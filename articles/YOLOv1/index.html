@@ -1,0 +1,342 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>YOLOv1原理解析 | Yetbye-除了死亡，每一天都是婚礼~</title><meta name="author" content="Yetbye"><meta name="copyright" content="Yetbye"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#0d0d0d"><meta name="description" content="例会讲义， 摘自《YOLO目标检测》 Network Structureoverview 逻辑：仅使用一个卷积神经网络来端到端地检测目标（not two-stage）    遗风：图像分类网络都会将特征图展平(flatten)，得到一个一维特征向量，然后连接全连接层去做预测。（如图）   容易计算从特征图被展平，再到连接4096的全连接层时过程的参数量：$$7×7×1024×4096 + 4096">
+<meta property="og:type" content="article">
+<meta property="og:title" content="YOLOv1原理解析">
+<meta property="og:url" content="https://yetbye.top/articles/YOLOv1/index.html">
+<meta property="og:site_name" content="Yetbye-除了死亡，每一天都是婚礼~">
+<meta property="og:description" content="例会讲义， 摘自《YOLO目标检测》 Network Structureoverview 逻辑：仅使用一个卷积神经网络来端到端地检测目标（not two-stage）    遗风：图像分类网络都会将特征图展平(flatten)，得到一个一维特征向量，然后连接全连接层去做预测。（如图）   容易计算从特征图被展平，再到连接4096的全连接层时过程的参数量：$$7×7×1024×4096 + 4096">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://yetbye.top/image/postcover/yolo1.jpeg">
+<meta property="article:published_time" content="2025-06-05T16:00:00.000Z">
+<meta property="article:modified_time" content="2026-08-31T13:24:01.175Z">
+<meta property="article:author" content="Yetbye">
+<meta property="article:tag" content="深度学习">
+<meta property="article:tag" content="YOLO">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://yetbye.top/image/postcover/yolo1.jpeg"><link rel="shortcut icon" href="/image/media/favion.ico"><link rel="canonical" href="https://yetbye.top/articles/YOLOv1/index.html"><link rel="preconnect" href="//cdnjs.cloudflare.com"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!true && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdnjs.cloudflare.com/ajax/libs/egjs-infinitegrid/4.12.0/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'YOLOv1原理解析',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/css/waves.css"><link rel="stylesheet" href="/css/cursor.css"><link rel="stylesheet" href="/css/venus-post.css"><link rel="stylesheet" href="/css/footer_fish.css"><link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin><link rel="preconnect" href="https://fonts.googleapis.com" crossorigin><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/js-heo@1.0.11/mainColor/heoMainColor.css"><link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/js-heo@1.0.11/poem/poem.css"><meta name="generator" content="Hexo 7.3.0"></head><body><div id="web_bg" style="background-image: url(/image/media/banner1.jpg);"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/image/media/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">35</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">15</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-skull"></i><span> Home</span></a></div><div class="menus_item"><a class="site-page" href="/notes/"><i class="fa-fw fas fa-crown"></i><span> Note</span></a></div><div class="menus_item"><a class="site-page" href="/moments/"><i class="fa-fw fas fa-camera"></i><span> Moments</span></a></div><div class="menus_item"><a class="site-page" href="/map/"><i class="fa-fw fas fa-route"></i><span> 行迹</span></a></div><div class="menus_item"><a class="site-page" href="/music/"><i class="fa-fw fas fa-compact-disc"></i><span> 八音盒</span></a></div><div class="menus_item"><a class="site-page" href="/gallery/"><i class="fa-fw fas fa-images"></i><span> 调色盘</span></a></div><div class="menus_item"><a class="site-page" href="/shuoshuo/"><i class="fa-fw fas fa-sticky-note"></i><span> 小纸条</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于我</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/image/postcover/yolo1.jpeg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">Yetbye-除了死亡，每一天都是婚礼~</span></a><a class="nav-page-title" href="/"><span class="site-name">YOLOv1原理解析</span></a></span><div id="menus"><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-skull"></i><span> Home</span></a></div><div class="menus_item"><a class="site-page" href="/notes/"><i class="fa-fw fas fa-crown"></i><span> Note</span></a></div><div class="menus_item"><a class="site-page" href="/moments/"><i class="fa-fw fas fa-camera"></i><span> Moments</span></a></div><div class="menus_item"><a class="site-page" href="/map/"><i class="fa-fw fas fa-route"></i><span> 行迹</span></a></div><div class="menus_item"><a class="site-page" href="/music/"><i class="fa-fw fas fa-compact-disc"></i><span> 八音盒</span></a></div><div class="menus_item"><a class="site-page" href="/gallery/"><i class="fa-fw fas fa-images"></i><span> 调色盘</span></a></div><div class="menus_item"><a class="site-page" href="/shuoshuo/"><i class="fa-fw fas fa-sticky-note"></i><span> 小纸条</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于我</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">YOLOv1原理解析</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2025-06-05T16:00:00.000Z" title="发表于 2025-06-06 00:00:00">2025-06-06</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-08-31T13:24:01.175Z" title="更新于 2026-08-31 21:24:01">2026-08-31</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/yolo-od/">yolo-od</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">2.2k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>6分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div><section class="main-hero-waves-area waves-area"><svg class="waves-svg" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto"><defs><path id="gentle-wave" d="M -160 44 c 30 0 58 -18 88 -18 s 58 18 88 18 s 58 -18 88 -18 s 58 18 88 18 v 44 h -352 Z"></path></defs><g class="parallax"><use href="#gentle-wave" x="48" y="0"></use><use href="#gentle-wave" x="48" y="3"></use><use href="#gentle-wave" x="48" y="5"></use><use href="#gentle-wave" x="48" y="7"></use></g></svg></section></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><p><strong>例会讲义， 摘自《YOLO目标检测》</strong></p>
+<h1 id="Network-Structure"><a href="#Network-Structure" class="headerlink" title="Network Structure"></a>Network Structure</h1><h2 id="overview"><a href="#overview" class="headerlink" title="overview"></a>overview</h2><ul>
+<li>逻辑：仅使用一个卷积神经网络来端到端地检测目标（not two-stage）</li>
+</ul>
+<p><img src="/image/postcover/yopo1.jpg"></p>
+<ul>
+<li><p>遗风：图像分类网络都会将特征图展平(flatten)，得到一个一维特征向量，然后连接全连接层去做预测。（如图）</p>
+<p>  容易计算从特征图被展平，再到连接4096的全连接层时过程的参数量：$$7×7×1024×4096 + 4096 \approx 2×10^{8}$$<br>  YOLOv1这一缺陷是致命的（后续的改进便是优化该层网络结构）</p>
+</li>
+</ul>
+<h2 id="how-to-realize-detection"><a href="#how-to-realize-detection" class="headerlink" title="how to realize detection"></a>how to realize detection</h2><p>综述：将输入图像划分成$7\times 7$的网格，然后在网格上做预测。（DL works on CV because of CNN）</p>
+<h3 id="概览YOLO"><a href="#概览YOLO" class="headerlink" title="概览YOLO"></a>概览YOLO</h3><blockquote>
+<p>一张RGB图像输入网络经过一系列的卷积和池化操作后，得到一个经过64倍<strong>降采样</strong>的 $feature\space map$   （获取高级特征）</p>
+</blockquote>
+<blockquote>
+<p>将其展平为一个一维的特征向量，再由若干全连接层处理，最后做一些必要的维度转换操作，得到输出张量       $Y \in \mathbb{R}^{7 \times 7 \times 30}$（可以理解为 information map 或者 meta map） （处理特征获取信息）</p>
+</blockquote>
+<h3 id="获取特征"><a href="#获取特征" class="headerlink" title="获取特征"></a>获取特征</h3><ul>
+<li>将$H \times W$ 的原始图像 处理为 被降采样的 feature map($F \in \mathbb{R}^{H_o \times W_o \times C_o}$）.</li>
+<li>存在：            （可带大家数一下图中数字）（明确自变量与因变量）（为什么是这些数，炼丹调出来的）$$ H_o &#x3D; \frac{H}{\text{stride}}, \quad W_o &#x3D; \frac{W}{\text{stride}} $$</li>
+</ul>
+<h3 id="获取信息"><a href="#获取信息" class="headerlink" title="获取信息"></a>获取信息</h3><ul>
+<li><p>为什么要展开</p>
+<blockquote>
+<p>展开实际上是为了方便计算与处理，因为展开后还要还原shape，本质上是从feature map直接获取 information map  （具体如何设计获取，我不知道。根据每个grid的特征来预测该grid是否有目标的中心点坐标，以及相应的目标类别。）</p>
+</blockquote>
+</li>
+<li><p>我们将输出的information map 看作一个 $7\times7\times\times30$ 的立方体，而 $7\times7$ 可视作将原图像划作成49个网格（grid）<br>  <img src="/image/postcover/yopo2.jpg"></p>
+</li>
+<li><p>每一个网格对应了一个维度为 30 的向量，该向量包含了  <em>两个</em>预测边界框的置信度与位置参数    以及    目标检测类别的  <em>one-hat</em> 表示 （20是因为使用的是VOC数据集）</p>
+<p>  <img src="/image/postcover/yopo3.jpg"> </p>
+</li>
+<li><p>其中每一个边界框都包括一个置信度  $C(confidence)$、边界框位置$(t_x, t_y,w, h)$参数，表示边界框的中心点相较于网格左上角点的偏移量$(t_x, t_y)$以及边界框的宽和高$(w ,h)$</p>
+</li>
+<li><p>因此，我们可以使用  $5B+N_c$  来计算输出张量的通道数该是多少</p>
+</li>
+</ul>
+<p>、、、、其实YOLOv1的这一检测理念也是从Faster R-CNN中的区域候选网络  (region proposal network，RPN)  继承来的，只不过，Faster R-CNN只用于确定每个网格里是否有目标，不关心目标类别，而YOLOv1则进一步将目标分类也整合进来，使得定位和分类一步到位，从而进一步发展了“anchor-based”的思想。</p>
+<h3 id="recap"><a href="#recap" class="headerlink" title="recap"></a>recap</h3><p><img src="/image/postcover/yopo4.jpg"></p>
+<h1 id="Detection-Principle"><a href="#Detection-Principle" class="headerlink" title="Detection Principle"></a>Detection Principle</h1><h2 id="边界框"><a href="#边界框" class="headerlink" title="边界框"></a>边界框</h2><p>参数$（C, t_x, t_y,w, h）$ 的学习</p>
+<h3 id="逻辑概览"><a href="#逻辑概览" class="headerlink" title="逻辑概览"></a>逻辑概览</h3><p>YOLOv1是通过检测图像中的目标中心点来实现检测目标，即只有包含目标中心点的网格才会被认为是有物体的。</p>
+<ul>
+<li>$Pr(objectness) &#x3D; 1$  代表此网格有物体</li>
+<li>$Pr(objectness) &#x3D; 0$  代表此网格无物体</li>
+</ul>
+<p>物体在哪个网格，就由该网格去拟合（学习）边界框。</p>
+<ul>
+<li>该网格内所要预测的边界框，其置信度会尽可能接近1。</li>
+<li>有物体的网格会被标记为正样本候选区域</li>
+<li>在训练过程中，训练的正样本(positive sample)只会从此网格处的预测中得到，而其他区域的预测都是该目标的负样本（置信度接近0）。<br><img src="/image/postcover/yopo5.jpg"></li>
+</ul>
+<h3 id="目标中心点坐标"><a href="#目标中心点坐标" class="headerlink" title="目标中心点坐标"></a>目标中心点坐标</h3><p>类似于残差思想，在每个grid的 baseline 上，学习相对于所在网格的偏移量（容易学习。边界框，目标点与所在网格联系密切）</p>
+<p><img src="/image/postcover/yopo6.png"><br><img src="/image/postcover/yopo7.png"><br>相对偏移量<img src="/image/postcover/yopo8.png"><br>视作训练标签（容易学习）<img src="/image/postcover/yopo9.png"></p>
+<p>图示：<img src="/image/postcover/yopo10.jpg"></p>
+<h3 id="边界框的确定：宽与高"><a href="#边界框的确定：宽与高" class="headerlink" title="边界框的确定：宽与高"></a>边界框的确定：宽与高</h3><p>我们当然可以直接将目标的真实边界框的宽和高作为学习标签。不过一般进行normalization会更好，也会避免一些问题的发生（我不知道）$$ \bar{w} &#x3D; \frac{w}{W} <br>\space\space\space    \bar{h} &#x3D; \frac{h}{H} $$</p>
+<h3 id="置信度的学习（范式：二元对立-—-概率表示）-one-stage-的关键"><a href="#置信度的学习（范式：二元对立-—-概率表示）-one-stage-的关键" class="headerlink" title="置信度的学习（范式：二元对立 —&gt; 概率表示）(one-stage 的关键)"></a>置信度的学习（范式：二元对立 —&gt; 概率表示）(one-stage 的关键)</h3><p><img src="/image/postcover/yopo11.png"></p>
+<p>如何给置信度的标签赋值呢？一个很简单的想法是，将有目标中心点的网格处的边界框置信度的学习标签设置为1，反之为0，这是一个典型的“二分类”思想，正如Faster-RCNN中的RPN所做的那样。</p>
+<p>YOLOv1希望边界框的置信度能表征所预测的边界框的定位精度。因为边界框不仅要表征有无物体，它自身也要去定位物体，所以定位得是否准确同样是至关重要的。而对于边界框的定位精度，通常使用<strong>交并比</strong>(intersection of union，IoU)来衡量。</p>
+<blockquote>
+<p>$IoU$:  分别计算出两个矩形框的交集(intersection)和并集(union)，它们的比值即为IoU。显然，IoU是一个0～1的数，且IoU越接近1，表明两个矩形框的重合度越高。</p>
+</blockquote>
+<p><img src="/image/postcover/yopo12.jpg"></p>
+<p> <em>既如此，不妨直接将 $IuO$ 作为置信度的学习标签</em>    😋😋😋</p>
+<h4 id="置信度的训练"><a href="#置信度的训练" class="headerlink" title="置信度的训练"></a>置信度的训练</h4><p>只需关注那些有目标中心点的网格，即正样本候选区域<img src="/image/postcover/yopo13.png"></p>
+<p>仅保留$IoU$ 较大的预测框，让其拟合（学习）目标框， 对于其他预测框将其置信度<em>标签</em>改为0，视作负样本， 和其他网格的预测框一样， 仅计算一次$RoU$ , 不在参与后续的参数拟合（学习）</p>
+<p>可以看到，一个正样本的标记是由预测本身决定的，即我们是直接构建预测框与目标框之间的关联，而没有借助某种先验。<br>后之视今，会发现YOLOv1一共蕴含了后来被着重发展的3个技术点：（我不知道，我抄的）<br>	1. 不使用先验框(anchor box)的anchor-free技术。  （关于先验，可以学习<code>classification中朴素贝叶斯</code>）<br>	2. 将IoU引入类别置信度中的IoU-aware技术<br>	3. 动态标签分配(dynamic label assignment)技术。</p>
+<h2 id="分类（类别置信度）"><a href="#分类（类别置信度）" class="headerlink" title="分类（类别置信度）"></a>分类（类别置信度）</h2><ul>
+<li><p>同边界框的学习一样，类别的学习也只考虑正样本网格，而不考虑其他不包含目标中心点的网格。</p>
+</li>
+<li><p>对于one-hot格式的类别学习，通常会使用$Softmax$函数来处理网络的类别预测，得到每个类别的置信度，再配合交叉熵(cross entropy)函数去计算类别损失</p>
+</li>
+</ul>
+<p>***而YOLOv1使用线性函数输出类别置信度预测，并用$L2$（有关范数，可以理解为最小二乘法）损失来计算每个类别的损失</p>
+<p>but this time it did not continue the myth   🙊🙊🙊<br>	YOLOv1预测的类别置信度可能会是一个负数，同样，对于边界框的置信度和位置参数，YOLOv1也是采用线性函数来输出的  （后续改进点）</p>
+<h2 id="summary"><a href="#summary" class="headerlink" title="summary"></a>summary</h2><p><img src="/image/postcover/yopo14.png"><br><img src="/image/postcover/yopo15.png"></p>
+<h1 id="Loss-Function"><a href="#Loss-Function" class="headerlink" title="Loss Function"></a>Loss Function</h1><p>问题就来到了简单的最小二乘法（线性拟合） （不过是高维形式上） 🤗🤗🤗</p>
+<p><img src="/image/postcover/yopo16.jpg"></p>
+<p>小问题：为什么负样本的置信度也要参与loss的计算  （万能黑箱）</p>
+<h1 id="前向推理"><a href="#前向推理" class="headerlink" title="前向推理"></a>前向推理</h1><p>对于训练好的YOLOv1，输出的$Y \in \mathbb{R}^{7 \times 7 \times 30}$ （表现如图），需要进行筛选<img src="/image/postcover/yopo17.png"></p>
+<h5 id="1-计算所有预测的边界框的得分"><a href="#1-计算所有预测的边界框的得分" class="headerlink" title="1. 计算所有预测的边界框的得分"></a>1. 计算所有预测的边界框的得分</h5><p>得分score 定义为该边界框的置信度  $C$  与类别的最高置信度(<code>20个概率的最大值</code>)的乘积</p>
+<h5 id="2-得分阈值筛选"><a href="#2-得分阈值筛选" class="headerlink" title="2.得分阈值筛选"></a>2.得分阈值筛选</h5><p>设定一个阈值去滤除那些得分低的边界框。（数值表现就是设置为零）<br><img src="/image/postcover/yopo18.jpg"></p>
+<h5 id="3-计算边界框"><a href="#3-计算边界框" class="headerlink" title="3.计算边界框"></a>3.计算边界框</h5><p>计算余下的边界框的中心点坐标以及宽和高。</p>
+<h5 id="4-使用非极大值抑制（NMS）进行第二次筛选"><a href="#4-使用非极大值抑制（NMS）进行第二次筛选" class="headerlink" title="4.使用非极大值抑制（NMS）进行第二次筛选"></a>4.使用非极大值抑制（NMS）进行第二次筛选</h5><blockquote>
+<p>非极大值抑制(non-maximal suppression，NMS)<br>非极大值抑制的思想很简单，对于某一类别目标的所有边界框，<br>先挑选出得分最高的边界框，<br>再依次计算其他边界框与这个得分最高的边界框的IoU，<br>超过设定的IoU阈值的边界框则被认为是重复检测，将其剔除。（数值表现就是设置为零）<br>对所有类别的边界框都进行上述操作，直到无边界框可剔除为止<br> <img src="/image/postcover/yopo19.jpg"></p>
+</blockquote>
+</article><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0/">深度学习</a><a class="post-meta__tags" href="/tags/YOLO/">YOLO</a></div><div class="post-share"><div class="social-share" data-image="/image/postcover/yolo1.jpeg" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/butterfly-extsrc/1.1.4/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdnjs.cloudflare.com/ajax/libs/butterfly-extsrc/1.1.4/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/articles/text/" title="笔记本功能测试"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">笔记本功能测试</div></div><div class="info-2"><div class="info-item-1">测试！好运来 </div></div></div></a><a class="pagination-related" href="/articles/YOLOv2/" title="YOLOv2框架解析"><img class="cover" src="/image/postcover/yolo2.jpeg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">YOLOv2框架解析</div></div><div class="info-2"><div class="info-item-1">~~测试测试 例会讲义， 摘自《YOLO目标检测》 overview 使用新的网络结构 引入由 Faster R-CNN 工作提出的先验框机制 提出基于k均值聚类算法的先验框聚类算法 采用新的边界框回归方法 …………  ~ 优化详解 引入批量归一化(BN)层关于BN ,参考：[[Batch Normalization Layer]] ‘’卷积三件套‘’ 高分辨率主干网络预备知识：预训练（pretrain），微调（fine-tune） v1中：先基于GoogLeNet的网络结构设计了合适的主干网络，并将其放到ImageNet数据集上进行一次预训练，随后，再将这一预训练的权重作为YOLOv1的主干网络的初始参数 问题：ImageNet 中 图像大小为 $224 \times 224$， 而训练的 voc 中大小为 $448 \times 448$	也就是原来的预训练后的参数不太好，会忽略很多细节特征 解决方案： 微调： 二次预训练 ，再使用 $448\times448$ 稍微训练几次 不过，后来被时代抛弃了，...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/articles/YOLOv2/" title="YOLOv2框架解析"><img class="cover" src="/image/postcover/yolo2.jpeg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-06-07</div><div class="info-item-2">YOLOv2框架解析</div></div><div class="info-2"><div class="info-item-1">~~测试测试 例会讲义， 摘自《YOLO目标检测》 overview 使用新的网络结构 引入由 Faster R-CNN 工作提出的先验框机制 提出基于k均值聚类算法的先验框聚类算法 采用新的边界框回归方法 …………  ~ 优化详解 引入批量归一化(BN)层关于BN ,参考：[[Batch Normalization Layer]] ‘’卷积三件套‘’ 高分辨率主干网络预备知识：预训练（pretrain），微调（fine-tune） v1中：先基于GoogLeNet的网络结构设计了合适的主干网络，并将其放到ImageNet数据集上进行一次预训练，随后，再将这一预训练的权重作为YOLOv1的主干网络的初始参数 问题：ImageNet 中 图像大小为 $224 \times 224$， 而训练的 voc 中大小为 $448 \times 448$	也就是原来的预训练后的参数不太好，会忽略很多细节特征 解决方案： 微调： 二次预训练 ，再使用 $448\times448$ 稍微训练几次 不过，后来被时代抛弃了，...</div></div></div></a><a class="pagination-related" href="/articles/Gradient%20Descent/" title="Gradient Descent"><img class="cover" src="/image/postcover/gradient.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-06-07</div><div class="info-item-2">Gradient Descent</div></div><div class="info-2"><div class="info-item-1"> 梯度下降（Gradient Descent）是机器学习和深度学习中广泛使用的一种优化算法，可以类比于单变量函数中的牛顿法（切线近似）  基本概念在数学中，梯度是一个向量，它的方向指向函数增长最快的方向，而其反方向则是函数下降最快的方向。梯度下降算法的核心思想就是沿着目标函数的梯度反方向，逐步更新模型的参数，以达到最小化目标函数的目的。  想象你在一座大山上，目标是找到山的最低点（即目标函数的最小值）。梯度下降就像是你每次都朝着最陡峭向下（即梯度反方向）的路径走一步，通过不断地重复这个过程，逐渐接近山底。 数学原理假设我们有一个目标函数 $J(\theta)$，其中 $\theta$ 是模型的参数向量（例如在线性回归中，$\theta$ 包含了权重和偏置）。梯度下降的参数更新公式为： $$\theta_{i} &#x3D; \theta_{i} - \alpha \frac{\partial J(\theta)}{\partial \theta_{i}} $$ 其中，$\theta_{i}$ 是参数向量 $\theta$ 的第 $i$ 个分量，$\frac{\partial...</div></div></div></a><a class="pagination-related" href="/articles/DL-cards/Validation-Set/" title="Validation Set"><img class="cover" src="/image/postcover/valiset.jpeg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-06-02</div><div class="info-item-2">Validation Set</div></div><div class="info-2"><div class="info-item-1">定义验证集是从原始训练数据中划分出来的一部分数据，它与训练集和测试集不同，主要用于模型训练过程中调整模型的超参数，以及对模型的性能进行初步评估，以避免模型过拟合，提高模型的泛化能力。 作用 调整超参数：超参数是在模型训练之前需要手动设置的参数，如学习率、层数、神经元数量、正则化参数等。通过在验证集上评估不同超参数组合下模型的性能，可以找到最优的超参数设置，使模型在测试集或实际应用中表现更好。例如，在训练多层感知机时，通过在验证集上比较不同学习率下模型的损失值和准确率，选择使得验证集准确率最高的学习率作为最终的学习率。 防止过拟合：过拟合是指模型在训练集上表现很好，但在新的数据（测试集或实际应用中的数据）上表现不佳的现象。在训练过程中，使用验证集可以监控模型的性能变化。如果发现模型在训练集上的损失不断下降，而在验证集上的损失开始上升，准确率开始下降，这可能是模型开始过拟合的信号。此时，可以采取一些措施，如提前停止训练、增加正则化项、减少模型复杂度等，以防止模型过拟合。  划分方式 留出法：直接将原始数据集按照一定的比例划分为训练集、验证集和测试集。通常情况下，训练集占比 60%...</div></div></div></a><a class="pagination-related" href="/articles/DL-cards/likelihood/" title="maximum-likelihood"><img class="cover" src="/image/postcover/3.jpeg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-06-02</div><div class="info-item-2">maximum-likelihood</div></div><div class="info-2"><div class="info-item-1">测试，日后再补 </div></div></div></a><a class="pagination-related" href="/articles/DL-cards/how-to-train-mlp/" title="How To Train MLP"><img class="cover" src="/image/postcover/tay.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-11-01</div><div class="info-item-2">How To Train MLP</div></div><div class="info-2"><div class="info-item-1">overview训练 MLP（以及扩展的神经网络）的权重依赖于四个主要部分。  训练神经网络的步骤：	1. 前向传播：计算一个输入示例的网络输出。2. 误差计算：计算网络预测与目标之间的预测误差。3. 反向传播：根据输入和权重以相反的顺序计算梯度。4. 参数更新：使用随机梯度下降更新网络的权值，以减少该实例的误差。&#96;  前向传播训练 MLP 的第一步是计算来自数据集示例的网络输出。我们使用以 $\sigma(x)$ 表示的 sigmoid 函数作为 MLP 的激活函数。可以认为它是一个平滑的阶跃函数，如图。此外，它是连续可微的，这是反向传播的一个理想性质。sigmoid 函数的定义为：$$\sigma(x) &#x3D; \frac{1}{1 + e^{-x}}$$![[&#x2F;image&#x2F;postcover&#x2F;461323_1_En_4_Fig14_HTML.png]] 前向传播过程的目标是计算特定示例 $x$ 的当前网络输出，将每个输出连接为下一层神经元的输入 为了便于标记和计算，该层的权重被组合成单个权重矩阵...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/image/media/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Yetbye</div><div class="author-info-description"></div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">35</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">15</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://www.zhihu.com/people/80-34-65-84-64"><i class="fab fa-zhihu"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/Yetbye" target="_blank" title="Github"><i class="fab fa-github"></i></a><a class="social-icon" href="https://www.zhihu.com/people/80-34-65-84-64" target="_blank" title="Zhihu"><i class="fab fa-zhihu"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">小站现在还有很多不足，如果数据没有加载出来，可以刷新试试~ Have a nice day!</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Network-Structure"><span class="toc-number">1.</span> <span class="toc-text">Network Structure</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#overview"><span class="toc-number">1.1.</span> <span class="toc-text">overview</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#how-to-realize-detection"><span class="toc-number">1.2.</span> <span class="toc-text">how to realize detection</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A6%82%E8%A7%88YOLO"><span class="toc-number">1.2.1.</span> <span class="toc-text">概览YOLO</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%8E%B7%E5%8F%96%E7%89%B9%E5%BE%81"><span class="toc-number">1.2.2.</span> <span class="toc-text">获取特征</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%8E%B7%E5%8F%96%E4%BF%A1%E6%81%AF"><span class="toc-number">1.2.3.</span> <span class="toc-text">获取信息</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#recap"><span class="toc-number">1.2.4.</span> <span class="toc-text">recap</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#Detection-Principle"><span class="toc-number">2.</span> <span class="toc-text">Detection Principle</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BE%B9%E7%95%8C%E6%A1%86"><span class="toc-number">2.1.</span> <span class="toc-text">边界框</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%BB%E8%BE%91%E6%A6%82%E8%A7%88"><span class="toc-number">2.1.1.</span> <span class="toc-text">逻辑概览</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9B%AE%E6%A0%87%E4%B8%AD%E5%BF%83%E7%82%B9%E5%9D%90%E6%A0%87"><span class="toc-number">2.1.2.</span> <span class="toc-text">目标中心点坐标</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BE%B9%E7%95%8C%E6%A1%86%E7%9A%84%E7%A1%AE%E5%AE%9A%EF%BC%9A%E5%AE%BD%E4%B8%8E%E9%AB%98"><span class="toc-number">2.1.3.</span> <span class="toc-text">边界框的确定：宽与高</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BD%AE%E4%BF%A1%E5%BA%A6%E7%9A%84%E5%AD%A6%E4%B9%A0%EF%BC%88%E8%8C%83%E5%BC%8F%EF%BC%9A%E4%BA%8C%E5%85%83%E5%AF%B9%E7%AB%8B-%E2%80%94-%E6%A6%82%E7%8E%87%E8%A1%A8%E7%A4%BA%EF%BC%89-one-stage-%E7%9A%84%E5%85%B3%E9%94%AE"><span class="toc-number">2.1.4.</span> <span class="toc-text">置信度的学习（范式：二元对立 —&gt; 概率表示）(one-stage 的关键)</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%BD%AE%E4%BF%A1%E5%BA%A6%E7%9A%84%E8%AE%AD%E7%BB%83"><span class="toc-number">2.1.4.1.</span> <span class="toc-text">置信度的训练</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E7%B1%BB%EF%BC%88%E7%B1%BB%E5%88%AB%E7%BD%AE%E4%BF%A1%E5%BA%A6%EF%BC%89"><span class="toc-number">2.2.</span> <span class="toc-text">分类（类别置信度）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#summary"><span class="toc-number">2.3.</span> <span class="toc-text">summary</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#Loss-Function"><span class="toc-number">3.</span> <span class="toc-text">Loss Function</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%89%8D%E5%90%91%E6%8E%A8%E7%90%86"><span class="toc-number">4.</span> <span class="toc-text">前向推理</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#1-%E8%AE%A1%E7%AE%97%E6%89%80%E6%9C%89%E9%A2%84%E6%B5%8B%E7%9A%84%E8%BE%B9%E7%95%8C%E6%A1%86%E7%9A%84%E5%BE%97%E5%88%86"><span class="toc-number">4.0.0.0.1.</span> <span class="toc-text">1. 计算所有预测的边界框的得分</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#2-%E5%BE%97%E5%88%86%E9%98%88%E5%80%BC%E7%AD%9B%E9%80%89"><span class="toc-number">4.0.0.0.2.</span> <span class="toc-text">2.得分阈值筛选</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#3-%E8%AE%A1%E7%AE%97%E8%BE%B9%E7%95%8C%E6%A1%86"><span class="toc-number">4.0.0.0.3.</span> <span class="toc-text">3.计算边界框</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#4-%E4%BD%BF%E7%94%A8%E9%9D%9E%E6%9E%81%E5%A4%A7%E5%80%BC%E6%8A%91%E5%88%B6%EF%BC%88NMS%EF%BC%89%E8%BF%9B%E8%A1%8C%E7%AC%AC%E4%BA%8C%E6%AC%A1%E7%AD%9B%E9%80%89"><span class="toc-number">4.0.0.0.4.</span> <span class="toc-text">4.使用非极大值抑制（NMS）进行第二次筛选</span></a></li></ol></li></ol></li></ol></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/docs/CausalForcingPP/" title="Causal Forcing++: 可扩展少步自回归扩散蒸馏"><img src="/docs/CausalForcingPP/assets/_v_end.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Causal Forcing++: 可扩展少步自回归扩散蒸馏"/></a><div class="content"><a class="title" href="/docs/CausalForcingPP/" title="Causal Forcing++: 可扩展少步自回归扩散蒸馏">Causal Forcing++: 可扩展少步自回归扩散蒸馏</a><time datetime="2026-08-31T04:00:00.000Z" title="发表于 2026-08-31 12:00:00">2026-08-31</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/docs/AnnCA/" title="FAST-AR: ANN加速自回归视频扩散"><img src="/docs/AnnCA/assets/Figure_10__Ablations_p15.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="FAST-AR: ANN加速自回归视频扩散"/></a><div class="content"><a class="title" href="/docs/AnnCA/" title="FAST-AR: ANN加速自回归视频扩散">FAST-AR: ANN加速自回归视频扩散</a><time datetime="2026-08-31T04:00:00.000Z" title="发表于 2026-08-31 12:00:00">2026-08-31</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/docs/CausVid/" title="从双向扩散到快速自回归视频扩散模型 | CausVid 论文精读"><img src="/docs/CausVid/assets/fig1_latency.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="从双向扩散到快速自回归视频扩散模型 | CausVid 论文精读"/></a><div class="content"><a class="title" href="/docs/CausVid/" title="从双向扩散到快速自回归视频扩散模型 | CausVid 论文精读">从双向扩散到快速自回归视频扩散模型 | CausVid 论文精读</a><time datetime="2026-08-31T04:00:00.000Z" title="发表于 2026-08-31 12:00:00">2026-08-31</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/docs/ContextForcing/" title="Context Forcing: 一致性长上下文自回归视频生成"><img src="/docs/ContextForcing/assets/cover.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Context Forcing: 一致性长上下文自回归视频生成"/></a><div class="content"><a class="title" href="/docs/ContextForcing/" title="Context Forcing: 一致性长上下文自回归视频生成">Context Forcing: 一致性长上下文自回归视频生成</a><time datetime="2026-08-31T04:00:00.000Z" title="发表于 2026-08-31 12:00:00">2026-08-31</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/docs/CausalForcing/" title="Causal Forcing: 自回归扩散蒸馏的正确姿势"><img src="/docs/CausalForcing/assets/cover.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Causal Forcing: 自回归扩散蒸馏的正确姿势"/></a><div class="content"><a class="title" href="/docs/CausalForcing/" title="Causal Forcing: 自回归扩散蒸馏的正确姿势">Causal Forcing: 自回归扩散蒸馏的正确姿势</a><time datetime="2026-08-31T04:00:00.000Z" title="发表于 2026-08-31 12:00:00">2026-08-31</time></div></div></div></div></div></div></main><footer id="footer" style="background-image: url(/image/media/footer1.jpg);"><div id="footer-wrap"><div class="footer_custom_text">最是人间留不住，朱颜辞镜花辞树</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="简繁转换">简</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="/js/tw_cn.js"></script><div class="js-pjax"><script>(() => {
+  const loadMathjax = () => {
+    if (!window.MathJax) {
+      window.MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']],
+          tags: 'none',
+        },
+        chtml: {
+          scale: 1.1
+        },
+        options: {
+          enableMenu: false,
+          renderActions: {
+            findScript: [10, doc => {
+              for (const node of document.querySelectorAll('script[type^="math/tex"]')) {
+                const display = !!node.type.match(/; *mode=display/)
+                const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display)
+                const text = document.createTextNode('')
+                node.parentNode.replaceChild(text, node)
+                math.start = {node: text, delim: '', n: 0}
+                math.end = {node: text, delim: '', n: 0}
+                doc.math.push(math)
+              }
+            }, '']
+          }
+        }
+      }
+
+      const script = document.createElement('script')
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.min.js'
+      script.id = 'MathJax-script'
+      script.async = true
+      document.head.appendChild(script)
+    } else {
+      MathJax.startup.document.state(0)
+      MathJax.texReset()
+      MathJax.typesetPromise()
+    }
+  }
+
+  btf.addGlobalFn('encrypt', loadMathjax, 'mathjax')
+  window.pjax ? loadMathjax() : window.addEventListener('load', loadMathjax)
+})()</script></div><script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script><script src="/js/fish.js"></script><canvas class="fireworks" mobile="false"></canvas><script src="https://cdnjs.cloudflare.com/ajax/libs/butterfly-extsrc/1.1.4/fireworks.min.js"></script><script id="canvas_nest" defer="defer" color="255, 20, 147" opacity="0.7" zIndex="-1" count="99" mobile="false" src="https://cdnjs.cloudflare.com/ajax/libs/butterfly-extsrc/1.1.4/canvas-nest.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/aplayer/1.10.1/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdnjs.cloudflare.com/ajax/libs/aplayer/1.10.1/APlayer.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/butterfly-extsrc/1.1.4/metingjs/dist/Meting.min.js"></script><script>(() => {
+  const destroyAplayer = () => {
+    if (window.aplayers) {
+      for (let i = 0; i < window.aplayers.length; i++) {
+        if (!window.aplayers[i].options.fixed) {
+          window.aplayers[i].destroy()
+        }
+      }
+    }
+  }
+
+  const runMetingJS = () => {
+    typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+  }
+
+  btf.addGlobalFn('pjaxSend', destroyAplayer, 'destroyAplayer')
+  btf.addGlobalFn('pjaxComplete', loadMeting, 'runMetingJS')
+})()</script><script src="https://cdnjs.cloudflare.com/ajax/libs/pjax/0.2.8/pjax.min.js"></script><script>(() => {
+  const pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+  window.pjax = new Pjax({
+    elements: 'a:not([target="_blank"]):not([href="/notes/"]):not([href="/moments/"]):not([href="/gallery/"]):not([href="/shuoshuo/"]):not([href="/music/"]):not([href="/about/"]):not([href="/map/"])',
+    selectors: pjaxSelectors,
+    cacheBust: false,
+    analytics: false,
+    scrollRestoration: false
+  })
+
+  const triggerPjaxFn = (val) => {
+    if (!val) return
+    Object.values(val).forEach(fn => fn())
+  }
+
+  document.addEventListener('pjax:send', () => {
+    // removeEventListener
+    btf.removeGlobalFnEvent('pjaxSendOnce')
+    btf.removeGlobalFnEvent('themeChange')
+
+    // reset readmode
+    const $bodyClassList = document.body.classList
+    if ($bodyClassList.contains('read-mode')) $bodyClassList.remove('read-mode')
+
+    triggerPjaxFn(window.globalFn.pjaxSend)
+  })
+
+  document.addEventListener('pjax:complete', () => {
+    btf.removeGlobalFnEvent('pjaxCompleteOnce')
+    document.querySelectorAll('script[data-pjax]').forEach(item => {
+      const newScript = document.createElement('script')
+      const content = item.text || item.textContent || item.innerHTML || ""
+      Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+      newScript.appendChild(document.createTextNode(content))
+      item.parentNode.replaceChild(newScript, item)
+    })
+
+    triggerPjaxFn(window.globalFn.pjaxComplete)
+  })
+
+  document.addEventListener('pjax:error', e => {
+    if (e.request.status === 404) {
+      const usePjax = true
+      false 
+        ? (usePjax ? pjax.loadUrl('/404.html') : window.location.href = '/404.html')
+        : window.location.href = e.request.responseURL
+    }
+  })
+})()</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div><script src="/live2dw/lib/L2Dwidget.min.js?094cbace49a39548bed64abff5988b05"></script><script>L2Dwidget.init({"pluginRootPath":"live2dw/","pluginJsPath":"lib/","pluginModelPath":"assets/","model":{"jsonPath":"/live2dw/assets/z16.model.json"},"display":{"position":"left","width":150,"height":300,"hOffset":0,"vOffset":-20},"mobile":{"show":false,"scale":0.5},"react":{"opacityDefault":0.7,"opacityOnHover":0.9},"log":false,"tagMode":false});</script></body></html>

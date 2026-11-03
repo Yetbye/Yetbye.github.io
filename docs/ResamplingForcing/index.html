@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Resampling Forcing: 端到端自回归视频扩散训练</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  chtml: { scale: 1.05 },
+  startup: { typeset: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js" onerror="this.remove();document.write('<script src=\"https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js\"><\/script>')"></script>
+<script>
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    if (!window.MathJax || !window.MathJax.startup || !window.MathJax.startup.promise) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+      document.head.appendChild(s);
+    }
+  }, 5000);
+});
+</script>
+
+<style>
+:root {
+  --lav-50:#faf5ff;--lav-100:#f3e8ff;--lav-200:#e9d5ff;--lav-300:#d8b4fe;
+  --lav-400:#c084fc;--lav-500:#a855f7;--lav-600:#9333ea;--lav-700:#7e22ce;
+  --coral-100:#ffe4e6;--coral-200:#fecdd3;--coral-300:#fda4af;--coral-400:#fb7185;--coral-500:#f43f5e;
+  --mint-100:#d1fae5;--mint-200:#a7f3d0;--mint-300:#6ee7b7;--mint-400:#34d399;--mint-500:#10b981;
+  --warm-100:#fef3c7;--warm-200:#fde68a;--amber-500:#f59e0b;
+  --ink:#1e1b4b;--ink-soft:#4c4b5e;--ink-muted:#787887;
+  --paper:#ffffff;--paper-warm:#faf8f5;--paper-cream:#fdf6e3;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans SC',sans-serif;background:var(--paper-warm);color:var(--ink);line-height:1.8;overflow-x:hidden}
+h1,h2,h3,h4{font-family:'Noto Serif SC',serif;font-weight:700}
+
+/* Navigation */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(250,248,245,0.85);backdrop-filter:blur(16px) saturate(1.5);border-bottom:1px solid rgba(192,132,252,0.15);padding:10px 24px}
+nav .nav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+nav .logo{font-family:'Noto Serif SC',serif;font-weight:900;font-size:18px;background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+nav .nav-links{display:flex;gap:6px;flex-wrap:wrap}
+nav .nav-links a{font-size:12px;color:var(--ink-soft);text-decoration:none;padding:4px 10px;border-radius:100px;transition:all .2s}
+nav .nav-links a:hover{background:var(--lav-100);color:var(--lav-600)}
+
+/* Hero */
+.hero{position:relative;min-height:96vh;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:120px 24px 80px;background:linear-gradient(135deg,#faf5ff 0%,#f3e8ff 18%,#fdf4e3 50%,#fffbeb 100%)}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 520px 320px at 12% 22%,rgba(192,132,252,0.16),transparent 60%),radial-gradient(ellipse 520px 320px at 88% 78%,rgba(251,191,36,0.13),transparent 60%)}
+.hero-wrap{position:relative;z-index:2;width:100%;max-width:780px;text-align:center}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,0.6);backdrop-filter:blur(12px) saturate(1.5);border:1px solid rgba(192,132,252,0.3);color:var(--lav-600);padding:7px 20px;border-radius:100px;font-family:'Noto Sans SC',sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;margin-bottom:20px;box-shadow:0 4px 20px rgba(192,132,252,0.12)}
+.hero h1{font-family:'Noto Serif SC',serif;font-size:clamp(2.8rem,8vw,5rem);font-weight:900;letter-spacing:-0.03em;line-height:1.1;margin:12px 0 10px;background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 38%,var(--coral-500) 62%,var(--amber-500) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:clamp(0.95rem,2.5vw,1.25rem);color:var(--ink-soft);font-weight:400;line-height:1.6;margin-bottom:8px}
+.hero-art{margin:20px auto 8px;max-width:760px;width:100%}
+.hero-img{width:100%;height:auto;border-radius:24px;box-shadow:0 24px 70px -24px rgba(30,27,75,0.18);border:1px solid rgba(192,132,252,0.12)}
+.hero-caption{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--ink-muted);margin-top:8px}
+.scroll-indicator{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:4px;color:var(--ink-muted);text-transform:uppercase;animation:bounce 2s infinite}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+
+/* Content */
+.content{max-width:820px;margin:0 auto;padding:60px 24px}
+section{margin-bottom:80px;scroll-margin-top:80px}
+.section-tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--lav-600);background:var(--lav-50);padding:4px 14px;border-radius:100px;margin-bottom:12px}
+h2{font-size:clamp(1.6rem,4vw,2.2rem);margin-bottom:16px;color:var(--ink);line-height:1.3}
+h3{font-size:clamp(1.15rem,3vw,1.45rem);margin:24px 0 12px;color:var(--lav-700)}
+p{margin-bottom:14px;color:var(--ink-soft);font-size:15px;line-height:1.85}
+strong{color:var(--ink);font-weight:600}
+em{color:var(--lav-600);font-style:normal;font-weight:500}
+
+/* Formula */
+.formula{background:var(--paper-cream);border-left:3px solid var(--lav-400);padding:16px 20px;margin:16px 0;border-radius:0 12px 12px 0;overflow-x:auto}
+.formula-label{font-size:11px;font-weight:700;color:var(--lav-600);margin-bottom:6px;letter-spacing:1px}
+
+/* Insight box */
+.insight{background:linear-gradient(135deg,var(--mint-100) 0%,var(--mint-50,#ecfdf5) 100%);border:1px solid var(--mint-300);border-left:4px solid var(--mint-400);padding:18px 22px;margin:20px 0;border-radius:0 16px 16px 0}
+.insight-title{font-weight:700;color:var(--mint-500);font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.insight-title::before{content:'';display:inline-block;width:16px;height:16px;background:var(--mint-400);border-radius:50%;flex-shrink:0}
+.insight p{color:var(--ink-soft);font-size:14px;margin:0}
+
+/* Deep insight (lavender) */
+.deep-insight{background:linear-gradient(135deg,var(--lav-50) 0%,var(--lav-100) 100%);border:1px solid var(--lav-300);border-left:4px solid var(--lav-500);padding:18px 22px;margin:20px 0;border-radius:0 16px 16px 0}
+.deep-insight-title{font-weight:700;color:var(--lav-600);font-size:13px;margin-bottom:8px}
+
+/* Code block */
+.code-block{background:#1e1b4b;border-radius:12px;padding:20px 24px;margin:20px 0;overflow-x:auto;position:relative}
+.code-block::before{content:attr(data-label);position:absolute;top:-10px;left:20px;background:var(--lav-500);color:white;font-size:10px;font-weight:700;padding:2px 12px;border-radius:100px;letter-spacing:1px}
+.code-block pre{margin:0}
+.code-block code{font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.65;color:#e0e0e0;white-space:pre-wrap;word-break:break-word}
+.code-block .kw{color:#c084fc}
+.code-block .str{color:#6ee7b7}
+.code-block .com{color:#787887}
+.code-block .fn{color:#fbbf24}
+.code-block .num{color:#fb7185}
+
+/* Figure */
+.figure{margin:24px 0;text-align:center}
+.figure img{max-width:100%;border-radius:12px;box-shadow:0 8px 30px -12px rgba(30,27,75,0.15);border:1px solid rgba(192,132,252,0.1)}
+.figure-caption{font-size:12px;color:var(--ink-muted);margin-top:8px;line-height:1.5}
+
+/* Table */
+.result-table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}
+.result-table th{background:var(--lav-100);color:var(--lav-700);padding:8px 10px;text-align:center;font-weight:600;border-radius:6px}
+.result-table td{padding:8px 10px;text-align:center;border-bottom:1px solid var(--lav-100)}
+.result-table tr:hover{background:var(--lav-50)}
+.result-table .best{color:var(--mint-500);font-weight:700}
+.result-table .ours{background:var(--mint-50,#ecfdf5)}
+
+/* Research question */
+.rq-card{background:linear-gradient(135deg,var(--warm-100) 0%,var(--warm-200,#fef9e7) 100%);border:1px solid var(--warm-200);border-left:4px solid var(--amber-500);padding:20px 24px;margin:20px 0;border-radius:0 16px 16px 0}
+.rq-tag{display:inline-block;background:var(--amber-500);color:white;font-size:10px;font-weight:700;padding:2px 10px;border-radius:100px;margin-bottom:8px;letter-spacing:1px}
+.rq-card h4{color:var(--ink);margin-bottom:8px;font-size:15px}
+.rq-card p{color:var(--ink-soft);font-size:14px;margin:0}
+
+/* Compare card */
+.compare-card{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0}
+.compare-side{padding:16px;border-radius:12px}
+.compare-left{background:var(--coral-100);border:1px solid var(--coral-200)}
+.compare-right{background:var(--mint-100);border:1px solid var(--mint-200)}
+.compare-side h4{font-size:13px;margin-bottom:8px}
+
+/* Summary */
+.summary-box{background:linear-gradient(135deg,var(--lav-50),var(--paper-cream));border:1px solid var(--lav-200);border-radius:16px;padding:24px;margin:20px 0}
+.summary-box h3{color:var(--lav-700);margin-bottom:12px}
+
+/* Footer */
+footer{text-align:center;padding:40px 24px;color:var(--ink-muted);font-size:12px;border-top:1px solid var(--lav-100)}
+
+/* SVG container */
+.svg-container{margin:24px 0;text-align:center}
+.svg-container svg{max-width:100%;height:auto}
+.svg-caption{font-size:12px;color:var(--ink-muted);margin-top:8px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav>
+<div class="nav-inner">
+  <span class="logo">Resampling Forcing</span>
+  <div class="nav-links"><a href="../index.html">« 合辑</a>
+    <a href="#ch1">暴露偏差</a>
+    <a href="#ch2">自重采样</a>
+    <a href="#ch3">历史路由</a>
+    <a href="#ch4">代码实现</a>
+    <a href="#ch5">实验结果</a>
+    <a href="#ch6">消融研究</a>
+    <a href="#ch7">方法对比</a>
+    <a href="#ch8">局限与未来</a>
+    <a href="#ch9">科研问题</a>
+  </div>
+</div>
+</nav>
+
+<!-- Hero Section -->
+<div class="hero">
+<div class="hero-wrap">
+  <div class="hero-badge">arXiv 2025 · Preprint</div>
+  <h1>Resampling Forcing</h1>
+  <p class="hero-sub">端到端自回归视频扩散训练 · 无需教师模型 · 自重采样模拟推理误差</p>
+  <p class="hero-sub" style="font-size:0.9rem;color:var(--ink-muted)">Self-Resampling × History Routing × Teacher-Free End-to-End Training</p>
+  <div class="hero-art">
+    <img src="assets/cover_v2.webp" alt="Resampling Forcing: 水墨卷轴风格的自重采样隐喻" class="hero-img">
+    <p class="hero-caption">水彩写意 × 中国水墨：混沌的误差通过自重采样漩涡被净化，化为有序的视频帧序列</p>
+  </div>
+</div>
+<div class="scroll-indicator">SCROLL TO READ</div>
+</div>
+
+<!-- Content -->
+<div class="content">
+
+<!-- ========== CH1: 暴露偏差 ========== -->
+<section id="ch1">
+<span class="section-tag">CH1 · 问题分析</span>
+<h2>暴露偏差 — 自回归视频生成的阿喀琉斯之踵</h2>
+
+<p>自回归视频生成将视频的联合分布分解为条件分布的连乘积，这一范式天然适合世界模拟——因为它镜像了物理世界的严格因果性。然而，这一优雅的数学框架下隐藏着一个致命缺陷：<strong>暴露偏差（exposure bias）</strong>。</p>
+
+<div class="formula">
+<div class="formula-label">Eq (1): 自回归联合分布分解</div>
+$$p(x_{1:N}|c) = \prod_{i=1}^{N} p(x_i | x_{\lt i}, c)
+$$
+</div>
+
+<p>在Flow Matching框架下，第 $i$ 帧 $x_i$ 通过ODE从高斯噪声 $x_i^1 \sim \mathcal{N}(0, \mathbf{I})$ 生成：</p>
+
+<div class="formula">
+<div class="formula-label">Eq (2): ODE求解</div>
+$$x_i = x_i^1 + \int_1^0 v_\theta(x_i^t, x_{\lt i}, t, c)\, dt
+$$
+</div>
+
+<p>训练时使用标准的Teacher Forcing：给定真实历史 $x_{\lt i}$，通过Flow Matching插值构建训练样本：</p>
+
+<div class="formula">
+<div class="formula-label">Eq (3): Flow Matching 插值</div>
+$$x_i^t = (1 - t) \cdot x_i + t \cdot \epsilon_i, \quad \epsilon_i \sim \mathcal{N}(0, \mathbf{I})
+$$
+</div>
+
+<div class="formula">
+<div class="formula-label">Eq (4): Velocity Regression Loss</div>
+$$\mathcal{L} = \mathbb{E}_{i,t,x,\epsilon}\left[\|(\epsilon_i - x_i) - v_\theta(x_i^t, x_{\lt i}, t, c)\|_2^2\right]
+$$
+</div>
+
+<!-- SVG 1: 双重误差累积示意图 -->
+<div class="svg-container">
+<svg viewBox="0 0 900 320" xmlns="http://www.w3.org/2000/svg" style="font-family:'Noto Sans SC',sans-serif">
+  <!-- Background -->
+  <rect width="900" height="320" fill="#faf5ff" rx="16"/>
+  
+  <!-- Title -->
+  <text x="450" y="30" text-anchor="middle" font-size="14" font-weight="700" fill="#1e1b4b">Teacher Forcing 下的误差累积机制</text>
+  
+  <!-- Ground Truth frames -->
+  <text x="80" y="70" text-anchor="middle" font-size="11" font-weight="600" fill="#7e22ce">训练时（真实历史）</text>
+  <rect x="30" y="80" width="60" height="40" rx="6" fill="#d8b4fe" stroke="#9333ea" stroke-width="1.5"/>
+  <text x="60" y="105" text-anchor="middle" font-size="10" fill="#1e1b4b">x₁</text>
+  <rect x="100" y="80" width="60" height="40" rx="6" fill="#d8b4fe" stroke="#9333ea" stroke-width="1.5"/>
+  <text x="130" y="105" text-anchor="middle" font-size="10" fill="#1e1b4b">x₂</text>
+  <rect x="170" y="80" width="60" height="40" rx="6" fill="#d8b4fe" stroke="#9333ea" stroke-width="1.5"/>
+  <text x="200" y="105" text-anchor="middle" font-size="10" fill="#1e1b4b">x₃</text>
+  <rect x="240" y="80" width="60" height="40" rx="6" fill="#d8b4fe" stroke="#9333ea" stroke-width="1.5"/>
+  <text x="270" y="105" text-anchor="middle" font-size="10" fill="#1e1b4b">x₄</text>
+  <!-- Arrows -->
+  <line x1="90" y1="100" x2="100" y2="100" stroke="#9333ea" stroke-width="1.5" marker-end="url(#arrow-lav)"/>
+  <line x1="160" y1="100" x2="170" y2="100" stroke="#9333ea" stroke-width="1.5" marker-end="url(#arrow-lav)"/>
+  <line x1="230" y1="100" x2="240" y2="100" stroke="#9333ea" stroke-width="1.5" marker-end="url(#arrow-lav)"/>
+  
+  <!-- Arrow marker -->
+  <defs>
+    <marker id="arrow-lav" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#9333ea"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#f43f5e"/></marker>
+    <marker id="arrow-grn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981"/></marker>
+  </defs>
+  
+  <!-- Inference frames with error -->
+  <text x="80" y="155" text-anchor="middle" font-size="11" font-weight="600" fill="#f43f5e">推理时（自身生成）</text>
+  <rect x="30" y="165" width="60" height="40" rx="6" fill="#fecdd3" stroke="#f43f5e" stroke-width="1.5"/>
+  <text x="60" y="190" text-anchor="middle" font-size="10" fill="#1e1b4b">x̂₁</text>
+  <rect x="100" y="165" width="60" height="40" rx="6" fill="#fecdd3" stroke="#f43f5e" stroke-width="1.5"/>
+  <text x="130" y="190" text-anchor="middle" font-size="10" fill="#1e1b4b">x̂₂<text x="130" y="200" font-size="7" fill="#f43f5e">+ε₁</text></text>
+  <rect x="170" y="165" width="60" height="40" rx="6" fill="#fecdd3" stroke="#f43f5e" stroke-width="2"/>
+  <text x="200" y="190" text-anchor="middle" font-size="10" fill="#1e1b4b">x̂₃<text x="200" y="200" font-size="7" fill="#f43f5e">+ε₁+ε₂</text></text>
+  <rect x="240" y="165" width="60" height="40" rx="6" fill="#fda4af" stroke="#f43f5e" stroke-width="2.5"/>
+  <text x="270" y="190" text-anchor="middle" font-size="10" fill="#fff">x̂₄<text x="270" y="200" font-size="7" fill="#fff">+Σεᵢ</text></text>
+  <!-- Arrows -->
+  <line x1="90" y1="185" x2="100" y2="185" stroke="#f43f5e" stroke-width="1.5" marker-end="url(#arrow-red)"/>
+  <line x1="160" y1="185" x2="170" y2="185" stroke="#f43f5e" stroke-width="1.5" marker-end="url(#arrow-red)"/>
+  <line x1="230" y1="185" x2="240" y2="185" stroke="#f43f5e" stroke-width="1.5" marker-end="url(#arrow-red)"/>
+  
+  <!-- Error growth curve -->
+  <text x="420" y="70" text-anchor="middle" font-size="11" font-weight="600" fill="#1e1b4b">误差幅度</text>
+  <text x="560" y="250" text-anchor="middle" font-size="10" fill="#787887">帧索引 →</text>
+  <path d="M 350 230 Q 400 220 430 200 Q 460 170 490 130 Q 520 90 550 70 Q 580 60 600 55" fill="none" stroke="#f43f5e" stroke-width="2.5" marker-end="url(#arrow-red)"/>
+  <path d="M 350 230 L 600 230" stroke="#e9d5ff" stroke-width="1" stroke-dasharray="4"/>
+  <text x="620" y="70" font-size="9" fill="#f43f5e">视频坍塌</text>
+  <text x="620" y="235" font-size="9" fill="#787887">质量底线</text>
+  
+  <!-- Solution arrow -->
+  <text x="750" y="100" text-anchor="middle" font-size="13" font-weight="700" fill="#10b981">解法</text>
+  <text x="750" y="120" text-anchor="middle" font-size="11" fill="#10b981">训练时模拟</text>
+  <text x="750" y="138" text-anchor="middle" font-size="11" fill="#10b981">推理时的误差</text>
+  <path d="M 650 160 Q 700 140 750 145" fill="none" stroke="#10b981" stroke-width="2" marker-end="url(#arrow-grn)"/>
+</svg>
+<div class="svg-caption">图 S1: Teacher Forcing 的暴露偏差——训练时使用完美历史，推理时误差逐帧累积直至视频坍塌</div>
+</div>
+
+<div class="insight">
+<div class="insight-title">暴露偏差的双重根源</div>
+<p>论文精辟地指出，自回归扩散模型中的分布偏移来自<strong>两个层面</strong>：(1) <strong>帧内误差</strong>（intra-frame）——不完美的score估计和离散化主要影响高频细节；(2) <strong>帧间累积误差</strong>（inter-frame）——通过自回归循环传播放大。这两个误差源的叠加是视频质量随时间退化的根本原因。</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">设计哲学：为什么不用更强的模型消除误差？</div>
+<p>论文的核心洞察是：<strong>在有限模型容量和训练样本下，消除模型误差是不可行的（intractable）</strong>。与其追求完美的单步生成，不如训练模型对输入扰动具有鲁棒性——即"学会在不完美的历史条件下生成正确的未来"。这一思路与LLM中Scheduled Sampling（Bengio et al., 2015）的思想一脉相承，但Resampling Forcing将其推进到了扩散模型的连续空间中。</p>
+</div>
+</section>
+
+<!-- ========== CH2: 自重采样机制 ========== -->
+<section id="ch2">
+<span class="section-tag">CH2 · 核心方法</span>
+<h2>自重采样机制 — Teacher-Free的误差模拟</h2>
+
+<p>Resampling Forcing的核心是一个<strong>自重采样（self-resampling）</strong>机制：在训练过程中，模型首先在历史帧上人为制造误差（模拟推理时的不完美生成），然后使用这些降质历史作为条件进行训练。这一过程完全不需要外部教师模型。</p>
+
+<h3>算法流程</h3>
+
+<p>具体而言，给定干净视频帧 $x_i$，首先将其加噪到采样时间步 $t_s \in (0,1)$：</p>
+
+<div class="formula">
+<div class="formula-label">Eq (5): 自回归自重采样</div>
+$$\tilde{x}_i = x_i^{t_s} + \int_{t_s}^0 v_\theta(x_i^t, \tilde{x}_{\lt i}, t, c)\, dt
+$$
+</div>
+
+<p>其中 $t_s$ 控制重采样强度——较小的 $t_s$ 意味着降质样本 $\tilde{x}_i$ 与真实 $x_i$ 非常接近（低重采样强度），较大的 $t_s$ 则允许更大的误差修正灵活性但增加内容漂移风险。</p>
+
+<!-- SVG 2: 自重采样流程图 -->
+<div class="svg-container">
+<svg viewBox="0 0 900 280" xmlns="http://www.w3.org/2000/svg" style="font-family:'Noto Sans SC',sans-serif">
+  <rect width="900" height="280" fill="#faf5ff" rx="16"/>
+  <text x="450" y="28" text-anchor="middle" font-size="14" font-weight="700" fill="#1e1b4b">自重采样训练流程（Stop Gradient 标记 ∥）</text>
+  
+  <!-- Step 1: Clean frames -->
+  <rect x="30" y="60" width="100" height="50" rx="8" fill="#d8b4fe" stroke="#9333ea" stroke-width="2"/>
+  <text x="80" y="82" text-anchor="middle" font-size="11" font-weight="600" fill="#1e1b4b">干净视频</text>
+  <text x="80" y="98" text-anchor="middle" font-size="10" fill="#4c4b5e">x₁, x₂, ..., xₙ</text>
+  
+  <!-- Arrow to noise -->
+  <line x1="130" y1="85" x2="170" y2="85" stroke="#9333ea" stroke-width="1.5" marker-end="url(#arrow-lav)"/>
+  <text x="150" y="75" text-anchor="middle" font-size="9" fill="#787887">加噪</text>
+  
+  <!-- Step 2: Noised -->
+  <rect x="170" y="60" width="100" height="50" rx="8" fill="#fde68a" stroke="#f59e0b" stroke-width="2"/>
+  <text x="220" y="82" text-anchor="middle" font-size="11" font-weight="600" fill="#1e1b4b">加噪到 tₛ</text>
+  <text x="220" y="98" text-anchor="middle" font-size="10" fill="#4c4b5e">xᵢᵗˢ</text>
+  
+  <!-- Arrow to resample -->
+  <line x1="270" y1="85" x2="310" y2="85" stroke="#9333ea" stroke-width="1.5" marker-end="url(#arrow-lav)"/>
+  <text x="290" y="75" text-anchor="middle" font-size="9" fill="#787887">ODE</text>
+  
+  <!-- Step 3: Resample (with stop gradient) -->
+  <rect x="310" y="50" width="140" height="70" rx="8" fill="#fecdd3" stroke="#f43f5e" stroke-width="2" stroke-dasharray="6"/>
+  <text x="380" y="72" text-anchor="middle" font-size="11" font-weight="600" fill="#f43f5e">∥ 自回归重采样</text>
+  <text x="380" y="90" text-anchor="middle" font-size="9" fill="#4c4b5e">vθ(xᵢᵗ, x̃₍ᵢ₎, t, c)</text>
+  <text x="380" y="106" text-anchor="middle" font-size="9" fill="#f43f5e">Stop Gradient</text>
+  
+  <!-- Arrow to degraded -->
+  <line x1="450" y1="85" x2="490" y2="85" stroke="#9333ea" stroke-width="1.5" marker-end="url(#arrow-lav)"/>
+  
+  <!-- Step 4: Degraded history -->
+  <rect x="490" y="60" width="120" height="50" rx="8" fill="#fecdd3" stroke="#f43f5e" stroke-width="2"/>
+  <text x="550" y="82" text-anchor="middle" font-size="11" font-weight="600" fill="#1e1b4b">降质历史</text>
+  <text x="550" y="98" text-anchor="middle" font-size="10" fill="#4c4b5e">x̃₁, x̃₂, ..., x̃ₙ</text>
+  
+  <!-- Arrow down to training -->
+  <line x1="550" y1="110" x2="550" y2="150" stroke="#9333ea" stroke-width="1.5" marker-end="url(#arrow-lav)"/>
+  <text x="570" y="135" font-size="9" fill="#787887">作为条件</text>
+  
+  <!-- Step 5: Training -->
+  <rect x="430" y="150" width="240" height="60" rx="8" fill="#d1fae5" stroke="#10b981" stroke-width="2"/>
+  <text x="550" y="172" text-anchor="middle" font-size="11" font-weight="600" fill="#10b981">并行训练（因果Mask）</text>
+  <text x="550" y="195" text-anchor="middle" font-size="10" fill="#4c4b5e">L = E[‖(εᵢ-xᵢ) - vθ(xᵢᵗⁱ, x̃₍ᵢ₎, tᵢ, c)‖²]</text>
+  
+  <!-- Ground truth target -->
+  <rect x="700" y="60" width="100" height="50" rx="8" fill="#a7f3d0" stroke="#10b981" stroke-width="2"/>
+  <text x="750" y="82" text-anchor="middle" font-size="11" font-weight="600" fill="#1e1b4b">训练目标</text>
+  <text x="750" y="98" text-anchor="middle" font-size="10" fill="#4c4b5e">干净视频 x₁..xₙ</text>
+  <line x1="700" y1="85" x2="650" y2="170" stroke="#10b981" stroke-width="1.5" stroke-dasharray="4" marker-end="url(#arrow-grn)"/>
+</svg>
+<div class="svg-caption">图 S2: Resampling Forcing 训练流程——降质历史通过 Stop Gradient 隔离，防止 shortcut learning</div>
+</div>
+
+<h3>时间步采样策略</h3>
+
+<p>$t_s$ 的分布至关重要。论文选择<strong>Logit-Normal分布</strong>来采样 $t_s$：</p>
+
+<div class="formula">
+<div class="formula-label">Eq (6): Logit-Normal 采样</div>
+$$\text{logit}(t_s) \sim \mathcal{N}(0, 1)
+$$
+</div>
+
+<p>Logit-Normal分布在中间值处密度最高、在极端值处密度最低，这完美匹配了需求：$t_s=0$ 退化为Teacher Forcing（无重采样），$t_s=1$ 则完全随机化（内容漂移）。</p>
+
+<p>为了进一步调节分布偏移，论文引入<strong>timestep shifting</strong>：</p>
+
+<div class="formula">
+<div class="formula-label">Eq (7): Timestep Shifting</div>
+$$t_s \leftarrow s \cdot t_s / (1 + (s - 1) \cdot t_s)
+$$
+</div>
+
+<p>当 $s \lt 1$ 时，分布向低噪声区域偏移，强调对历史的忠实性；当 $s \gt 1$ 时，分布向高噪声偏移，增强误差修正灵活性。论文设置 $s = 0.6$。</p>
+
+<div class="insight">
+<div class="insight-title">Stop Gradient 的关键作用</div>
+<p>自重采样过程中的梯度被<strong>显式切断</strong>（detached）。这不是可有可无的工程细节——如果不断梯度，模型会学到一种"作弊"策略：在重采样阶段故意产生特定模式的误差，然后在训练阶段利用这些已知误差轻松降低loss。这种<strong>shortcut learning</strong>会破坏模型的真实生成能力。Stop gradient确保模型必须真正学会纠正"自然产生"的误差。</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">与Self Forcing的核心区别：Teacher-Free</div>
+<p>Self Forcing（Huang et al., 2025）虽然也模拟推理过程，但依赖CausVid作为初始化基础（间接依赖bidirectional teacher进行student初始化），且使用DMD loss进行训练。Resampling Forcing则<strong>完全不需要任何教师模型</strong>——它通过自重采样让模型"自己教自己"。这意味着：(1) 训练pipeline更简洁；(2) 可以从零开始训练（training from scratch）；(3) 不存在教师模型的信息泄露问题。</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">Teacher Forcing Warmup 的必要性</div>
+<p>论文注意到，在训练初期，模型尚未收敛到因果架构，无法进行有意义的自回归生成。此时的模型误差主要来自随机初始化而非特定的帧内/帧间误差，自重采样会产生无信息量的学习信号并阻碍收敛。因此，模型先用Teacher Forcing预热10K步，获得基本的自回归能力后，再切换到Resampling Forcing继续训练。</p>
+</div>
+</section>
+
+<!-- ========== CH3: 历史路由 ========== -->
+<section id="ch3">
+<span class="section-tag">CH3 · 效率优化</span>
+<h2>历史路由机制 — 动态Top-K稀疏注意力</h2>
+
+<p>自回归生成中，历史帧数量随视频长度线性增长，导致注意力复杂度从 $O(1)$ 退化为 $O(L)$（$L$ 为历史帧数）。常见的解决方案是<strong>滑动窗口注意力</strong>（Self Forcing、LongLive均采用），但这会牺牲长程依赖。</p>
+
+<p>Resampling Forcing提出了一种<strong>无参数的动态路由机制</strong>：对于每个query token，动态检索最相关的top-k历史帧进行注意力计算。</p>
+
+<div class="formula">
+<div class="formula-label">Eq (8): 稀疏注意力</div>
+$$\text{Attention}(q_i, K_{\lt i}, V_{\lt i}) = \text{Softmax}\left(\frac{q_i K_{\Omega(q_i)}^\top}{\sqrt{d}}\right) \cdot V_{\Omega(q_i)}
+$$
+</div>
+
+<div class="formula">
+<div class="formula-label">Eq (9): Top-K 选择</div>
+$$\Omega(q_i) = \arg\max_{\Omega^*} \sum_{j \in \Omega^*} q_i^\top \phi(K_j)
+$$
+</div>
+
+<p>其中 $\phi(\cdot)$ 使用<strong>均值池化</strong>作为帧描述符变换——无参数、且与注意力分数计算一致。这将每token的注意力复杂度从 $O(L)$ 降低到 $O(k)$，实现 $1 - k/L$ 的稀疏度。</p>
+
+<!-- SVG 3: History Routing 机制图 -->
+<div class="svg-container">
+<svg viewBox="0 0 900 350" xmlns="http://www.w3.org/2000/svg" style="font-family:'Noto Sans SC',sans-serif">
+  <rect width="900" height="350" fill="#faf5ff" rx="16"/>
+  <text x="450" y="28" text-anchor="middle" font-size="14" font-weight="700" fill="#1e1b4b">History Routing：动态选择最相关的历史帧</text>
+  
+  <!-- Current frame query -->
+  <rect x="400" y="50" width="100" height="45" rx="8" fill="#d8b4fe" stroke="#9333ea" stroke-width="2.5"/>
+  <text x="450" y="72" text-anchor="middle" font-size="12" font-weight="700" fill="#1e1b4b">Query q₄</text>
+  <text x="450" y="88" text-anchor="middle" font-size="9" fill="#4c4b5e">当前帧</text>
+  
+  <!-- History frames -->
+  <rect x="50" y="150" width="70" height="40" rx="6" fill="#e9d5ff" stroke="#c084fc" stroke-width="1.5"/>
+  <text x="85" y="175" text-anchor="middle" font-size="10" fill="#1e1b4b">x̃₁</text>
+  
+  <rect x="150" y="150" width="70" height="40" rx="6" fill="#f3e8ff" stroke="#c084fc" stroke-width="1" opacity="0.4"/>
+  <text x="185" y="175" text-anchor="middle" font-size="10" fill="#787887">x̃₂</text>
+  
+  <rect x="250" y="150" width="70" height="40" rx="6" fill="#e9d5ff" stroke="#c084fc" stroke-width="1.5"/>
+  <text x="285" y="175" text-anchor="middle" font-size="10" fill="#1e1b4b">x̃₃</text>
+  
+  <!-- Selected frames highlighted -->
+  <rect x="45" y="145" width="80" height="50" rx="8" fill="none" stroke="#10b981" stroke-width="2.5" stroke-dasharray="4"/>
+  <rect x="245" y="145" width="80" height="50" rx="8" fill="none" stroke="#10b981" stroke-width="2.5" stroke-dasharray="4"/>
+  
+  <!-- Connection lines -->
+  <line x1="420" y1="95" x2="90" y2="150" stroke="#10b981" stroke-width="2" marker-end="url(#arrow-grn)"/>
+  <line x1="430" y1="95" x2="285" y2="150" stroke="#10b981" stroke-width="2" marker-end="url(#arrow-grn)"/>
+  <line x1="450" y1="95" x2="185" y2="150" stroke="#c084fc" stroke-width="1" stroke-dasharray="4" opacity="0.3"/>
+  
+  <!-- Top-K label -->
+  <text x="85" y="210" text-anchor="middle" font-size="10" font-weight="600" fill="#10b981">Top-1 ✓</text>
+  <text x="185" y="210" text-anchor="middle" font-size="10" fill="#787887">未选中</text>
+  <text x="285" y="210" text-anchor="middle" font-size="10" font-weight="600" fill="#10b981">Top-2 ✓</text>
+  
+  <!-- Router mechanism -->
+  <rect x="550" y="130" width="300" height="100" rx="12" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="700" y="155" text-anchor="middle" font-size="12" font-weight="700" fill="#1e1b4b">Top-K Router（无参数）</text>
+  <text x="700" y="175" text-anchor="middle" font-size="10" fill="#4c4b5e">score = qᵢᵀ · MeanPool(Kⱼ)</text>
+  <text x="700" y="195" text-anchor="middle" font-size="10" fill="#4c4b5e">选择 score 最高的 k 个历史帧</text>
+  <text x="700" y="215" text-anchor="middle" font-size="10" fill="#787887">每head每token独立路由 → 有效感受场 ≫ k</text>
+  
+  <!-- Comparison: sliding window -->
+  <rect x="50" y="260" width="350" height="70" rx="10" fill="#ffe4e6" stroke="#fb7185" stroke-width="1"/>
+  <text x="225" y="282" text-anchor="middle" font-size="11" font-weight="600" fill="#f43f5e">❌ 滑动窗口（固定局部）</text>
+  <text x="225" y="300" text-anchor="middle" font-size="10" fill="#4c4b5e">只看最近w帧 → 长程信息丢失 → 一致性退化</text>
+  <text x="225" y="318" text-anchor="middle" font-size="10" fill="#787887">Self Forcing / LongLive 采用</text>
+  
+  <rect x="500" y="260" width="350" height="70" rx="10" fill="#d1fae5" stroke="#34d399" stroke-width="1"/>
+  <text x="675" y="282" text-anchor="middle" font-size="11" font-weight="600" fill="#10b981">✓ History Routing（动态全局）</text>
+  <text x="675" y="300" text-anchor="middle" font-size="10" fill="#4c4b5e">按相关性选择 → 保持长程一致性</text>
+  <text x="675" y="318" text-anchor="middle" font-size="10" fill="#787887">75%稀疏度，质量几乎无损</text>
+</svg>
+<div class="svg-caption">图 S3: History Routing vs 滑动窗口——动态路由通过内容感知选择实现更大有效感受场</div>
+</div>
+
+<div class="insight">
+<div class="insight-title">Head-wise 路由的隐含优势</div>
+<p>虽然每个head每个token只选择 $k$ 个历史帧，但不同attention head和不同空间位置的token会路由到<strong>不同的历史帧组合</strong>。这意味着模型的整体有效感受场远大于 $k$ 帧——论文实验中 $k=5$ 就达到了75%稀疏度且质量几乎无损。这与MoBA（Mixture of Block Attention, Lu et al., 2025）在LLM中的稀疏注意力设计一脉相承。</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">两分支注意力融合的工程实现</div>
+<p>论文采用MoBA的高效两分支注意力：(1) <strong>帧内分支</strong>——每个query只attend自己帧内的token；(2) <strong>历史分支</strong>——选择top-k历史帧进行稀疏注意力。两个分支通过全局log-sum-exp对齐后融合，等价于在所有key的并集上做单一softmax。两个分支都使用FlashAttention的 <code>flash_attn_varlen_func()</code> 接口实现。</p>
+</div>
+</section>
+
+<!-- ========== CH4: 代码实现 ========== -->
+<section id="ch4">
+<span class="section-tag">CH4 · 代码解析</span>
+<h2>代码实现解析</h2>
+
+<p>以下代码基于论文Algorithm 1和方法描述构建。<strong>[示意性实现]</strong> 表示基于论文描述构建的参考代码，非官方实现。</p>
+
+<h3>核心算法：Algorithm 1 完整实现</h3>
+
+<div class="code-block" data-label="[示意性实现] Algorithm 1: Resampling Forcing">
+<pre><code><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn.functional <span class="kw">as</span> F
+
+<span class="kw">def</span> <span class="fn">resampling_forcing_training</span>(
+    model,          <span class="com"># Causal DiT vθ(·)</span>
+    video_data,     <span class="com"># (x_{1:N}, c) from dataset D</span>
+    shift_s=<span class="num">0.6</span>,   <span class="com"># timestep shifting parameter</span>
+    solver_steps=<span class="num">1</span>, <span class="com"># 1-step Euler for efficiency</span>
+):
+    <span class="str">"""Algorithm 1: Resampling Forcing Training Loop"""</span>
+    x_clean = video_data[<span class="str">'frames'</span>]  <span class="com"># [N, C, H, W] clean video</span>
+    cond = video_data[<span class="str">'condition'</span>]   <span class="com"># text condition c</span>
+    N = x_clean.shape[<span class="num">0</span>]
+
+    <span class="com"># Step 1: Sample simulation timestep from LogitNormal(0,1)</span>
+    <span class="com"># logit(t_s) ~ N(0,1), then apply shifting</span>
+    u = torch.randn(<span class="num">1</span>)              <span class="com"># sample from N(0,1)</span>
+    t_s = torch.sigmoid(u)           <span class="com"># inverse logit → t_s in (0,1)</span>
+    t_s = shift_s * t_s / (<span class="num">1</span> + (shift_s - <span class="num">1</span>) * t_s)  <span class="com"># Eq(7) shifting</span>
+
+    <span class="com"># Step 2: Add noise to clean video at timestep t_s</span>
+    epsilon = torch.randn_like(x_clean)
+    x_noisy = (<span class="num">1</span> - t_s) * x_clean + t_s * epsilon  <span class="com"># Eq(3) interpolation</span>
+
+    <span class="com"># Step 3: Autoregressive resampling with STOP GRADIENT</span>
+    x_degraded = []
+    <span class="kw">with</span> torch.no_grad():  <span class="com"># ← Critical: detach gradients</span>
+        kv_cache = {}
+        <span class="kw">for</span> i <span class="kw">in</span> range(N):
+            <span class="com"># Solve ODE from t_s to 0 using model weights</span>
+            x_i_t = x_noisy[i]
+            <span class="kw">for</span> step <span class="kw">in</span> range(solver_steps):
+                t_cur = t_s * (<span class="num">1</span> - step / solver_steps)
+                v = model(x_i_t, x_degraded, t_cur, cond, kv_cache)
+                x_i_t = x_i_t - (t_s / solver_steps) * v
+            x_degraded.append(x_i_t)  <span class="com"># degraded frame ˜x_i</span>
+
+    x_degraded = torch.stack(x_degraded)  <span class="com"># [N, C, H, W]</span>
+
+    <span class="com"># Step 4: Parallel training with causal mask</span>
+    t_train = torch.rand(N)  <span class="com"># per-frame training timesteps</span>
+    eps_train = torch.randn_like(x_clean)
+    x_t_train = (<span class="num">1</span> - t_train[:,None,None,None]) * x_clean \
+              + t_train[:,None,None,None] * eps_train
+
+    <span class="com"># Forward pass with degraded history + causal mask</span>
+    v_pred = model(x_t_train, x_degraded, t_train, cond)
+
+    <span class="com"># Step 5: Compute velocity regression loss (Eq.4)</span>
+    v_target = eps_train - x_clean
+    loss = F.mse_loss(v_pred, v_target)
+
+    <span class="kw">return</span> loss</code></pre>
+</div>
+
+<h3>History Routing 实现</h3>
+
+<div class="code-block" data-label="[示意性实现] History Routing: 动态Top-K稀疏注意力">
+<pre><code><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn.functional <span class="kw">as</span> F
+
+<span class="kw">class</span> <span class="fn">HistoryRouter</span>:
+    <span class="str">"""Parameter-free top-k history frame router.
+    Following MoBA: mean-pool as frame descriptor."""</span>
+
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, k=<span class="num">5</span>):
+        self.k = k
+
+    <span class="kw">def</span> <span class="fn">compute_routing</span>(self, q, K_history):
+        <span class="str">"""Select top-k history frames per query token.
+        Args:
+            q: [num_heads, L_q, d] query tokens
+            K_history: [num_heads, L_hist, d] history keys
+        Returns:
+            selected_indices: [num_heads, L_q, k]
+        """</span>
+        <span class="com"># Frame descriptor: mean pool over spatial tokens</span>
+        <span class="com"># ϕ(K_j) = MeanPool(K_j), following Eq(9)</span>
+        frame_desc = K_history.mean(dim=<span class="num">1</span>, keepdim=<span class="kw">True</span>)  <span class="com"># [H, 1, d]</span>
+
+        <span class="com"># Compute relevance scores: q_i^T · ϕ(K_j)</span>
+        scores = torch.einsum(<span class="str">'hqd,hd->hq'</span>, q, frame_desc.squeeze(<span class="num">1</span>))
+        <span class="com"># scores: [H, L_q] — one score per query per head</span>
+
+        <span class="com"># Select top-k history frames</span>
+        _, indices = torch.topk(scores, self.k, dim=-<span class="num">1</span>)
+        <span class="kw">return</span> indices  <span class="com"># [H, L_q, k]</span>
+
+    <span class="kw">def</span> <span class="fn">sparse_attention</span>(self, q, K, V, k_cache):
+        <span class="str">"""Two-branch attention: intra-frame + sparse history.
+        Fused via global log-sum-exp alignment."""</span>
+        <span class="com"># Branch 1: Intra-frame attention (full)</span>
+        attn_intra = F.scaled_dot_product_attention(q, K, V)
+
+        <span class="com"># Branch 2: Sparse history attention (top-k)</span>
+        indices = self.compute_routing(q, k_cache)
+        K_selected = gather(k_cache, indices)  <span class="com"># [H, L_q, k, d]</span>
+        V_selected = gather(v_cache, indices)
+        attn_hist = F.scaled_dot_product_attention(
+            q, K_selected, V_selected
+        )
+
+        <span class="com"># Fuse via log-sum-exp (MoBA-style)</span>
+        <span class="com"># ... (simplified for clarity)</span>
+        <span class="kw">return</span> attn_intra + attn_hist  <span class="com"># simplified fusion</span></code></pre>
+</div>
+
+<h3>Timestep 采样（可运行实现）</h3>
+
+<div class="code-block" data-label="[可运行实现] Timestep Sampling: Logit-Normal + Shifting">
+<pre><code><span class="kw">import</span> torch
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+<span class="kw">def</span> <span class="fn">sample_resampling_timestep</span>(
+    batch_size, shift_s=<span class="num">0.6</span>, device=<span class="str">'cuda'</span>
+):
+    <span class="str">"""Sample simulation timestep t_s for Resampling Forcing.
+    
+    Eq(6): logit(t_s) ~ N(0,1)  →  t_s = sigmoid(u), u ~ N(0,1)
+    Eq(7): t_s ← s·t_s / (1 + (s-1)·t_s)
+    
+    Args:
+        batch_size: number of samples
+        shift_s: shifting parameter (s < 1 → bias toward low noise)
+    Returns:
+        t_s: [batch_size] simulation timesteps in (0, 1)
+    """</span>
+    <span class="com"># Step 1: Sample from LogitNormal(0,1)</span>
+    u = torch.randn(batch_size, device=device)
+    t_s = torch.sigmoid(u)  <span class="com"># inverse logit</span>
+
+    <span class="com"># Step 2: Apply timestep shifting (Eq.7)</span>
+    t_s = shift_s * t_s / (<span class="num">1</span> + (shift_s - <span class="num">1</span>) * t_s)
+
+    <span class="kw">return</span> t_s
+
+<span class="com"># 验证分布特性</span>
+<span class="kw">if</span> __name__ == <span class="str">'__main__'</span>:
+    t_samples = sample_resampling_timestep(<span class="num">100000</span>, shift_s=<span class="num">0.6</span>, device=<span class="str">'cpu'</span>)
+    print(f<span class="str">"Mean: {t_samples.mean():.3f}"</span>)   <span class="com"># ≈ 0.35</span>
+    print(f<span class="str">"Std:  {t_samples.std():.3f}"</span>)    <span class="com"># ≈ 0.15</span>
+    print(f<span class="str">"Min:  {t_samples.min():.3f}"</span>)    <span class="com"># ≈ 0.01</span>
+    print(f<span class="str">"Max:  {t_samples.max():.3f}"</span>)    <span class="com"># ≈ 0.85</span></code></pre>
+</div>
+
+<div class="insight">
+<div class="insight-title">1-Step Euler 的工程权衡</div>
+<p>论文在自重采样阶段使用<strong>1-step Euler solver</strong>（而非推理时的32步）来完成从 $t_s$ 到 0 的ODE求解。这是一个关键的效率权衡：更少的求解步数意味着更快的训练，但也会引入更大的近似误差。论文认为这种误差恰好是有益的——它进一步增强了模型对不完美输入的鲁棒性。</p>
+</div>
+</section>
+
+<!-- ========== CH5: 实验结果 ========== -->
+<section id="ch5">
+<span class="section-tag">CH5 · 实验验证</span>
+<h2>实验结果 — 15秒视频的全面评估</h2>
+
+<p>论文基于WAN2.1-1.3B架构进行实验，将原始双向注意力修改为因果注意力，使用chunk size为3个latent帧作为自回归单元。训练分三个阶段：Teacher Forcing预热10K步 → Resampling Forcing 5s训练15K步 → 15s训练5K步 → 稀疏路由微调1.5K步。</p>
+
+<h3>定量结果</h3>
+
+<p>论文将生成的15秒视频分为三段（0-5s, 5-10s, 10-15s）分别评估，以更好地检测长程质量退化：</p>
+
+<div class="figure">
+<img src="assets/table1_quantitative.webp" alt="Table 1: 定量比较结果">
+<div class="figure-caption">Table 1: 15秒视频分段VBench评估。Ours在所有时段的Temporal指标上均领先，且不依赖教师模型。</div>
+</div>
+
+<table class="result-table">
+<thead>
+<tr><th>方法</th><th>参数</th><th>教师模型</th><th>Temporal 0-15s</th><th>Visual 0-15s</th><th>Text 0-15s</th></tr>
+</thead>
+<tbody>
+<tr><td>SkyReels-V2</td><td>1.3B</td><td>-</td><td>81.93</td><td>60.25</td><td>21.92</td></tr>
+<tr><td>MAGI-1</td><td>4.5B</td><td>-</td><td>87.09</td><td>59.79</td><td>26.18</td></tr>
+<tr><td>CausVid</td><td>1.3B</td><td>WAN2.1-14B</td><td>89.35</td><td>65.80</td><td>23.95</td></tr>
+<tr><td>Self Forcing</td><td>1.3B</td><td>WAN2.1-14B</td><td>90.03</td><td>67.12</td><td>25.02</td></tr>
+<tr><td>LongLive</td><td>1.3B</td><td>WAN2.1-14B</td><td>81.84</td><td>66.56</td><td>24.41</td></tr>
+<tr class="ours"><td><strong>Ours (75% sparsity)</strong></td><td>1.3B</td><td><strong>无</strong></td><td>90.18</td><td>63.95</td><td>24.12</td></tr>
+<tr class="ours"><td><strong>Ours (dense)</strong></td><td>1.3B</td><td><strong>无</strong></td><td class="best">91.20</td><td>64.72</td><td class="best">25.79</td></tr>
+</tbody>
+</table>
+
+<div class="insight">
+<div class="insight-title">无需教师模型的SOTA级性能</div>
+<p>Ours在Temporal Score上以<strong>91.20</strong>超越所有基线，包括依赖14B参数bidirectional teacher的CausVid（89.35）和Self Forcing（90.03）。更关键的是，75%稀疏度版本（90.18）与dense版本（91.20）差距仅1.02，证明History Routing的有效性。</p>
+</div>
+
+<h3>因果性验证：倒牛奶实验</h3>
+
+<div class="figure">
+<img src="assets/fig5_qualitative.webp" alt="Figure 5: 定性比较">
+<div class="figure-caption">Figure 5: 长视频定性比较。底部：LongLive的液面先升后降（违反物理因果），Ours的液面单调上升（严格因果）。</div>
+</div>
+
+<p>论文用一个极具说服力的案例展示了因果性差异：在"倒牛奶"场景中，LongLive（基于bidirectional teacher蒸馏）产生了<strong>液面先升后降</strong>的违反物理现象——因为bidirectional teacher允许未来信息通过attention泄露到早期帧。而Resampling Forcing严格保持因果性：液面单调上升，源容器逐渐排空。</p>
+
+<div class="deep-insight">
+<div class="deep-insight-title">为什么蒸馏会破坏因果性？</div>
+<p>论文指出两个原因：(1) <strong>Bidirectional teacher的固有非因果性</strong>——教师模型的attention允许未来帧影响早期帧，在蒸馏过程中将这种非因果行为传递给学生；(2) <strong>子片段蒸馏的局部偏差</strong>——LongLive取5秒子片段计算蒸馏loss，强调局部外观质量而忽略全局因果关系。Resampling Forcing的训练<strong>严格禁止未来信息泄露</strong>（通过因果mask实现），从根本上保证了因果性。</p>
+</div>
+</section>
+
+<!-- ========== CH6: 消融研究 ========== -->
+<section id="ch6">
+<span class="section-tag">CH6 · 消融分析</span>
+<h2>消融研究 — 设计选择的实证验证</h2>
+
+<h3>误差模拟策略比较</h3>
+
+<div class="figure">
+<img src="assets/table2_error_simulation.webp" alt="Table 2: Error Simulation策略消融">
+<div class="figure-caption">Table 2: 三种误差模拟策略的比较。自回归重采样显著优于其他方案。</div>
+</div>
+
+<table class="result-table">
+<thead>
+<tr><th>策略</th><th>Temporal</th><th>Visual</th><th>Text</th></tr>
+</thead>
+<tbody>
+<tr><td>Noise Augmentation</td><td>87.15</td><td>61.90</td><td>21.44</td></tr>
+<tr><td>Resampling - Parallel</td><td>88.01</td><td>62.51</td><td>24.51</td></tr>
+<tr class="ours"><td><strong>Resampling - Autoregressive</strong></td><td class="best">90.46</td><td class="best">64.25</td><td class="best">25.26</td></tr>
+</tbody>
+</table>
+
+<p>三种策略的优劣排序：<strong>自回归重采样 ≫ 并行重采样 ≫ 噪声增强</strong>。噪声增强（往历史帧加小高斯噪声）与推理时的误差模式不匹配；并行重采样只捕获帧内退化而忽略帧间累积；自回归重采样则同时模拟两种误差来源。</p>
+
+<h3>Timestep Shifting 消融</h3>
+
+<div class="figure">
+<img src="assets/fig6_timestep_shifting.webp" alt="Figure 6: Timestep Shifting消融">
+<div class="figure-caption">Figure 6: 小s（0.1）→误差累积；大s（3.0）→内容漂移；适中s（0.6）→平衡。</div>
+</div>
+
+<div class="insight">
+<div class="insight-title">$s$ 的物理含义</div>
+<p>$s$ 控制着重采样的"力度"。$s=0.1$ 时 $t_s$ 集中在极低值，模型几乎只看到干净历史→误差累积风险高；$s=3.0$ 时 $t_s$ 集中在高值，历史帧被严重破坏→模型被迫大幅偏离历史→内容漂移。$s=0.6$ 是两者的平衡点。</p>
+</div>
+
+<h3>Sparse History 策略比较</h3>
+
+<div class="figure">
+<img src="assets/fig7_sparse_history.webp" alt="Figure 7: Sparse History策略比较">
+<div class="figure-caption">Figure 7: Top-5路由(75%稀疏)质量接近dense；Top-1路由(95%稀疏)仍保持合理质量。</div>
+</div>
+
+<h3>History Routing 频率分析</h3>
+
+<div class="figure">
+<img src="assets/fig8_routing_frequency.webp" alt="Figure 8: History Routing频率">
+<div class="figure-caption">Figure 8: 路由选择频率呈"滑动窗口+attention sink"混合模式。</div>
+</div>
+
+<p>论文可视化了生成第21帧时对前20帧的选择频率，发现一个有趣的<strong>混合模式</strong>：路由器优先选择初始帧（类似attention sink）和最近的帧（类似滑动窗口）。这种模式在 $k=1$ 时最明显，随着 $k$ 增大变得更加分散。</p>
+
+<div class="deep-insight">
+<div class="deep-insight-title">路由频率的理论意义</div>
+<p>这一发现为LongLive的"frame sink + sliding window"启发式设计提供了<strong>经验支持</strong>——固定启发式掩码是动态路由的一种特殊情况。论文的结果暗示了一条更好的路径：用动态、内容感知的路由替代固定启发式，探索更大空间的上下文组合。这与LLM中MoBA的设计哲学一致。</p>
+</div>
+</section>
+
+<!-- ========== CH7: 方法对比 ========== -->
+<section id="ch7">
+<span class="section-tag">CH7 · 全景对比</span>
+<h2>与相关方法的全景对比</h2>
+
+<!-- SVG 4: 方法对比表 -->
+<div class="svg-container">
+<svg viewBox="0 0 900 400" xmlns="http://www.w3.org/2000/svg" style="font-family:'Noto Sans SC',sans-serif">
+  <rect width="900" height="400" fill="#faf5ff" rx="16"/>
+  <text x="450" y="28" text-anchor="middle" font-size="14" font-weight="700" fill="#1e1b4b">自回归视频生成方法谱系</text>
+  
+  <!-- Timeline -->
+  <line x1="60" y1="60" x2="840" y2="60" stroke="#e9d5ff" stroke-width="2"/>
+  <circle cx="150" cy="60" r="6" fill="#9333ea"/>
+  <circle cx="300" cy="60" r="6" fill="#c084fc"/>
+  <circle cx="450" cy="60" r="6" fill="#f43f5e"/>
+  <circle cx="600" cy="60" r="6" fill="#fb7185"/>
+  <circle cx="750" cy="60" r="6" fill="#10b981"/>
+  
+  <text x="150" y="50" text-anchor="middle" font-size="9" fill="#787887">2024</text>
+  <text x="300" y="50" text-anchor="middle" font-size="9" fill="#787887">2025 H1</text>
+  <text x="450" y="50" text-anchor="middle" font-size="9" fill="#787887">2025 H1</text>
+  <text x="600" y="50" text-anchor="middle" font-size="9" fill="#787887">2025 H2</text>
+  <text x="750" y="50" text-anchor="middle" font-size="9" fill="#787887">2025 H2</text>
+  
+  <!-- Method cards -->
+  <rect x="90" y="75" width="120" height="55" rx="8" fill="#f3e8ff" stroke="#9333ea" stroke-width="1.5"/>
+  <text x="150" y="95" text-anchor="middle" font-size="10" font-weight="600" fill="#1e1b4b">Diffusion Forcing</text>
+  <text x="150" y="110" text-anchor="middle" font-size="8" fill="#4c4b5e">Per-frame noise</text>
+  <text x="150" y="122" text-anchor="middle" font-size="8" fill="#787887">NeurIPS 2024</text>
+  
+  <rect x="240" y="75" width="120" height="55" rx="8" fill="#ffe4e6" stroke="#f43f5e" stroke-width="1.5"/>
+  <text x="300" y="95" text-anchor="middle" font-size="10" font-weight="600" fill="#1e1b4b">CausVid</text>
+  <text x="300" y="110" text-anchor="middle" font-size="8" fill="#4c4b5e">Bidirectional蒸馏</text>
+  <text x="300" y="122" text-anchor="middle" font-size="8" fill="#787887">CVPR 2025</text>
+  
+  <rect x="390" y="75" width="120" height="55" rx="8" fill="#fecdd3" stroke="#fb7185" stroke-width="1.5"/>
+  <text x="450" y="95" text-anchor="middle" font-size="10" font-weight="600" fill="#1e1b4b">Self Forcing</text>
+  <text x="450" y="110" text-anchor="middle" font-size="8" fill="#4c4b5e">DMD + KV Cache</text>
+  <text x="450" y="122" text-anchor="middle" font-size="8" fill="#787887">NeurIPS 2025</text>
+  
+  <rect x="540" y="75" width="120" height="55" rx="8" fill="#e9d5ff" stroke="#9333ea" stroke-width="1.5"/>
+  <text x="600" y="95" text-anchor="middle" font-size="10" font-weight="600" fill="#1e1b4b">LongLive</text>
+  <text x="600" y="110" text-anchor="middle" font-size="8" fill="#4c4b5e">Sink + Sliding Window</text>
+  <text x="600" y="122" text-anchor="middle" font-size="8" fill="#787887">2025</text>
+  
+  <rect x="690" y="75" width="120" height="55" rx="8" fill="#d1fae5" stroke="#10b981" stroke-width="2.5"/>
+  <text x="750" y="95" text-anchor="middle" font-size="10" font-weight="700" fill="#1e1b4b">Resampling Forcing</text>
+  <text x="750" y="110" text-anchor="middle" font-size="8" fill="#10b981">Self-Resampling</text>
+  <text x="750" y="122" text-anchor="middle" font-size="8" fill="#10b981">Teacher-Free ✓</text>
+  
+  <!-- Comparison dimensions -->
+  <text x="60" y="170" font-size="11" font-weight="700" fill="#1e1b4b">对比维度</text>
+  
+  <text x="80" y="195" font-size="10" fill="#4c4b5e">教师模型需求</text>
+  <rect x="250" y="183" width="60" height="16" rx="4" fill="#fecdd3"/><text x="280" y="195" text-anchor="middle" font-size="8" fill="#f43f5e">需要</text>
+  <rect x="370" y="183" width="60" height="16" rx="4" fill="#fecdd3"/><text x="400" y="195" text-anchor="middle" font-size="8" fill="#f43f5e">需要</text>
+  <rect x="600" y="183" width="60" height="16" rx="4" fill="#fecdd3"/><text x="630" y="195" text-anchor="middle" font-size="8" fill="#f43f5e">需要</text>
+  <rect x="720" y="183" width="70" height="16" rx="4" fill="#d1fae5"/><text x="755" y="195" text-anchor="middle" font-size="8" fill="#10b981">无需 ✓</text>
+  
+  <text x="80" y="220" font-size="10" fill="#4c4b5e">因果性保证</text>
+  <rect x="250" y="208" width="60" height="16" rx="4" fill="#fef3c7"/><text x="280" y="220" text-anchor="middle" font-size="8" fill="#787887">部分</text>
+  <rect x="370" y="208" width="60" height="16" rx="4" fill="#fecdd3"/><text x="400" y="220" text-anchor="middle" font-size="8" fill="#f43f5e">弱</text>
+  <rect x="600" y="208" width="60" height="16" rx="4" fill="#fecdd3"/><text x="630" y="220" text-anchor="middle" font-size="8" fill="#f43f5e">弱</text>
+  <rect x="720" y="208" width="70" height="16" rx="4" fill="#d1fae5"/><text x="755" y="220" text-anchor="middle" font-size="8" fill="#10b981">严格 ✓</text>
+  
+  <text x="80" y="245" font-size="10" fill="#4c4b5e">历史处理方式</text>
+  <text x="280" y="245" text-anchor="middle" font-size="8" fill="#787887">Per-frame noise</text>
+  <text x="400" y="245" text-anchor="middle" font-size="8" fill="#787887">Full context</text>
+  <text x="630" y="245" text-anchor="middle" font-size="8" fill="#787887">Sink+Window</text>
+  <text x="755" y="245" text-anchor="middle" font-size="8" fill="#10b981">Dynamic Routing</text>
+  
+  <text x="80" y="270" font-size="10" fill="#4c4b5e">端到端训练</text>
+  <rect x="720" y="258" width="70" height="16" rx="4" fill="#d1fae5"/><text x="755" y="270" text-anchor="middle" font-size="8" fill="#10b981">✓ 端到端</text>
+</svg>
+<div class="svg-caption">图 S4: 自回归视频生成方法谱系——Resampling Forcing是唯一同时满足Teacher-Free、严格因果、动态路由的方法</div>
+</div>
+
+<h3>多维度对比表</h3>
+
+<table class="result-table">
+<thead>
+<tr><th>方法</th><th>教师模型</th><th>训练方式</th><th>历史处理</th><th>因果性</th><th>端到端</th></tr>
+</thead>
+<tbody>
+<tr><td>Diffusion Forcing</td><td>无</td><td>Per-frame noise</td><td>独立噪声级</td><td>严格</td><td>✓</td></tr>
+<tr><td>CausVid</td><td>WAN2.1-14B</td><td>非对称蒸馏</td><td>Full context</td><td>弱</td><td>✗</td></tr>
+<tr><td>Self Forcing</td><td>CausVid初始化</td><td>DMD loss</td><td>Rolling KV</td><td>弱</td><td>✗</td></tr>
+<tr><td>LongLive</td><td>WAN2.1-14B</td><td>子片段蒸馏</td><td>Sink+Window</td><td>弱</td><td>✗</td></tr>
+<tr class="ours"><td><strong>Resampling Forcing</strong></td><td><strong>无</strong></td><td><strong>Self-resampling</strong></td><td><strong>Dynamic Routing</strong></td><td><strong>严格</strong></td><td><strong>✓</strong></td></tr>
+</tbody>
+</table>
+
+<!-- SVG 5: Exposure Bias 解决范式对比 -->
+<div class="svg-container">
+<svg viewBox="0 0 900 220" xmlns="http://www.w3.org/2000/svg" style="font-family:'Noto Sans SC',sans-serif">
+  <rect width="900" height="220" fill="#faf5ff" rx="16"/>
+  <text x="450" y="28" text-anchor="middle" font-size="14" font-weight="700" fill="#1e1b4b">Exposure Bias 的三种解决范式</text>
+  
+  <!-- Paradigm 1: Teacher Forcing baseline -->
+  <rect x="30" y="50" width="250" height="150" rx="12" fill="#f3e8ff" stroke="#c084fc" stroke-width="1"/>
+  <text x="155" y="72" text-anchor="middle" font-size="12" font-weight="700" fill="#9333ea">范式一：Teacher Forcing</text>
+  <text x="155" y="95" text-anchor="middle" font-size="10" fill="#4c4b5e">训练时用完美历史</text>
+  <text x="155" y="112" text-anchor="middle" font-size="10" fill="#4c4b5e">推理时用自身输出</text>
+  <text x="155" y="140" text-anchor="middle" font-size="11" font-weight="600" fill="#f43f5e">✗ 分布不匹配 → 误差累积</text>
+  <text x="155" y="160" text-anchor="middle" font-size="9" fill="#787887">ACDiT, Ca2-VDM 等</text>
+  
+  <!-- Paradigm 2: Distillation-based -->
+  <rect x="310" y="50" width="250" height="150" rx="12" fill="#ffe4e6" stroke="#fb7185" stroke-width="1"/>
+  <text x="435" y="72" text-anchor="middle" font-size="12" font-weight="700" fill="#f43f5e">范式二：蒸馏/对抗训练</text>
+  <text x="435" y="95" text-anchor="middle" font-size="10" fill="#4c4b5e">自回归rollout后</text>
+  <text x="435" y="112" text-anchor="middle" font-size="10" fill="#4c4b5e">用教师/判别器匹配分布</text>
+  <text x="435" y="140" text-anchor="middle" font-size="11" font-weight="600" fill="#fb7185">△ 需要额外模型 · 因果性弱</text>
+  <text x="435" y="160" text-anchor="middle" font-size="9" fill="#787887">CausVid, Self Forcing, LongLive</text>
+  
+  <!-- Paradigm 3: Self-Resampling -->
+  <rect x="590" y="50" width="280" height="150" rx="12" fill="#d1fae5" stroke="#34d399" stroke-width="2"/>
+  <text x="730" y="72" text-anchor="middle" font-size="12" font-weight="700" fill="#10b981">范式三：自重采样</text>
+  <text x="730" y="95" text-anchor="middle" font-size="10" fill="#4c4b5e">训练时用模型自身生成的降质历史</text>
+  <text x="730" y="112" text-anchor="middle" font-size="10" fill="#4c4b5e">端到端 · 无需教师 · 严格因果</text>
+  <text x="730" y="140" text-anchor="middle" font-size="11" font-weight="600" fill="#10b981">✓ Teacher-Free · 严格因果 · 端到端</text>
+  <text x="730" y="160" text-anchor="middle" font-size="9" fill="#10b981">Resampling Forcing (本文)</text>
+</svg>
+<div class="svg-caption">图 S5: Exposure Bias 的三种解决范式——Resampling Forcing开创了第三种：自重采样</div>
+</div>
+</section>
+
+<!-- ========== CH8: 局限与未来 ========== -->
+<section id="ch8">
+<span class="section-tag">CH8 · 批判评估</span>
+<h2>局限与未来方向</h2>
+
+<p>论文坦诚地指出了两个核心局限：</p>
+
+<h3>推理延迟</h3>
+<p>作为扩散方法，Resampling Forcing需要迭代去噪步进行推理（论文使用32步Euler采样器）。实现实时延迟需要后处理加速，如少步蒸馏或改进的采样器。</p>
+
+<h3>双序列处理开销</h3>
+<p>训练时需要同时处理两个序列——扩散样本和干净历史——这增加了计算开销。论文建议可以通过类似Self Forcing的架构优化来改进。</p>
+
+<div class="insight">
+<div class="insight-title">与Self-Forcing++的互补关系</div>
+<p>Resampling Forcing解决了"如何从零训练"的问题，Self-Forcing++解决了"如何生成分钟级长视频"的问题。两者的方法论互补：Resampling Forcing的自重采样可以与Self-Forcing++的Backward Noise Initialization结合——前者模拟帧内误差，后者处理帧间累积。未来的工作可以探索两者的统一框架。</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">History Routing的计算-质量Pareto前沿</div>
+<p>论文展示了75%稀疏度（top-5/20）几乎无质量损失，95%稀疏度（top-1/20）仍有合理质量。但论文未探索的是：<strong>最优稀疏度是否随视频内容变化</strong>？对于静态场景，top-1可能就够了；对于复杂动态场景，可能需要top-7甚至更多。一个自适应稀疏度策略可能进一步优化Pareto前沿。</p>
+</div>
+</section>
+
+<!-- ========== CH9: 科研问题 ========== -->
+<section id="ch9">
+<span class="section-tag">CH9 · 科研探索</span>
+<h2>自主科研问题</h2>
+
+<div class="rq-card">
+<span class="rq-tag">问题 1</span>
+<h4>自重采样强度是否应该随训练进度自适应？</h4>
+<p>论文固定 $s=0.6$，但一个自然的问题是：训练早期（模型误差大）需要更强的重采样以暴露更多缺陷，训练后期（模型收敛）需要更弱的重采样以避免内容漂移。<strong>理论分析</strong>：这类似于课程学习——从"强扰动"逐渐过渡到"弱扰动"。可以设计一个自适应 $s$ 调度器：$s_t = s_0 \cdot \alpha^{t/T}$，其中 $\alpha \lt 1$ 控制衰减速率。需要验证的是：自适应 $s$ 是否比固定 $s$ 带来显著的质量提升？</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">问题 2</span>
+<h4>History Routing的top-k是否应该随视频长度和内容动态调整？</h4>
+<p>论文固定 $k=5$，但最优 $k$ 可能与视频长度、场景复杂度、帧间相似度有关。<strong>理论分析</strong>：对于静态场景（如延时摄影），帧间高度相似，$k=1$ 可能就够了；对于复杂动态场景（如体育赛事），可能需要 $k=10+$。可以设计一个<strong>自适应路由预算</strong>：基于帧间相似度（如光流幅度或latent cosine similarity）动态调整 $k$，在质量和效率间取得更优的Pareto平衡。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">问题 3</span>
+<h4>自重采样能否与Diffusion Forcing的per-frame noise level结合？</h4>
+<p>Resampling Forcing在训练时给所有帧相同的 $t_s$（由logit-normal采样），而Diffusion Forcing给每帧独立的噪声级别。两者解决的是不同但相关的问题：前者模拟误差来源，后者提供灵活的去噪调度。<strong>理论分析</strong>：一种可能的结合方式是——在自重采样过程中，对不同位置的帧使用不同的 $t_s$（近帧低噪声、远帧高噪声），模拟"误差随距离增长"的真实模式。这可能比统一 $t_s$ 更好地逼近推理时的误差分布。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">问题 4</span>
+<h4>自重采样范式能否扩展到图像生成的exposure bias？</h4>
+<p>虽然暴露偏差在自回归视频中最突出，但扩散模型在图像生成中也存在类似问题（如迭代采样中的误差累积）。<strong>理论分析</strong>：自重采样的核心思想——"训练时模拟推理时的不完美输入"——可以推广到任何迭代生成过程。例如，在级联图像生成（低分辨率→高分辨率）中，可以对低分辨率条件施加自重采样以增强鲁棒性。关键挑战是：图像生成中"误差模式"的定义不如视频中清晰。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">问题 5</span>
+<h4>因果性vs生成质量的Pareto前沿如何刻画？</h4>
+<p>论文展示了严格因果的Resampling Forcing在质量上不逊于非因果方法（甚至更优），但这引出一个更深层的问题：<strong>因果性约束是否总是无代价的</strong>？在某些需要"前瞻"的场景（如预测物体运动轨迹），严格因果可能限制模型的预测能力。<strong>理论分析</strong>：可以设计一个"因果性松弛"参数 $\delta$，允许模型peek未来 $\delta$ 帧的信息，然后在 $\delta=0$（严格因果）到 $\delta=N$（完全非因果）之间刻画质量-因果性的Pareto前沿。这对世界模型的实际应用至关重要。</p>
+</div>
+</section>
+
+<!-- ========== Summary ========== -->
+<section id="summary">
+<span class="section-tag">总结</span>
+<h2>核心贡献与未来方向</h2>
+
+<div class="summary-box">
+<h3>核心贡献</h3>
+<p><strong>1. 问题诊断</strong>：将自回归视频生成的误差累积归因于帧内误差和帧间累积的双重来源，揭示了Teacher Forcing的根本缺陷。</p>
+<p><strong>2. 自重采样机制</strong>：提出Teacher-Free的自重采样方案——训练时用模型自身生成的降质历史作为条件，端到端地训练模型对不完美输入的鲁棒性。</p>
+<p><strong>3. History Routing</strong>：引入无参数的动态top-k路由机制，将注意力复杂度从 $O(L)$ 降低到 $O(k)$，实现75%稀疏度几乎无质量损失。</p>
+<p><strong>4. 因果性保证</strong>：通过严格的因果mask和自重采样设计，确保训练过程中无未来信息泄露，生成的视频严格遵守时间因果性。</p>
+</div>
+
+<h3>技术局限</h3>
+<p>论文坦诚了两个局限：(1) 推理延迟——迭代去噪需要32步采样；(2) 训练开销——双序列处理增加计算成本。</p>
+
+<h3>未来方向</h3>
+<p><strong>推理加速</strong>：通过少步蒸馏或改进采样器实现实时生成。<strong>架构优化</strong>：借鉴Self Forcing的双序列处理优化。<strong>长视频扩展</strong>：结合History Routing的稀疏注意力支持更长视频生成。</p>
+
+<div class="insight">
+<div class="insight-title">范式意义：从"借用教师"到"自己教自己"</div>
+<p>Resampling Forcing的核心贡献不仅是技术方案，更是一种<strong>范式转换</strong>：从依赖外部教师模型的蒸馏/对抗训练，转向模型自我监督的端到端训练。这与LLM从RLHF到self-play的演进路径有深刻的类比——当模型足够强大时，"自己教自己"可能比"向教师学习"更有效。Resampling Forcing为这一方向在视频生成领域迈出了关键一步。</p>
+</div>
+</section>
+
+</div>
+
+<footer>
+<p>Resampling Forcing: End-to-End Training for Autoregressive Video Diffusion via Self-Resampling</p>
+<p>arXiv:2512.15702 · Yuwei Guo et al. · 2025</p>
+<p style="margin-top:8px">本博客为论文深度解读，基于PDF原文公式提取和数据验证，所有数学公式均通过MathJax渲染</p>
+</footer>
+
+</body>
+</html>

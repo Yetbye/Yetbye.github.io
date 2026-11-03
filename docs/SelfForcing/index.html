@@ -1,0 +1,1579 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Self Forcing：弥合自回归视频扩散的训练-测试鸿沟 | 论文精读</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;600;700;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true
+  },
+  options: {
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+  },
+  chtml: { scale: 1.05 },
+  startup: { typeset: true }
+};
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+<script>
+// CDN 回退：unpkg 加载失败时自动切换到 jsdelivr
+window.addEventListener('error', function(e) {
+  if (e.target && e.target.id === 'MathJax-script') {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+    s.async = true;
+    s.id = 'MathJax-script-fallback';
+    document.head.appendChild(s);
+  }
+}, true);
+// 超时检测：5 秒后若 MathJax 未渲染则加载备用 CDN
+setTimeout(function() {
+  if (!window.MathJax || !window.MathJax.startup || !window.MathJax.startup.promise) {
+    var existing = document.getElementById('MathJax-script-fallback');
+    if (!existing) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+      s.async = true;
+      s.id = 'MathJax-script-fallback';
+      document.head.appendChild(s);
+    }
+  }
+}, 5000);
+</script>
+<style>
+:root {
+  --lav-50:#faf5ff;--lav-100:#f3e8ff;--lav-200:#e9d5ff;--lav-300:#d8b4fe;
+  --lav-400:#c084fc;--lav-500:#a855f7;--lav-600:#9333ea;--lav-700:#7e22ce;
+  --coral-100:#ffe4e6;--coral-200:#fecdd3;--coral-300:#fda4af;--coral-400:#fb7185;
+  --coral-500:#f43f5e;
+  --mint-100:#d1fae5;--mint-200:#a7f3d0;--mint-300:#6ee7b7;--mint-400:#34d399;
+  --mint-500:#10b981;
+  --amber-100:#fef3c7;--amber-200:#fde68a;--amber-400:#fbbf24;--amber-500:#f59e0b;
+  --ink:#1e1b4b;--ink-soft:#4c4b5e;--ink-muted:#787887;
+  --paper:#ffffff;--paper-warm:#faf8f5;--paper-soft:#f5f3f0;
+  --border:rgba(30,27,75,0.08);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Noto Sans SC',sans-serif;color:var(--ink);background:var(--paper-warm);
+  line-height:1.8;font-size:16px;overflow-x:hidden;
+}
+/* ===== Nav ===== */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(250,248,245,0.75);backdrop-filter:blur(20px) saturate(1.5);
+  border-bottom:1px solid var(--border);transition:all .3s;
+}
+nav.scrolled{background:rgba(250,248,245,0.92);box-shadow:0 1px 20px rgba(30,27,75,0.06)}
+.nav-inner{max-width:1200px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;justify-content:space-between}
+.nav-logo{font-family:'Noto Serif SC',serif;font-weight:700;font-size:16px;color:var(--ink);display:flex;align-items:center;gap:8px}
+.nav-logo span{color:var(--lav-500)}
+.nav-links{display:flex;gap:4px;flex-wrap:wrap}
+.nav-links a{
+  font-size:12px;color:var(--ink-soft);text-decoration:none;padding:6px 12px;
+  border-radius:8px;transition:all .2s;font-weight:500;
+}
+.nav-links a:hover{background:var(--lav-100);color:var(--lav-600)}
+/* ===== Hero ===== */
+.hero{
+  position:relative;min-height:96vh;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;padding:120px 24px 80px;
+  background:linear-gradient(135deg,#faf5ff 0%,#f3e8ff 18%,#fdf4e3 50%,#fffbeb 100%);
+}
+.hero::before{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 520px 320px at 12% 22%,rgba(192,132,252,0.16),transparent 60%),
+    radial-gradient(ellipse 520px 320px at 88% 78%,rgba(251,191,36,0.13),transparent 60%);
+}
+.hero-wrap{position:relative;z-index:2;width:100%;max-width:780px;text-align:center}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,0.6);backdrop-filter:blur(12px) saturate(1.5);
+  border:1px solid rgba(192,132,252,0.3);color:var(--lav-600);
+  padding:7px 20px;border-radius:100px;
+  font-family:'Noto Sans SC',sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;
+  margin-bottom:20px;box-shadow:0 4px 20px rgba(192,132,252,0.12);
+}
+.hero h1{
+  font-family:'Noto Serif SC',serif;
+  font-size:clamp(2.2rem,6vw,3.8rem);font-weight:900;
+  letter-spacing:-0.03em;line-height:1.15;margin:12px 0 10px;
+  background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 38%,var(--coral-500) 62%,var(--amber-500) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero-subtitle{
+  font-size:clamp(14px,2.5vw,17px);color:var(--ink-soft);max-width:560px;margin:0 auto 28px;
+  line-height:1.7;
+}
+.hero-art{margin:20px auto 8px;max-width:680px;width:100%}
+.hero-img{
+  width:100%;height:auto;border-radius:20px;
+  box-shadow:0 24px 70px -24px rgba(30,27,75,0.18);
+  border:1px solid rgba(192,132,252,0.12);
+}
+.hero-tags{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:24px}
+.hero-tag{
+  font-size:12px;padding:5px 14px;border-radius:100px;font-weight:500;
+  background:rgba(255,255,255,0.5);border:1px solid var(--border);color:var(--ink-soft);
+}
+.hero-tag.lav{background:var(--lav-100);border-color:var(--lav-200);color:var(--lav-600)}
+.hero-tag.coral{background:var(--coral-100);border-color:var(--coral-200);color:var(--coral-400)}
+.hero-tag.mint{background:var(--mint-100);border-color:var(--mint-200);color:var(--mint-500)}
+.scroll-ind{
+  position:absolute;bottom:30px;left:50%;transform:translateX(-50%);
+  font-size:11px;letter-spacing:3px;color:var(--ink-muted);font-weight:500;
+  animation:bounce 2s infinite;
+}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-8px)}}
+/* ===== Main Content ===== */
+main{max-width:820px;margin:0 auto;padding:60px 24px 120px}
+.chapter{margin-bottom:80px;scroll-margin-top:80px}
+.chapter-num{
+  font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;
+  color:var(--lav-500);letter-spacing:2px;margin-bottom:8px;
+}
+.chapter-title{
+  font-family:'Noto Serif SC',serif;font-size:clamp(22px,4vw,30px);font-weight:700;
+  color:var(--ink);margin-bottom:24px;line-height:1.3;
+}
+h3{font-family:'Noto Serif SC',serif;font-size:19px;font-weight:600;color:var(--ink);margin:32px 0 14px}
+h4{font-size:15px;font-weight:600;color:var(--lav-600);margin:20px 0 10px}
+p{margin-bottom:16px;color:var(--ink-soft);line-height:1.85}
+strong{color:var(--ink);font-weight:600}
+a{color:var(--lav-600);text-decoration:none}
+a:hover{text-decoration:underline}
+/* ===== Components ===== */
+.insight-box{
+  background:linear-gradient(135deg,var(--mint-100) 0%,var(--lav-50) 100%);
+  border-left:4px solid var(--mint-400);border-radius:12px;padding:20px 24px;margin:24px 0;
+  box-shadow:0 4px 20px rgba(52,211,153,0.08);
+}
+.insight-box .insight-title{
+  font-weight:700;color:var(--mint-500);font-size:13px;letter-spacing:1px;
+  text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px;
+}
+.insight-box p{color:var(--ink-soft);margin-bottom:0}
+.insight-box .insight-title::before{content:'💡';font-size:16px}
+.research-q{
+  background:linear-gradient(135deg,#fff7ed 0%,var(--amber-100) 100%);
+  border:1px solid var(--amber-200);border-radius:12px;padding:20px 24px;margin:24px 0;
+}
+.research-q .rq-tag{
+  display:inline-block;background:var(--amber-400);color:white;font-size:11px;
+  font-weight:600;padding:3px 10px;border-radius:100px;margin-bottom:10px;letter-spacing:1px;
+}
+.research-q .rq-title{font-weight:700;color:var(--ink);font-size:15px;margin-bottom:8px}
+.research-q p{font-size:14px;color:var(--ink-soft);margin-bottom:0}
+.formula-card{
+  background:var(--paper);border:1px solid var(--border);border-radius:12px;
+  padding:20px 24px;margin:20px 0;box-shadow:0 2px 12px rgba(30,27,75,0.04);
+}
+.formula-card .fc-label{
+  font-size:11px;color:var(--ink-muted);font-weight:600;letter-spacing:1px;
+  text-transform:uppercase;margin-bottom:8px;
+}
+.formula-card .formula{font-size:15px;color:var(--ink);overflow-x:auto;padding:8px 0}
+.compare-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin:24px 0}
+.compare-card{
+  background:var(--paper);border:1px solid var(--border);border-radius:12px;
+  padding:20px;transition:all .2s;
+}
+.compare-card:hover{box-shadow:0 8px 30px rgba(30,27,75,0.08);transform:translateY(-2px)}
+.compare-card .cc-icon{font-size:28px;margin-bottom:10px}
+.compare-card .cc-title{font-weight:700;font-size:14px;color:var(--ink);margin-bottom:6px}
+.compare-card .cc-desc{font-size:13px;color:var(--ink-muted);line-height:1.6}
+.compare-card.tf{border-top:3px solid var(--coral-400)}
+.compare-card.df{border-top:3px solid var(--amber-400)}
+.compare-card.sf{border-top:3px solid var(--mint-400)}
+/* Code Block */
+.code-block{
+  background:#1a1625;border-radius:12px;overflow:hidden;margin:24px 0;
+  box-shadow:0 8px 30px rgba(30,27,75,0.15);
+}
+.code-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px;background:rgba(255,255,255,0.05);
+  border-bottom:1px solid rgba(255,255,255,0.08);
+}
+.code-header .ch-label{font-family:'JetBrains Mono',monospace;font-size:12px;color:#a78bfa;font-weight:500}
+.code-header .ch-tag{
+  font-size:10px;padding:2px 8px;border-radius:100px;font-weight:600;
+  background:rgba(167,139,250,0.15);color:#c4b5fd;
+}
+.code-block pre{
+  padding:16px 20px;overflow-x:auto;font-family:'JetBrains Mono',monospace;
+  font-size:13px;line-height:1.6;color:#e0e0e0;
+}
+.code-block pre .kw{color:#c084fc;font-weight:500}
+.code-block pre .str{color:#6ee7b7}
+.code-block pre .com{color:#6b7280;font-style:italic}
+.code-block pre .fn{color:#fbbf24}
+.code-block pre .num{color:#fb7185}
+.code-block pre .var{color:#93c5fd}
+/* SVG Container */
+.svg-container{
+  background:var(--paper);border:1px solid var(--border);border-radius:16px;
+  padding:24px;margin:28px 0;box-shadow:0 4px 20px rgba(30,27,75,0.04);
+  overflow-x:auto;
+}
+.svg-container .svg-caption{
+  text-align:center;font-size:12px;color:var(--ink-muted);margin-top:12px;
+  font-style:italic;
+}
+/* Table */
+.data-table{width:100%;border-collapse:collapse;margin:24px 0;font-size:13px}
+.data-table th{
+  background:var(--lav-100);color:var(--lav-600);font-weight:600;
+  padding:10px 12px;text-align:left;border-bottom:2px solid var(--lav-200);
+  font-size:12px;
+}
+.data-table td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--ink-soft)}
+.data-table tr:hover{background:var(--lav-50)}
+.data-table .best{color:var(--mint-500);font-weight:600}
+.data-table .ours{background:rgba(52,211,153,0.05)}
+/* Figure */
+figure{margin:28px 0}
+figure img{width:100%;border-radius:12px;border:1px solid var(--border);box-shadow:0 4px 20px rgba(30,27,75,0.06)}
+figcaption{text-align:center;font-size:12px;color:var(--ink-muted);margin-top:8px;font-style:italic}
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin:24px 0}
+.stat-card{
+  background:linear-gradient(135deg,var(--lav-50),var(--paper));
+  border:1px solid var(--lav-100);border-radius:12px;padding:20px;text-align:center;
+}
+.stat-card .stat-value{
+  font-family:'Noto Serif SC',serif;font-size:28px;font-weight:700;
+  background:linear-gradient(135deg,var(--lav-600),var(--coral-500));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.stat-card .stat-label{font-size:11px;color:var(--ink-muted);margin-top:4px;letter-spacing:1px}
+/* Architecture Decomposition */
+.arch-tree{
+  background:var(--paper);border:1px solid var(--border);border-radius:12px;
+  padding:24px;margin:24px 0;font-family:'JetBrains Mono',monospace;font-size:13px;
+  line-height:1.8;color:var(--ink-soft);white-space:pre;overflow-x:auto;
+}
+.arch-tree .root{color:var(--lav-600);font-weight:600}
+.arch-tree .branch{color:var(--ink)}
+.arch-tree .leaf{color:var(--ink-muted)}
+/* Footer */
+footer{
+  background:var(--ink);color:rgba(255,255,255,0.6);padding:40px 24px;text-align:center;
+}
+footer p{font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:8px}
+footer .footer-links{display:flex;gap:16px;justify-content:center;margin-top:12px}
+footer .footer-links a{font-size:12px;color:rgba(255,255,255,0.5)}
+/* Mobile */
+@media(max-width:640px){
+  .nav-links{display:none}
+  main{padding:40px 16px 80px}
+  .compare-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== Nav ===== -->
+<nav id="nav">
+<div class="nav-inner">
+<div class="nav-logo">📄 Self <span>Forcing</span> 精读</div>
+<div class="nav-links"><a href="../index.html">« 合辑</a>
+<a href="#ch1">问题动机</a>
+<a href="#ch2">范式对比</a>
+<a href="#ch3">核心方法</a>
+<a href="#ch4">梯度截断</a>
+<a href="#ch5">分布匹配</a>
+<a href="#ch6">滚动缓存</a>
+<a href="#ch7">实验</a>
+<a href="#ch8">消融</a>
+<a href="#ch9">讨论</a>
+<a href="#ch10">科研问题</a>
+<a href="#code">代码附录</a>
+</div>
+</div>
+</nav>
+
+<!-- ===== Hero ===== -->
+<section class="hero">
+<div class="hero-wrap">
+<div class="hero-badge">NeurIPS 2025 · SPOTLIGHT</div>
+<h1>Self Forcing</h1>
+<p class="hero-subtitle">弥合自回归视频扩散中的训练-测试分布鸿沟，通过训练时自展开实现实时流式视频生成</p>
+<div class="hero-art">
+<img src="assets/hero_selfforcing.webp" alt="Self Forcing 封面" class="hero-img">
+</div>
+<div class="hero-tags">
+<span class="hero-tag lav">自展开训练</span>
+<span class="hero-tag coral">KV 缓存</span>
+<span class="hero-tag mint">分布匹配损失</span>
+<span class="hero-tag">17 FPS 实时生成</span>
+<span class="hero-tag">亚秒级延迟</span>
+</div>
+</div>
+<div class="scroll-ind">SCROLL TO READ ↓</div>
+</section>
+
+<!-- ===== Main ===== -->
+<main>
+
+<!-- ===== Chapter 1 ===== -->
+<section class="chapter" id="ch1">
+<div class="chapter-num">CHAPTER 01</div>
+<h2 class="chapter-title">问题动机：自回归视频扩散的曝光偏差</h2>
+
+<p>视频生成领域近期取得了巨大进展，最先进的系统已经能生成具有复杂时间动态的高度逼真内容。然而，这些成果通常依赖于<strong>双向注意力扩散Transformer（DiT）</strong>——所有帧同时去噪，未来可以影响过去。这种设计从根本上限制了实时流式应用：生成当前帧时，未来的信息尚不可知。</p>
+
+<p>自回归（AR）模型天然契合时间媒体的因果结构——逐帧顺序生成，显著降低观看延迟，并解锁实时交互内容创作、游戏模拟、机器人学习等场景。但 AR 模型长期受困于一个核心问题：<strong>曝光偏差（Exposure Bias）</strong>。</p>
+
+<div class="insight-box">
+<div class="insight-title">深度洞察：曝光偏差的本质</div>
+<p>曝光偏差源于训练与推理时的<strong>分布不匹配</strong>：训练时模型基于干净的真实上下文帧（ground-truth context）学习去噪，但推理时必须依赖自己生成的<strong>不完美预测</strong>作为上下文。这种分布偏移导致误差在自回归链中逐步累积——如同传话游戏中信息逐级失真，最终造成视频质量随时间严重退化，表现为过度饱和、过度锐化或结构崩塌。</p>
+</div>
+
+<p>现有的两种训练范式均未根本解决这一问题：</p>
+
+<div class="compare-grid">
+<div class="compare-card tf">
+<div class="cc-icon">🎯</div>
+<div class="cc-title">Teacher Forcing (TF)</div>
+<div class="cc-desc">每帧基于干净的 ground-truth 上下文帧去噪。训练分布与推理分布完全脱节——推理时根本不存在干净上下文。</div>
+</div>
+<div class="compare-card df">
+<div class="cc-icon">🔀</div>
+<div class="cc-title">Diffusion Forcing (DF)</div>
+<div class="cc-desc">每帧基于带不同噪声水平的上下文帧去噪。虽覆盖了"上下文有噪声"的情形，但训练输出的分布仍非推理时模型自身的生成分布。</div>
+</div>
+<div class="compare-card sf">
+<div class="cc-icon">🔄</div>
+<div class="cc-title">Self Forcing (本文)</div>
+<div class="cc-desc">训练时执行自回归自展开（self-rollout），每帧基于模型自己生成的帧去噪。训练过程镜像推理过程，根本消除分布鸿沟。</div>
+</div>
+</div>
+
+<p>Self Forcing 的灵感来自 RNN 时代的序列级训练技术（Professor Forcing、SeqGAN 等），但首次将其系统地应用于视频扩散模型，并结合 few-step diffusion 和随机梯度截断策略，使其在工程上切实可行。</p>
+</section>
+
+<!-- ===== Chapter 2 ===== -->
+<section class="chapter" id="ch2">
+<div class="chapter-num">CHAPTER 02</div>
+<h2 class="chapter-title">三种训练范式的深度对比</h2>
+
+<p>给定 $N$ 帧视频 $x_{1:N} = (x_1, x_2, \ldots, x_N)$，自回归视频扩散模型通过链式法则分解联合分布：</p>
+
+<div class="formula-card">
+<div class="fc-label">链式法则分解</div>
+<div class="formula">
+$$p(x_{1:N}) = \prod_{i=1}^{N} p(x_i \mid x_{\lt i})$$
+</div>
+</div>
+
+<p>每个条件分布 $p(x_i \mid x_{\lt i})$ 由扩散过程建模——从高斯噪声出发，以前序帧为条件，逐步去噪生成当前帧。前向过程将第 $i$ 帧加噪为：</p>
+
+<div class="formula-card">
+<div class="fc-label">前向扩散过程</div>
+<div class="formula">
+$$x_{t_i}^i = \Psi(x_i, \epsilon_i, t_i) = \alpha_{t_i} x_i + \sigma_{t_i} \epsilon_i, \quad \epsilon_i \sim \mathcal{N}(0, \mathbf{I})$$
+</div>
+</div>
+
+<p>模型通过预测添加的噪声 $\hat{\epsilon}_\theta^i := G_\theta(x_{t_i}^i, t_i, c)$ 来学习逆过程，训练目标为帧级去噪损失：</p>
+
+<div class="formula-card">
+<div class="fc-label">帧级去噪损失 (TF/DF)</div>
+<div class="formula">
+$$\mathcal{L}_\theta^{\text{DM}} = \mathbb{E}_{x_i, t_i, \epsilon_i} \left[ w_{t_i} \| \hat{\epsilon}_\theta^i - \epsilon_i \|_2^2 \right]$$
+</div>
+</div>
+
+<p>TF 和 DF 的关键区别在于<strong>时间步采样策略</strong>：TF 中所有帧共享同一时间步 $t_i$，而 DF 中每帧独立采样 $t_i$。但两者的训练输出都不属于模型在推理时实际生成的分布。</p>
+
+<!-- SVG 1: Training Paradigm Comparison -->
+<div class="svg-container">
+<svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:760px;margin:0 auto;display:block">
+<defs>
+<linearGradient id="tfGrad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#fecdd3"/><stop offset="100%" stop-color="#fda4af"/>
+</linearGradient>
+<linearGradient id="dfGrad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#fde68a"/><stop offset="100%" stop-color="#fbbf24"/>
+</linearGradient>
+<linearGradient id="sfGrad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#a7f3d0"/><stop offset="100%" stop-color="#34d399"/>
+</linearGradient>
+<marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+<path d="M0,0 L8,4 L0,8 Z" fill="#787887"/>
+</marker>
+</defs>
+<!-- TF -->
+<text x="120" y="20" text-anchor="middle" font-size="12" font-weight="600" fill="#f43f5e" font-family="Noto Sans SC">Teacher Forcing</text>
+<rect x="30" y="30" width="180" height="70" rx="8" fill="url(#tfGrad)" opacity="0.3"/>
+<text x="120" y="50" text-anchor="middle" font-size="10" fill="#4c4b5e">训练：干净 GT 上下文</text>
+<rect x="45" y="60" width="25" height="25" rx="4" fill="#fff" stroke="#f43f5e" stroke-width="1.5"/>
+<text x="57" y="76" text-anchor="middle" font-size="8" fill="#f43f5e">x₁</text>
+<rect x="80" y="60" width="25" height="25" rx="4" fill="#fff" stroke="#f43f5e" stroke-width="1.5"/>
+<text x="92" y="76" text-anchor="middle" font-size="8" fill="#f43f5e">x₂</text>
+<rect x="115" y="55" width="30" height="30" rx="4" fill="#fecdd3" stroke="#f43f5e" stroke-width="2"/>
+<text x="130" y="73" text-anchor="middle" font-size="8" fill="#f43f5e">x̃₃</text>
+<rect x="155" y="60" width="25" height="25" rx="4" fill="#fff" stroke="#f43f5e" stroke-width="1.5" opacity="0.4"/>
+<text x="167" y="76" text-anchor="middle" font-size="8" fill="#f43f5e">x₄</text>
+<line x1="120" y1="110" x2="120" y2="130" stroke="#787887" stroke-width="1" stroke-dasharray="3,2"/>
+<text x="120" y="145" text-anchor="middle" font-size="9" fill="#787887">推理：自生成上下文 ✗</text>
+
+<!-- DF -->
+<text x="380" y="20" text-anchor="middle" font-size="12" font-weight="600" fill="#f59e0b" font-family="Noto Sans SC">Diffusion Forcing</text>
+<rect x="290" y="30" width="180" height="70" rx="8" fill="url(#dfGrad)" opacity="0.3"/>
+<text x="380" y="50" text-anchor="middle" font-size="10" fill="#4c4b5e">训练：带噪上下文</text>
+<rect x="305" y="60" width="25" height="25" rx="4" fill="#fde68a" stroke="#f59e0b" stroke-width="1.5"/>
+<text x="317" y="76" text-anchor="middle" font-size="8" fill="#f59e0b">x̃₁</text>
+<rect x="340" y="60" width="25" height="25" rx="4" fill="#fde68a" stroke="#f59e0b" stroke-width="1.5"/>
+<text x="352" y="76" text-anchor="middle" font-size="8" fill="#f59e0b">x̃₂</text>
+<rect x="375" y="55" width="30" height="30" rx="4" fill="#fde68a" stroke="#f59e0b" stroke-width="2"/>
+<text x="390" y="73" text-anchor="middle" font-size="8" fill="#f59e0b">x̃₃</text>
+<rect x="415" y="60" width="25" height="25" rx="4" fill="#fde68a" stroke="#f59e0b" stroke-width="1.5" opacity="0.6"/>
+<text x="427" y="76" text-anchor="middle" font-size="8" fill="#f59e0b">x̃₄</text>
+<line x1="380" y1="110" x2="380" y2="130" stroke="#787887" stroke-width="1" stroke-dasharray="3,2"/>
+<text x="380" y="145" text-anchor="middle" font-size="9" fill="#787887">推理：干净自生成 ✗</text>
+
+<!-- SF -->
+<text x="640" y="20" text-anchor="middle" font-size="12" font-weight="600" fill="#10b981" font-family="Noto Sans SC">Self Forcing (Ours)</text>
+<rect x="550" y="30" width="180" height="70" rx="8" fill="url(#sfGrad)" opacity="0.3"/>
+<text x="640" y="50" text-anchor="middle" font-size="10" fill="#4c4b5e">训练：自展开生成</text>
+<!-- Sequential rollout arrows -->
+<rect x="565" y="60" width="25" height="25" rx="4" fill="#a7f3d0" stroke="#10b981" stroke-width="2"/>
+<text x="577" y="76" text-anchor="middle" font-size="8" fill="#10b981">x̂₁</text>
+<path d="M595,72 L608,72" stroke="#10b981" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<rect x="612" y="60" width="25" height="25" rx="4" fill="#a7f3d0" stroke="#10b981" stroke-width="2"/>
+<text x="624" y="76" text-anchor="middle" font-size="8" fill="#10b981">x̂₂</text>
+<path d="M642,72 L655,72" stroke="#10b981" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<rect x="659" y="55" width="30" height="30" rx="4" fill="#6ee7b7" stroke="#10b981" stroke-width="2.5"/>
+<text x="674" y="73" text-anchor="middle" font-size="8" fill="#10b981">x̂₃</text>
+<path d="M694,72 L707,72" stroke="#10b981" stroke-width="1.5" fill="none" marker-end="url(#arrow)" opacity="0.5"/>
+<rect x="711" y="60" width="15" height="25" rx="4" fill="#a7f3d0" stroke="#10b981" stroke-width="1" opacity="0.3"/>
+<line x1="640" y1="110" x2="640" y2="130" stroke="#10b981" stroke-width="1.5"/>
+<text x="640" y="145" text-anchor="middle" font-size="9" fill="#10b981" font-weight="600">推理：完全一致 ✓</text>
+
+<!-- Attention masks section -->
+<text x="380" y="180" text-anchor="middle" font-size="11" fill="#4c4b5e" font-weight="600">注意力掩码配置</text>
+
+<!-- TF mask -->
+<g transform="translate(50,195)">
+<text x="50" y="0" text-anchor="middle" font-size="9" fill="#f43f5e">TF: 因果掩码</text>
+<rect x="0" y="5" width="20" height="20" fill="#fecdd3" stroke="#fda4af"/>
+<rect x="20" y="5" width="20" height="20" fill="#fff" stroke="#fda4af"/>
+<rect x="40" y="5" width="20" height="20" fill="#fff" stroke="#fda4af"/>
+<rect x="0" y="25" width="20" height="20" fill="#fecdd3" stroke="#fda4af"/>
+<rect x="20" y="25" width="20" height="20" fill="#fecdd3" stroke="#fda4af"/>
+<rect x="40" y="25" width="20" height="20" fill="#fff" stroke="#fda4af"/>
+<rect x="0" y="45" width="20" height="20" fill="#fecdd3" stroke="#fda4af"/>
+<rect x="20" y="45" width="20" height="20" fill="#fecdd3" stroke="#fda4af"/>
+<rect x="40" y="45" width="20" height="20" fill="#fecdd3" stroke="#fda4af"/>
+<text x="30" y="85" text-anchor="middle" font-size="8" fill="#787887">并行训练+掩码</text>
+</g>
+
+<!-- DF mask -->
+<g transform="translate(310,195)">
+<text x="50" y="0" text-anchor="middle" font-size="9" fill="#f59e0b">DF: 因果掩码</text>
+<rect x="0" y="5" width="20" height="20" fill="#fde68a" stroke="#fbbf24"/>
+<rect x="20" y="5" width="20" height="20" fill="#fff7ed" stroke="#fbbf24"/>
+<rect x="40" y="5" width="20" height="20" fill="#fff" stroke="#fbbf24"/>
+<rect x="0" y="25" width="20" height="20" fill="#fde68a" stroke="#fbbf24"/>
+<rect x="20" y="25" width="20" height="20" fill="#fde68a" stroke="#fbbf24"/>
+<rect x="40" y="25" width="20" height="20" fill="#fff7ed" stroke="#fbbf24"/>
+<rect x="0" y="45" width="20" height="20" fill="#fde68a" stroke="#fbbf24"/>
+<rect x="20" y="45" width="20" height="20" fill="#fde68a" stroke="#fbbf24"/>
+<rect x="40" y="45" width="20" height="20" fill="#fde68a" stroke="#fbbf24"/>
+<text x="30" y="85" text-anchor="middle" font-size="8" fill="#787887">并行训练+掩码</text>
+</g>
+
+<!-- SF: KV cache -->
+<g transform="translate(570,195)">
+<text x="50" y="0" text-anchor="middle" font-size="9" fill="#10b981">SF: KV 缓存</text>
+<rect x="0" y="5" width="100" height="60" rx="6" fill="#d1fae5" stroke="#34d399" stroke-width="1.5"/>
+<text x="50" y="22" text-anchor="middle" font-size="9" fill="#10b981" font-weight="600">Full Attention</text>
+<text x="50" y="38" text-anchor="middle" font-size="8" fill="#10b981">无需掩码</text>
+<text x="50" y="52" text-anchor="middle" font-size="8" fill="#10b981">KV cache 复用</text>
+<text x="50" y="85" text-anchor="middle" font-size="8" fill="#787887">串行展开+缓存</text>
+</g>
+</svg>
+</div>
+<div class="svg-container" style="margin-top:-16px">
+<p style="font-size:12px;color:var(--ink-muted);text-align:center;font-style:italic">图 1：三种训练范式对比。TF/DF 使用因果注意力掩码并行训练全视频，SF 通过 KV 缓存串行自展开，训练过程镜像推理。</p>
+</div>
+
+<div class="insight-box">
+<div class="insight-title">架构洞察：为什么 SF 不需要注意力掩码？</div>
+<p>TF 和 DF 必须使用 <strong>block sparse attention masks</strong> 来在并行处理所有帧的同时强制因果依赖，这引入了额外计算开销（即便使用 FlexAttention 优化）。Self Forcing 则因为<strong>逐帧串行展开 + KV 缓存</strong>，天然满足因果性——当前帧只需 attend 到缓存中的历史 KV，无需任何掩码。这使得 SF 可以使用高度优化的 <strong>FlashAttention-3</strong> 内核，反而比"并行"的 TF/DF 更快。</p>
+</div>
+</section>
+
+<!-- ===== Chapter 3 ===== -->
+<section class="chapter" id="ch3">
+<div class="chapter-num">CHAPTER 03</div>
+<h2 class="chapter-title">核心方法：自回归自展开训练</h2>
+
+<p>Self Forcing 的核心思想是：在训练时按照推理时的配方执行自回归自展开（self-rollout）。具体而言，从模型自身分布 $p_\theta(x_{1:N}) = \prod_{i=1}^{N} p_\theta(x_i \mid x_{\lt i})$ 采样视频序列，每帧通过迭代去噪生成，以前序自生成的干净帧为条件。</p>
+
+<h3>Few-Step Diffusion 近似</h3>
+
+<p>使用标准的多步扩散模型实现 Self Forcing 在计算上不可行——需要展开并通过长去噪链反向传播。因此，论文选择 <strong>few-step diffusion model</strong> $G_\theta$ 来近似每个条件分布。考虑时间步子序列 $\{t_0=0, t_1, \ldots, t_T=1000\}$，模型分布隐式定义为：</p>
+
+<div class="formula-card">
+<div class="fc-label">Few-Step 模型分布</div>
+<div class="formula">
+$$p_\theta(x_i \mid x_{\lt i}) = f_{\theta,t_1} \circ f_{\theta,t_2} \circ \cdots \circ f_{\theta,t_T}(x_{t_T}^i)$$
+</div>
+<div class="formula" style="margin-top:8px">
+$$f_{\theta,t_j}(x_{t_j}^i) = \Psi\big(G_\theta(x_{t_j}^i, t_j, x_{\lt i}),\; \epsilon_{t_{j-1}},\; t_{j-1}\big)$$
+</div>
+</div>
+
+<p>实际使用 <strong>4步去噪</strong>，时间步调度为 $[t_4, t_3, t_2, t_1] = [1000, 750, 500, 250]$。每步去噪后将预测的干净帧通过前向过程重新加噪到下一个时间步，这是 few-step diffusion 的标准做法。</p>
+
+<h3>训练时的 KV 缓存</h3>
+
+<p>Self Forcing 的关键创新之一是<strong>在训练时使用 KV 缓存</strong>——此前 KV 缓存仅用于推理。如图 2(c) 所示，自展开训练过程中，每生成一帧后，将其 KV embedding 写入缓存，后续帧通过 full attention attend 到缓存内容。这与 TF/DF 使用注意力掩码并行处理全视频形成鲜明对比。</p>
+
+<!-- SVG 2: Self-Rollout Training Pipeline -->
+<div class="svg-container">
+<svg viewBox="0 0 760 280" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:760px;margin:0 auto;display:block">
+<defs>
+<linearGradient id="noiseGrad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#e9d5ff"/><stop offset="100%" stop-color="#c084fc"/>
+</linearGradient>
+<linearGradient id="cleanGrad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#a7f3d0"/><stop offset="100%" stop-color="#34d399"/>
+</linearGradient>
+<marker id="arr2" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+<path d="M0,0 L8,4 L0,8 Z" fill="#9333ea"/>
+</marker>
+</defs>
+
+<text x="380" y="20" text-anchor="middle" font-size="13" font-weight="600" fill="#1e1b4b" font-family="Noto Serif SC">Self Forcing 自展开训练流程</text>
+
+<!-- KV Cache bar -->
+<rect x="30" y="40" width="700" height="30" rx="6" fill="#f3e8ff" stroke="#d8b4fe"/>
+<text x="50" y="59" font-size="10" fill="#7e22ce" font-weight="600">KV Cache:</text>
+<rect x="120" y="46" width="40" height="18" rx="3" fill="#c084fc" opacity="0.3"/>
+<text x="140" y="59" text-anchor="middle" font-size="8" fill="#7e22ce">x̂₁ KV</text>
+
+<!-- Frame 1 generation -->
+<g transform="translate(60,90)">
+<text x="50" y="0" text-anchor="middle" font-size="10" fill="#9333ea" font-weight="600">Block 1</text>
+<rect x="10" y="10" width="80" height="25" rx="4" fill="url(#noiseGrad)" opacity="0.4"/>
+<text x="50" y="27" text-anchor="middle" font-size="8" fill="#7e22ce">noise t₄=1000</text>
+<path d="M50,35 L50,48" stroke="#9333ea" stroke-width="1" marker-end="url(#arr2)"/>
+<rect x="10" y="50" width="80" height="22" rx="4" fill="#e9d5ff" opacity="0.5"/>
+<text x="50" y="64" text-anchor="middle" font-size="7" fill="#7e22ce">denoise t₃</text>
+<path d="M50,72 L50,83" stroke="#9333ea" stroke-width="1" marker-end="url(#arr2)"/>
+<rect x="10" y="85" width="80" height="22" rx="4" fill="#d8b4fe" opacity="0.6"/>
+<text x="50" y="99" text-anchor="middle" font-size="7" fill="#7e22ce">denoise t₂</text>
+<path d="M50,107 L50,118" stroke="#9333ea" stroke-width="1" marker-end="url(#arr2)"/>
+<rect x="10" y="120" width="80" height="25" rx="4" fill="url(#cleanGrad)"/>
+<text x="50" y="137" text-anchor="middle" font-size="8" fill="#047857" font-weight="600">x̂₁ (step s)</text>
+<!-- Write to KV -->
+<path d="M90,132 L115,55" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#arr2)"/>
+<text x="105" y="100" font-size="7" fill="#10b981">→ KV</text>
+</g>
+
+<!-- Arrow to next block -->
+<path d="M155,200 L195,200" stroke="#9333ea" stroke-width="2" fill="none" marker-end="url(#arr2)"/>
+
+<!-- Frame 2 -->
+<g transform="translate(205,90)">
+<text x="50" y="0" text-anchor="middle" font-size="10" fill="#9333ea" font-weight="600">Block 2</text>
+<rect x="10" y="10" width="80" height="25" rx="4" fill="url(#noiseGrad)" opacity="0.4"/>
+<text x="50" y="27" text-anchor="middle" font-size="8" fill="#7e22ce">noise t₄</text>
+<path d="M50,35 L50,48" stroke="#9333ea" stroke-width="1" marker-end="url(#arr2)"/>
+<rect x="10" y="50" width="80" height="22" rx="4" fill="#e9d5ff" opacity="0.5"/>
+<text x="50" y="64" text-anchor="middle" font-size="7" fill="#7e22ce">denoise t₃</text>
+<path d="M50,72 L50,83" stroke="#9333ea" stroke-width="1" marker-end="url(#arr2)"/>
+<rect x="10" y="85" width="80" height="22" rx="4" fill="#d8b4fe" opacity="0.6"/>
+<text x="50" y="99" text-anchor="middle" font-size="7" fill="#7e22ce">denoise t₂</text>
+<path d="M50,107 L50,118" stroke="#9333ea" stroke-width="1" marker-end="url(#arr2)"/>
+<rect x="10" y="120" width="80" height="25" rx="4" fill="url(#cleanGrad)"/>
+<text x="50" y="137" text-anchor="middle" font-size="8" fill="#047857" font-weight="600">x̂₂ (step s)</text>
+<path d="M90,132 L260,55" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#arr2)"/>
+</g>
+
+<path d="M295,200 L335,200" stroke="#9333ea" stroke-width="2" fill="none" marker-end="url(#arr2)"/>
+
+<!-- Frame 3 -->
+<g transform="translate(345,90)">
+<text x="50" y="0" text-anchor="middle" font-size="10" fill="#9333ea" font-weight="600">Block 3</text>
+<rect x="10" y="10" width="80" height="25" rx="4" fill="url(#noiseGrad)" opacity="0.4"/>
+<text x="50" y="27" text-anchor="middle" font-size="8" fill="#7e22ce">noise t₄</text>
+<path d="M50,35 L50,48" stroke="#9333ea" stroke-width="1" marker-end="url(#arr2)"/>
+<rect x="10" y="50" width="80" height="22" rx="4" fill="#e9d5ff" opacity="0.5"/>
+<text x="50" y="64" text-anchor="middle" font-size="7" fill="#7e22ce">denoise t₃</text>
+<path d="M50,72 L50,83" stroke="#9333ea" stroke-width="1" marker-end="url(#arr2)"/>
+<rect x="10" y="85" width="80" height="22" rx="4" fill="#d8b4fe" opacity="0.6"/>
+<text x="50" y="99" text-anchor="middle" font-size="7" fill="#7e22ce">denoise t₂</text>
+<path d="M50,107 L50,118" stroke="#9333ea" stroke-width="1" marker-end="url(#arr2)"/>
+<rect x="10" y="120" width="80" height="25" rx="4" fill="url(#cleanGrad)"/>
+<text x="50" y="137" text-anchor="middle" font-size="8" fill="#047857" font-weight="600">x̂₃ (step s)</text>
+<path d="M90,132 L405,55" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#arr2)"/>
+</g>
+
+<!-- Dots -->
+<text x="460" y="200" font-size="14" fill="#787887">···</text>
+
+<!-- Frame N -->
+<g transform="translate(500,90)">
+<text x="50" y="0" text-anchor="middle" font-size="10" fill="#9333ea" font-weight="600">Block N</text>
+<rect x="10" y="10" width="80" height="25" rx="4" fill="url(#noiseGrad)" opacity="0.4"/>
+<text x="50" y="27" text-anchor="middle" font-size="8" fill="#7e22ce">noise t₄</text>
+<path d="M50,35 L50,48" stroke="#9333ea" stroke-width="1" marker-end="url(#arr2)"/>
+<rect x="10" y="50" width="80" height="22" rx="4" fill="#e9d5ff" opacity="0.5"/>
+<text x="50" y="64" text-anchor="middle" font-size="7" fill="#7e22ce">denoise t₃</text>
+<path d="M50,72 L50,83" stroke="#9333ea" stroke-width="1" marker-end="url(#arr2)"/>
+<rect x="10" y="85" width="80" height="22" rx="4" fill="#d8b4fe" opacity="0.6"/>
+<text x="50" y="99" text-anchor="middle" font-size="7" fill="#7e22ce">denoise t₂</text>
+<path d="M50,107 L50,118" stroke="#9333ea" stroke-width="1" marker-end="url(#arr2)"/>
+<rect x="10" y="120" width="80" height="25" rx="4" fill="url(#cleanGrad)"/>
+<text x="50" y="137" text-anchor="middle" font-size="8" fill="#047857" font-weight="600">x̂ₙ (step s)</text>
+</g>
+
+<!-- Loss -->
+<path d="M580,145 L580,225" stroke="#f43f5e" stroke-width="2" fill="none" marker-end="url(#arr2)"/>
+<rect x="520" y="230" width="120" height="35" rx="8" fill="#ffe4e6" stroke="#fb7185" stroke-width="2"/>
+<text x="580" y="248" text-anchor="middle" font-size="10" fill="#f43f5e" font-weight="600">分布匹配损失</text>
+<text x="580" y="260" text-anchor="middle" font-size="8" fill="#f43f5e">D(p_data || p_θ)</text>
+
+<!-- Gradient truncation indicator -->
+<rect x="60" y="170" width="490" height="10" rx="2" fill="none" stroke="#fbbf24" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="305" y="178" text-anchor="middle" font-size="8" fill="#f59e0b" font-weight="600">梯度仅在 step s 保留（随机截断）</text>
+</svg>
+</div>
+<p style="font-size:12px;color:var(--ink-muted);text-align:center;font-style:italic;margin-top:-12px">图 2：Self Forcing 自展开训练流程。每个 Block 串行生成，去噪到随机步 s 后输出，梯度仅在该步保留。绿色虚线表示 KV 写入缓存。</p>
+
+<h3>算法形式化</h3>
+
+<p>Algorithm 1 给出了完整的训练过程。核心循环为：对每个帧 $i$，从纯噪声出发，经过 $T \to s$ 步去噪（其中 $s$ 是随机采样的截断点），在 $s$ 步启用梯度计算获得输出 $\hat{x}_0^i$，然后禁用梯度并将 $\hat{x}_0^i$ 的 KV embedding 写入缓存。</p>
+
+<div class="formula-card">
+<div class="fc-label">关键设计：随机截断步 s</div>
+<div class="formula">
+$$s \sim \text{Uniform}(1, 2, \ldots, T)$$
+</div>
+<p style="font-size:13px;color:var(--ink-soft);margin-top:8px">每个训练迭代随机采样 $s$，使用第 $s$ 步的去噪输出作为最终输出。这确保所有中间去噪步都接收到监督信号——如果总是使用最后一步，前面的步将缺乏梯度而无法学习。</p>
+</div>
+
+<div class="insight-box">
+<div class="insight-title">设计哲学：训练即推理</div>
+<p>Self Forcing 的核心哲学可以概括为"<strong>训练即推理</strong>"（train as you infer）。通过在训练时完整模拟推理过程——包括 KV 缓存的使用、自回归展开、few-step 去噪——模型在训练阶段就"见过"自己推理时会产生的一切误差，并通过分布匹配损失学习纠正这些误差。这与 GAN 中生成器在训练和推理时遵循相同过程的原理一脉相承。</p>
+</div>
+</section>
+
+<!-- ===== Chapter 4 ===== -->
+<section class="chapter" id="ch4">
+<div class="chapter-num">CHAPTER 04</div>
+<h2 class="chapter-title">随机梯度截断策略</h2>
+
+<p>即使用 few-step diffusion，朴素地通过整个自回归扩散过程反向传播仍会导致显存消耗过高。论文提出了<strong>三层梯度截断策略</strong>来平衡计算成本与性能：</p>
+
+<div class="compare-grid">
+<div class="compare-card" style="border-top:3px solid var(--lav-400)">
+<div class="cc-icon">①</div>
+<div class="cc-title">Block 级截断</div>
+<div class="cc-desc">每个 block（通常 4 帧）只在随机选中的去噪步 $s$ 保留梯度，其余步使用 <code>torch.no_grad()</code>。通过 <code>dist.broadcast</code> 跨 GPU 同步截断点。</div>
+</div>
+<div class="compare-card" style="border-top:3px solid var(--coral-400)">
+<div class="cc-icon">②</div>
+<div class="cc-title">帧级截断</div>
+<div class="cc-desc">仅最后 21 帧保留梯度路径（<code>start_gradient_frame_index = num_output_frames - 21</code>），前面的帧全部 <code>no_grad</code>。前帧通过 VAE 重新编码为 image latent。</div>
+</div>
+<div class="compare-card" style="border-top:3px solid var(--mint-400)">
+<div class="cc-icon">③</div>
+<div class="cc-title">KV 梯度隔离</div>
+<div class="cc-desc">当前帧的梯度不回传到 KV 缓存中的历史帧——通过 <code>detach</code> 限制梯度流入 KV cache embeddings，防止跨帧的长链反向传播。</div>
+</div>
+</div>
+
+<!-- SVG 3: Gradient Truncation -->
+<div class="svg-container">
+<svg viewBox="0 0 760 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:760px;margin:0 auto;display:block">
+<defs>
+<linearGradient id="gradOn" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#34d399"/><stop offset="100%" stop-color="#10b981"/>
+</linearGradient>
+<linearGradient id="gradOff" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#e5e7eb"/><stop offset="100%" stop-color="#9ca3af"/>
+</linearGradient>
+</defs>
+
+<text x="380" y="20" text-anchor="middle" font-size="13" font-weight="600" fill="#1e1b4b" font-family="Noto Serif SC">三层梯度截断策略</text>
+
+<!-- Blocks along timeline -->
+<g transform="translate(20,40)">
+<!-- Block 1: no grad -->
+<rect x="0" y="0" width="80" height="60" rx="6" fill="url(#gradOff)" opacity="0.3"/>
+<text x="40" y="25" text-anchor="middle" font-size="9" fill="#6b7280">Block 1</text>
+<text x="40" y="40" text-anchor="middle" font-size="8" fill="#9ca3af">no_grad</text>
+<text x="40" y="52" text-anchor="middle" font-size="8" fill="#9ca3af">→ image latent</text>
+
+<!-- Block 2: no grad -->
+<rect x="90" y="0" width="80" height="60" rx="6" fill="url(#gradOff)" opacity="0.3"/>
+<text x="130" y="25" text-anchor="middle" font-size="9" fill="#6b7280">Block 2</text>
+<text x="130" y="40" text-anchor="middle" font-size="8" fill="#9ca3af">no_grad</text>
+<text x="130" y="52" text-anchor="middle" font-size="8" fill="#9ca3af">→ image latent</text>
+
+<!-- Dots -->
+<text x="200" y="35" font-size="14" fill="#9ca3af">···</text>
+
+<!-- Block N-20: grad starts -->
+<rect x="230" y="0" width="80" height="60" rx="6" fill="url(#gradOn)" opacity="0.15"/>
+<text x="270" y="25" text-anchor="middle" font-size="9" fill="#10b981">Block N-20</text>
+<text x="270" y="40" text-anchor="middle" font-size="8" fill="#10b981">grad ON</text>
+<text x="270" y="52" text-anchor="middle" font-size="8" fill="#10b981">step s only</text>
+
+<!-- Block N -->
+<rect x="320" y="0" width="80" height="60" rx="6" fill="url(#gradOn)" opacity="0.3"/>
+<text x="360" y="25" text-anchor="middle" font-size="9" fill="#10b981" font-weight="600">Block N</text>
+<text x="360" y="40" text-anchor="middle" font-size="8" fill="#10b981">grad ON</text>
+<text x="360" y="52" text-anchor="middle" font-size="8" fill="#10b981">step s only</text>
+</g>
+
+<!-- Denoising steps detail -->
+<g transform="translate(460,40)">
+<text x="120" y="0" text-anchor="middle" font-size="10" fill="#7e22ce" font-weight="600">单 Block 去噪步</text>
+<rect x="0" y="10" width="50" height="25" rx="4" fill="#e9d5ff" opacity="0.4"/>
+<text x="25" y="27" text-anchor="middle" font-size="8" fill="#7e22ce">t₄</text>
+<text x="25" y="48" text-anchor="middle" font-size="7" fill="#9ca3af">no_grad</text>
+
+<rect x="60" y="10" width="50" height="25" rx="4" fill="#d8b4fe" opacity="0.4"/>
+<text x="85" y="27" text-anchor="middle" font-size="8" fill="#7e22ce">t₃</text>
+<text x="85" y="48" text-anchor="middle" font-size="7" fill="#9ca3af">no_grad</text>
+
+<rect x="120" y="8" width="55" height="28" rx="4" fill="url(#gradOn)"/>
+<text x="147" y="26" text-anchor="middle" font-size="8" fill="#fff" font-weight="600">t_s ✓</text>
+<text x="147" y="48" text-anchor="middle" font-size="7" fill="#10b981" font-weight="600">GRAD ON</text>
+
+<rect x="185" y="10" width="50" height="25" rx="4" fill="#d8b4fe" opacity="0.2"/>
+<text x="210" y="27" text-anchor="middle" font-size="8" fill="#c084fc">skip</text>
+<text x="210" y="48" text-anchor="middle" font-size="7" fill="#9ca3af">truncated</text>
+</g>
+
+<!-- Legend -->
+<g transform="translate(20,130)">
+<rect x="0" y="0" width="16" height="16" rx="3" fill="url(#gradOn)" opacity="0.3"/>
+<text x="22" y="12" font-size="10" fill="#10b981">梯度保留（最后21帧 × 随机步s）</text>
+<rect x="250" y="0" width="16" height="16" rx="3" fill="url(#gradOff)" opacity="0.3"/>
+<text x="272" y="12" font-size="10" fill="#6b7280">梯度截断（no_grad）</text>
+<rect x="460" y="0" width="16" height="16" rx="3" fill="#fde68a"/>
+<text x="482" y="12" font-size="10" fill="#f59e0b">KV cache（梯度隔离）</text>
+</g>
+
+<text x="380" y="175" text-anchor="middle" font-size="10" fill="#787887">截断策略使 N 帧自展开的显存复杂度从 O(N·T) 降至 O(21·1)</text>
+</svg>
+</div>
+<p style="font-size:12px;color:var(--ink-muted);text-align:center;font-style:italic;margin-top:-12px">图 3：三层梯度截断策略。Block 级（随机步 s）、帧级（最后 21 帧）、KV 级（梯度隔离）。</p>
+
+<div class="insight-box">
+<div class="insight-title">数学直觉：截断为何有效？</div>
+<p>梯度截断本质上是<strong>有偏估计</strong>——它丢弃了通过历史帧的梯度路径，因此不是精确的梯度方向。但正如策略梯度中的 <code>detach</code> 或actor-critic中的停止梯度，这种有偏性反而带来了<strong>方差降低</strong>和<strong>训练稳定性</strong>。论文实验证明：截断后的 Self Forcing 仍显著优于不截断的 TF/DF，说明"正确的分布匹配方向 + 有但够用的梯度信号"胜过"错误分布上的精确梯度"。</p>
+</div>
+</section>
+
+<!-- ===== Chapter 5 ===== -->
+<section class="chapter" id="ch5">
+<div class="chapter-num">CHAPTER 05</div>
+<h2 class="chapter-title">全局分布匹配损失</h2>
+
+<p>自回归自展开从推理时的模型分布直接采样，使我们能够应用<strong>视频级全局损失</strong>——对齐生成视频分布 $p_\theta(x_{1:N})$ 与真实视频分布 $p_{\text{data}}(x_{1:N})$。为利用预训练扩散模型并增强训练稳定性，对两个分布施加前向扩散噪声后匹配 $p_{\theta,t}(x_t^{1:N})$ 和 $p_{\text{data},t}(x_t^{1:N})$。</p>
+
+<p>论文考虑了三种分布匹配框架，它们分别最小化不同的散度度量：</p>
+
+<div class="compare-grid">
+<div class="compare-card" style="border-top:3px solid var(--lav-400)">
+<div class="cc-icon">📐</div>
+<div class="cc-title">DMD</div>
+<div class="cc-desc">最小化反向 KL 散度 $\mathbb{E}_t[D_{\text{KL}}(p_{\theta,t} \| p_{\text{data},t})]$，利用 real score 与 fake score 的分数差引导梯度更新。<strong>无数据训练</strong>。</div>
+</div>
+<div class="compare-card" style="border-top:3px solid var(--mint-400)">
+<div class="cc-icon">🎯</div>
+<div class="cc-title">SiD</div>
+<div class="cc-desc">通过 Fisher 散度 $\mathbb{E}_{t,p_{\theta,t}}[\|\nabla \log p_{\theta,t} - \nabla \log p_{\text{data},t}\|^2]$ 进行分布匹配。<strong>无数据训练</strong>。</div>
+</div>
+<div class="compare-card" style="border-top:3px solid var(--coral-400)">
+<div class="cc-icon">⚔️</div>
+<div class="cc-title">GAN</div>
+<div class="cc-desc">通过生成器-判别器极小极大博弈近似最小化 Jensen-Shannon 散度。使用 R3GAN 目标（relativistic loss + R1/R2 正则）。<strong>需要真实数据</strong>。</div>
+</div>
+</div>
+
+<h3>DMD 损失推导</h3>
+
+<p>DMD 的 KL 散度梯度由 real score $s_{\text{real}}$（冻结的预训练模型 $f_\phi$）和 fake score $s_{\text{fake}}$（学习的 critic $f_\psi$）之差给出：</p>
+
+<div class="formula-card">
+<div class="fc-label">DMD KL 梯度</div>
+<div class="formula">
+$$\nabla_\theta \mathbb{E}_t \left[ D_{\text{KL}}(p_{\theta,t} \| p_{\text{data},t}) \right] = -\mathbb{E}_{t, \hat{x}_t \sim q_{t|0}(\hat{x}_t | \hat{x}), \hat{x} \sim p_\theta(\hat{x})} \left[ \big(s_{\text{real}}(\hat{x}_t, t) - s_{\text{fake}}(\hat{x}_t, t)\big) \frac{\partial \hat{x}}{\partial \theta} \right]$$
+</div>
+</div>
+
+<p>等价的损失函数为：</p>
+
+<div class="formula-card">
+<div class="fc-label">DMD 损失函数</div>
+<div class="formula">
+$$\mathcal{L}^{\text{DMD}}(\theta) = \mathbb{E}_{t, \hat{x}_t, \hat{x}} \left[ \frac{1}{2} \left\| \hat{x} - \text{sg}\left[\hat{x} - \big(f_\psi(\hat{x}_t, t) - f_\phi(\hat{x}_t, t)\big)\right] \right\|^2 \right]$$
+</div>
+<p style="font-size:12px;color:var(--ink-muted);margin-top:8px">其中 $\text{sg}[\cdot]$ 为停止梯度算子，$f_\phi$ 为 real score network（Wan2.1-14B），$f_\psi$ 为 fake score network（从 Wan2.1-1.3B 初始化）。</p>
+</div>
+
+<h3>SiD 损失</h3>
+
+<div class="formula-card">
+<div class="fc-label">SiD 损失</div>
+<div class="formula">
+$$\mathcal{L}^{\text{SiD}}(\theta) = \mathbb{E}_{t, \hat{x}_t, \hat{x}} \left[ (f_\phi - f_\psi)^T (f_\psi - \hat{x}) + (1 - \alpha) \|f_\phi - f_\psi\|^2 \right]$$
+</div>
+<p style="font-size:12px;color:var(--ink-muted);margin-top:8px">$\alpha = 0.5$ 对应 Fisher 散度的梯度。实验中 $\alpha = 1$（省略第二项）训练更稳定。</p>
+</div>
+
+<h3>GAN 损失</h3>
+
+<p>GAN 版本在 critic 网络上添加交叉注意力层和分类头，使用 relativistic loss 和有限差分近似的 R1/R2 正则：</p>
+
+<div class="formula-card">
+<div class="fc-label">GAN 正则化损失</div>
+<div class="formula">
+$$\mathcal{L}_{\text{reg}} = \frac{1}{2} \mathbb{E}_{t, x_t, \hat{x}_t, \epsilon, \hat{\epsilon}} \left[ \|f_\psi(x_t) - f_\psi(x_t + \sigma \epsilon)\|_2^2 + \|f_\psi(\hat{x}_t) - f_\psi(\hat{x}_t + \sigma \hat{\epsilon})\|_2^2 \right]$$
+</div>
+</div>
+
+<div class="formula-card">
+<div class="fc-label">GAN 判别器 / 生成器损失</div>
+<div class="formula">
+$$\mathcal{L}_D(\psi) = -\mathbb{E}_{t, x_t, \hat{x}_t} \left[ \log \sigma\big(f_\psi(x_t) - f_\psi(\hat{x}_t)\big) \right] + \lambda \mathcal{L}_{\text{reg}}$$
+</div>
+<div class="formula" style="margin-top:8px">
+$$\mathcal{L}_G(\theta) = -\mathbb{E}_{t, x_t, \hat{x}_t} \left[ \log \sigma\big(f_\psi(\hat{x}_t) - f_\psi(x_t)\big) \right]$$
+</div>
+<p style="font-size:12px;color:var(--ink-muted);margin-top:8px">使用 $\lambda = 30$, $\sigma = 0.05$，batch size 768 以保证训练稳定性。</p>
+</div>
+
+<div class="insight-box">
+<div class="insight-title">跨论文连接：Self Forcing vs CausVid 的关键区别</div>
+<p>CausVid 同样使用 DMD 来匹配生成视频分布，但其训练输出通过 <strong>Diffusion Forcing</strong> 生成——这意味着 DMD 优化的是 DF 输出分布，而非推理时模型自身的 AR 生成分布。这是一个<strong>致命缺陷</strong>：DMD 在匹配错误的分布。Self Forcing 通过自展开确保训练输出直接来自推理时模型分布，DMD/SiD/GAN 因此匹配的是<strong>正确的目标分布</strong>。实验表明这一区别带来了 +3.11 VBench Total Score 的提升（84.31 vs 81.20）。</p>
+</div>
+
+<h3>帧级 vs 视频级分布匹配</h3>
+
+<p>TF/DF 本质上执行的是<strong>帧级分布匹配</strong>：</p>
+
+<div class="formula-card">
+<div class="fc-label">TF/DF 的帧级分布匹配</div>
+<div class="formula">
+$$\mathbb{E}_{\{x_{\lt i}\} \sim p_{\text{data}}} D_{\text{KL}}\big(p_{\text{data}}(x_i \mid x_{\lt i}) \| p_\theta(x_i \mid x_{\lt i})\big)$$
+</div>
+</div>
+
+<p>而 Self Forcing 执行的是<strong>视频级全局分布匹配</strong>：$D\big(p_{\text{data}}(x_{1:N}) \| p_\theta(x_{1:N})\big)$。根本区别在于上下文帧的来源——TF/DF 从数据分布采样（干净或带噪），Self Forcing 从模型自身分布 $p_\theta$ 采样。这种训练-推理分布的对齐有效解决了曝光偏差。</p>
+</section>
+
+<!-- ===== Chapter 6 ===== -->
+<section class="chapter" id="ch6">
+<div class="chapter-num">CHAPTER 06</div>
+<h2 class="chapter-title">滚动 KV 缓存：无限长视频生成</h2>
+
+<p>自回归模型相比标准视频扩散模型的一个关键优势是<strong>外推能力</strong>——原则上可通过滑动窗口推理生成无限长视频。然而，现有实现存在严重的效率问题：</p>
+
+<!-- SVG 4: Rolling KV Cache -->
+<div class="svg-container">
+<svg viewBox="0 0 760 240" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:760px;margin:0 auto;display:block">
+<defs>
+<marker id="arr3" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+<path d="M0,0 L8,4 L0,8 Z" fill="#787887"/>
+</marker>
+</defs>
+
+<text x="380" y="20" text-anchor="middle" font-size="13" font-weight="600" fill="#1e1b4b" font-family="Noto Serif SC">三种滑动窗口策略的复杂度对比</text>
+
+<!-- (a) Bidirectional -->
+<g transform="translate(20,40)">
+<text x="120" y="0" text-anchor="middle" font-size="10" fill="#f43f5e" font-weight="600">(a) 双向滑动窗口</text>
+<text x="120" y="14" text-anchor="middle" font-size="9" fill="#f43f5e">O(TL²) — 无 KV 缓存</text>
+<!-- Window 1 -->
+<rect x="0" y="25" width="100" height="30" rx="4" fill="#fecdd3" opacity="0.3" stroke="#fda4af"/>
+<text x="50" y="44" text-anchor="middle" font-size="8" fill="#f43f5e">Window 1</text>
+<!-- Window 2 -->
+<rect x="50" y="60" width="100" height="30" rx="4" fill="#fecdd3" opacity="0.3" stroke="#fda4af"/>
+<text x="100" y="79" text-anchor="middle" font-size="8" fill="#f43f5e">Window 2</text>
+<!-- Recompute arrows -->
+<path d="M30,55 Q20,67 30,80" stroke="#f43f5e" stroke-width="1" fill="none" stroke-dasharray="2,2"/>
+<text x="10" y="70" font-size="7" fill="#f43f5e">重算</text>
+<!-- All frames -->
+<rect x="0" y="100" width="240" height="20" rx="3" fill="#ffe4e6"/>
+<text x="120" y="114" text-anchor="middle" font-size="8" fill="#f43f5e">每帧重新计算注意力 → 全部重算</text>
+</g>
+
+<!-- (b) Causal with KV recompute -->
+<g transform="translate(270,40)">
+<text x="120" y="0" text-anchor="middle" font-size="10" fill="#f59e0b" font-weight="600">(b) 因果+KV重算</text>
+<text x="120" y="14" text-anchor="middle" font-size="9" fill="#f59e0b">O(L²+TL) — 重叠帧重算</text>
+<!-- KV cache -->
+<rect x="0" y="25" width="60" height="30" rx="4" fill="#fde68a" opacity="0.3" stroke="#fbbf24"/>
+<text x="30" y="44" text-anchor="middle" font-size="7" fill="#f59e0b">KV [1,2,3]</text>
+<rect x="60" y="25" width="20" height="30" rx="4" fill="#fff7ed" stroke="#fbbf24" stroke-dasharray="2,1"/>
+<text x="70" y="44" text-anchor="middle" font-size="7" fill="#f59e0b">4</text>
+<!-- Next window -->
+<rect x="20" y="60" width="60" height="30" rx="4" fill="#fde68a" opacity="0.2" stroke="#fbbf24" stroke-dasharray="2,1"/>
+<text x="50" y="79" text-anchor="middle" font-size="7" fill="#f59e0b">重算 [2,3]</text>
+<rect x="80" y="60" width="20" height="30" rx="4" fill="#fde68a" opacity="0.3" stroke="#fbbf24"/>
+<text x="90" y="79" text-anchor="middle" font-size="7" fill="#f59e0b">+4</text>
+<path d="M50,55 Q40,67 50,80" stroke="#f59e0b" stroke-width="1" fill="none" stroke-dasharray="2,2"/>
+<rect x="0" y="100" width="240" height="20" rx="3" fill="#fef3c7"/>
+<text x="120" y="114" text-anchor="middle" font-size="8" fill="#f59e0b">滑动窗口重叠部分需重新计算 KV</text>
+</g>
+
+<!-- (c) Rolling KV Cache -->
+<g transform="translate(520,40)">
+<text x="120" y="0" text-anchor="middle" font-size="10" fill="#10b981" font-weight="600">(c) 滚动 KV 缓存 (Ours)</text>
+<text x="120" y="14" text-anchor="middle" font-size="9" fill="#10b981">O(TL) — 零重算</text>
+<!-- Fixed size cache -->
+<rect x="0" y="25" width="100" height="30" rx="4" fill="#d1fae5" opacity="0.4" stroke="#34d399"/>
+<text x="20" y="44" text-anchor="middle" font-size="7" fill="#10b981">1</text>
+<text x="40" y="44" text-anchor="middle" font-size="7" fill="#10b981">2</text>
+<text x="60" y="44" text-anchor="middle" font-size="7" fill="#10b981">3</text>
+<text x="80" y="44" text-anchor="middle" font-size="7" fill="#10b981">4</text>
+<text x="50" y="20" text-anchor="middle" font-size="7" fill="#10b981">固定大小 L=4</text>
+<!-- Evict 1, add 5 -->
+<rect x="0" y="60" width="100" height="30" rx="4" fill="#d1fae5" opacity="0.4" stroke="#34d399"/>
+<text x="20" y="79" text-anchor="middle" font-size="7" fill="#9ca3af" text-decoration="line-through">1</text>
+<text x="40" y="79" text-anchor="middle" font-size="7" fill="#10b981">2</text>
+<text x="60" y="79" text-anchor="middle" font-size="7" fill="#10b981">3</text>
+<text x="80" y="79" text-anchor="middle" font-size="7" fill="#10b981">4</text>
+<rect x="95" y="60" width="25" height="30" rx="4" fill="#a7f3d0" stroke="#10b981" stroke-width="2"/>
+<text x="107" y="79" text-anchor="middle" font-size="7" fill="#10b981" font-weight="600">5</text>
+<text x="107" y="20" text-anchor="middle" font-size="7" fill="#f43f5e">驱逐最旧</text>
+<path d="M12,55 Q107,50 107,55" stroke="#10b981" stroke-width="1" fill="none" marker-end="url(#arr3)"/>
+<rect x="0" y="100" width="240" height="20" rx="3" fill="#d1fae5"/>
+<text x="120" y="114" text-anchor="middle" font-size="8" fill="#10b981">固定大小缓存，驱逐最旧 → 无限生成</text>
+</g>
+
+<!-- Complexity comparison bar -->
+<g transform="translate(40,160)">
+<text x="340" y="0" text-anchor="middle" font-size="10" fill="#4c4b5e" font-weight="600">10秒视频生成吞吐量</text>
+<rect x="0" y="10" width="30" height="20" fill="#f43f5e" opacity="0.6"/>
+<text x="15" y="24" text-anchor="middle" font-size="8" fill="#fff" font-weight="600">N/A</text>
+<text x="40" y="24" font-size="9" fill="#f43f5e">双向</text>
+
+<rect x="100" y="10" width="50" height="20" fill="#f59e0b" opacity="0.6"/>
+<text x="125" y="24" text-anchor="middle" font-size="8" fill="#fff" font-weight="600">4.6</text>
+<text x="160" y="24" font-size="9" fill="#f59e0b">FPS (KV重算)</text>
+
+<rect x="280" y="10" width="180" height="20" fill="#10b981" opacity="0.6"/>
+<text x="370" y="24" text-anchor="middle" font-size="8" fill="#fff" font-weight="600">16.1</text>
+<text x="470" y="24" font-size="9" fill="#10b981">FPS (Rolling KV)</text>
+
+<text x="340" y="50" text-anchor="middle" font-size="8" fill="#787887">滚动 KV 缓存比 KV 重算快 3.5×，且无视觉伪影</text>
+</g>
+</svg>
+</div>
+<p style="font-size:12px;color:var(--ink-muted);text-align:center;font-style:italic;margin-top:-12px">图 4：三种滑动窗口策略对比。滚动 KV 缓存维护固定大小缓存，驱逐最旧帧，实现 O(TL) 复杂度的无限长视频生成。</p>
+
+<h3>训练适应：局部注意力窗口</h3>
+
+<p>滚动 KV 缓存的朴素实现会导致严重的闪烁伪影。原因在于<strong>第一帧的统计特性不同</strong>：它只编码第一张图像而不执行时间压缩，模型在训练中始终看到第一帧作为 image latent。当第一帧在滚动缓存中不再可见时，模型无法泛化。</p>
+
+<p>解决方案简洁但有效：<strong>训练时限制注意力窗口</strong>，使模型在去噪最后一个 chunk 时无法 attend 到第一个 chunk，从而模拟长视频生成时遇到的情形。</p>
+
+<div class="insight-box">
+<div class="insight-title">架构洞察：与 LLM Attention Sinks 的联系</div>
+<p>滚动 KV 缓存的灵感来自大语言模型中的 <strong>Attention Sinks</strong> 研究（Xiao et al., ICLR 2024）。LLM 中发现 Transformer 倾向于将大量注意力分配给最初的几个 token（"attention sink"），即使它们语义无关。视频扩散模型中也存在类似现象——第一帧（image latent）扮演了 attention sink 的角色。Self Forcing 的解决方案不是保留 sink（如 StreamingLLM），而是<strong>训练模型在没有 sink 的情况下工作</strong>，通过局部注意力窗口训练消除对第一帧的依赖。</p>
+</div>
+</section>
+
+<!-- ===== Chapter 7 ===== -->
+<section class="chapter" id="ch7">
+<div class="chapter-num">CHAPTER 07</div>
+<h2 class="chapter-title">实验结果：实时视频生成的新标杆</h2>
+
+<p>实验基于 Wan2.1-T2V-1.3B（Flow Matching 模型，16 FPS，832×480 分辨率），遵循 CausVid 的初始化协议：先用因果注意力掩码在 16k ODE 解对上微调基础模型。使用 4-step diffusion，实现了 frame-wise 和 chunk-wise 两种自回归变体。</p>
+
+<div class="stats-grid">
+<div class="stat-card">
+<div class="stat-value">17.0</div>
+<div class="stat-label">FPS 吞吐量</div>
+</div>
+<div class="stat-card">
+<div class="stat-value">0.69s</div>
+<div class="stat-label">首帧延迟</div>
+</div>
+<div class="stat-card">
+<div class="stat-value">84.31</div>
+<div class="stat-label">VBench 总分</div>
+</div>
+<div class="stat-card">
+<div class="stat-value">~1.5h</div>
+<div class="stat-label">训练时间 (64 H100)</div>
+</div>
+</div>
+
+<h3>主实验：与基线对比</h3>
+
+<table class="data-table">
+<thead>
+<tr>
+<th>模型</th>
+<th>参数量</th>
+<th>吞吐(FPS)</th>
+<th>延迟(s)</th>
+<th>总分</th>
+<th>质量分</th>
+<th>语义分</th>
+</tr>
+</thead>
+<tbody>
+<tr><td colspan="7" style="font-weight:600;color:var(--ink-muted);font-size:11px;background:var(--paper-soft)">扩散模型</td></tr>
+<tr><td>LTX-Video</td><td>1.9B</td><td>8.98</td><td>13.5</td><td>80.00</td><td>82.30</td><td>70.79</td></tr>
+<tr><td>Wan2.1</td><td>1.3B</td><td>0.78</td><td>103</td><td>84.26</td><td>85.30</td><td>80.09</td></tr>
+<tr><td colspan="7" style="font-weight:600;color:var(--ink-muted);font-size:11px;background:var(--paper-soft)">Chunk-wise 自回归模型</td></tr>
+<tr><td>SkyReels-V2</td><td>1.3B</td><td>0.49</td><td>112</td><td>82.67</td><td>84.70</td><td>74.53</td></tr>
+<tr><td>MAGI-1</td><td>4.5B</td><td>0.19</td><td>282</td><td>79.18</td><td>82.04</td><td>67.74</td></tr>
+<tr><td>CausVid</td><td>1.3B</td><td>17.0</td><td>0.69</td><td>81.20</td><td>84.05</td><td>69.80</td></tr>
+<tr class="ours"><td><strong>Self Forcing (chunk)</strong></td><td>1.3B</td><td class="best">17.0</td><td class="best">0.69</td><td class="best">84.31</td><td class="best">85.07</td><td class="best">81.28</td></tr>
+<tr><td colspan="7" style="font-weight:600;color:var(--ink-muted);font-size:11px;background:var(--paper-soft)">Frame-wise 自回归模型</td></tr>
+<tr><td>NOVA</td><td>0.6B</td><td>0.88</td><td>4.1</td><td>80.12</td><td>80.39</td><td>79.05</td></tr>
+<tr><td>Pyramid Flow</td><td>2B</td><td>6.7</td><td>2.5</td><td>81.72</td><td>84.74</td><td>69.62</td></tr>
+<tr class="ours"><td><strong>Self Forcing (frame)</strong></td><td>1.3B</td><td>8.9</td><td class="best">0.45</td><td>84.26</td><td>85.25</td><td>80.30</td></tr>
+</tbody>
+</table>
+
+<p>Self Forcing 在<strong>所有对比模型中取得最高 VBench 分数</strong>，同时实现实时吞吐（17.0 FPS）和亚秒延迟。值得注意的是，它甚至超越了作为初始化基础的 Wan2.1（84.31 vs 84.26），而后者需要 103 秒生成——Self Forcing 快了约 150 倍。</p>
+
+<h3>用户偏好研究</h3>
+
+<figure>
+<img src="assets/fig4_user_study.webp" alt="用户偏好研究">
+<figcaption>图 4：用户偏好研究。Self Forcing 在所有对比中均获多数偏好。</figcaption>
+</figure>
+
+<p>在 1003 个 MovieGenBench 提示词上的用户研究中，Self Forcing 一致优于所有基线，包括多步扩散模型 Wan2.1。偏好率分别为：vs MAGI-1 54.2%，vs SkyReels-V2 57.9%，vs Wan2.1 62.7%，vs CausVid 66.1%。</p>
+
+<div class="insight-box">
+<div class="insight-title">实验解读：语义分的飞跃</div>
+<p>Self Forcing 最显著的提升在于<strong>语义分（Semantic Score）</strong>：chunk-wise 达到 81.28，而 CausVid 仅 69.80——差距超过 11 分。这说明曝光偏差不仅影响视觉质量，更严重损害了<strong>语义一致性</strong>——模型在自回归生成中逐渐"忘记"文本提示的含义。Self Forcing 通过训练时自展开，使模型学会在长序列中维持语义一致性，这是曝光偏差被有效缓解的直接证据。</p>
+</div>
+</section>
+
+<!-- ===== Chapter 8 ===== -->
+<section class="chapter" id="ch8">
+<div class="chapter-num">CHAPTER 08</div>
+<h2 class="chapter-title">消融研究与训练效率</h2>
+
+<h3>训练范式与损失函数消融</h3>
+
+<table class="data-table">
+<thead>
+<tr>
+<th>训练方法</th>
+<th colspan="3">Chunk-wise AR</th>
+<th colspan="3">Frame-wise AR</th>
+</tr>
+<tr>
+<th></th>
+<th>总分</th>
+<th>质量</th>
+<th>语义</th>
+<th>总分</th>
+<th>质量</th>
+<th>语义</th>
+</tr>
+</thead>
+<tbody>
+<tr><td colspan="7" style="font-size:11px;color:var(--ink-muted);background:var(--paper-soft)">多步 (50×2) 模型</td></tr>
+<tr><td>DF</td><td>82.95</td><td>83.66</td><td>80.09</td><td>77.24</td><td>79.72</td><td>67.33</td></tr>
+<tr><td>TF</td><td>83.58</td><td>84.34</td><td>80.52</td><td>80.34</td><td>81.34</td><td>76.34</td></tr>
+<tr><td colspan="7" style="font-size:11px;color:var(--ink-muted);background:var(--paper-soft)">少步 (4) 模型</td></tr>
+<tr><td>DF + DMD</td><td>82.76</td><td>83.49</td><td>79.85</td><td>80.56</td><td>81.02</td><td>78.71</td></tr>
+<tr><td>TF + DMD</td><td>82.32</td><td>82.73</td><td>80.67</td><td>78.12</td><td>79.62</td><td>72.11</td></tr>
+<tr class="ours"><td><strong>SF + DMD</strong></td><td class="best">84.31</td><td>85.07</td><td class="best">81.28</td><td class="best">84.26</td><td class="best">85.25</td><td class="best">80.30</td></tr>
+<tr class="ours"><td><strong>SF + SiD</strong></td><td>84.07</td><td class="best">85.52</td><td>78.24</td><td>83.54</td><td>84.71</td><td>78.86</td></tr>
+<tr class="ours"><td><strong>SF + GAN</strong></td><td>83.88</td><td>85.06</td><td>79.16</td><td>83.27</td><td>84.57</td><td>78.08</td></tr>
+</tbody>
+</table>
+
+<p>消融结果揭示了几个关键发现：</p>
+
+<p><strong>1. Self Forcing 对所有分布匹配目标均有效</strong>。DMD、SiD、GAN 三种损失均显著优于 TF/DF 基线，说明收益来自训练范式本身（自展开），而非特定损失函数。</p>
+
+<p><strong>2. Frame-wise AR 的差距最为显著</strong>。从 chunk-wise 切换到 frame-wise 时，基线方法质量严重退化（TF: 83.58→80.34，DF+DMD: 82.76→80.56），而 Self Forcing 几乎无退化（84.31→84.26）。这是因为 frame-wise 的自回归链更长，曝光偏差更严重——正是 Self Forcing 所解决的问题。</p>
+
+<p><strong>3. DF+DMD 本质上复制了 CausVid</strong>。在相同训练条件下，Self Forcing (DMD) 比 DF+DMD 高出 1.55 分，直接验证了"匹配正确分布"的重要性。</p>
+
+<!-- SVG 5: Training Efficiency -->
+<div class="svg-container">
+<svg viewBox="0 0 760 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:760px;margin:0 auto;display:block">
+<defs>
+<linearGradient id="effGrad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#34d399" stop-opacity="0.8"/><stop offset="100%" stop-color="#10b981" stop-opacity="0.3"/>
+</linearGradient>
+</defs>
+
+<text x="380" y="20" text-anchor="middle" font-size="13" font-weight="600" fill="#1e1b4b" font-family="Noto Serif SC">训练效率：质量 vs 墙钟时间</text>
+
+<!-- Axes -->
+<line x1="80" y1="180" x2="700" y2="180" stroke="#787887" stroke-width="1.5"/>
+<line x1="80" y1="40" x2="80" y2="180" stroke="#787887" stroke-width="1.5"/>
+<text x="390" y="205" text-anchor="middle" font-size="10" fill="#4c4b5e">训练墙钟时间 (分钟)</text>
+<text x="35" y="110" text-anchor="middle" font-size="10" fill="#4c4b5e" transform="rotate(-90,35,110)">VBench 总分</text>
+
+<!-- Y axis labels -->
+<text x="72" y="183" text-anchor="end" font-size="8" fill="#787887">0.810</text>
+<text x="72" y="150" text-anchor="end" font-size="8" fill="#787887">0.820</text>
+<text x="72" y="117" text-anchor="end" font-size="8" fill="#787887">0.830</text>
+<text x="72" y="84" text-anchor="end" font-size="8" fill="#787887">0.840</text>
+
+<!-- Grid lines -->
+<line x1="80" y1="150" x2="700" y2="150" stroke="#e5e7eb" stroke-width="0.5"/>
+<line x1="80" y1="117" x2="700" y2="117" stroke="#e5e7eb" stroke-width="0.5"/>
+<line x1="80" y1="84" x2="700" y2="84" stroke="#e5e7eb" stroke-width="0.5"/>
+
+<!-- X axis labels -->
+<text x="80" y="195" text-anchor="middle" font-size="8" fill="#787887">0</text>
+<text x="220" y="195" text-anchor="middle" font-size="8" fill="#787887">10</text>
+<text x="360" y="195" text-anchor="middle" font-size="8" fill="#787887">20</text>
+<text x="500" y="195" text-anchor="middle" font-size="8" fill="#787887">30</text>
+<text x="640" y="195" text-anchor="middle" font-size="8" fill="#787887">40</text>
+
+<!-- DF curve (orange) -->
+<path d="M 120,145 Q 200,130 280,120 T 420,105 T 560,98 T 680,95" stroke="#f59e0b" stroke-width="2" fill="none"/>
+<circle cx="120" cy="145" r="3" fill="#f59e0b"/>
+<circle cx="280" cy="120" r="3" fill="#f59e0b"/>
+<circle cx="420" cy="105" r="3" fill="#f59e0b"/>
+<circle cx="560" cy="98" r="3" fill="#f59e0b"/>
+<circle cx="680" cy="95" r="3" fill="#f59e0b"/>
+<text x="690" y="92" font-size="9" fill="#f59e0b" font-weight="600">DF</text>
+
+<!-- TF curve (red) -->
+<path d="M 120,140 Q 200,125 280,115 T 420,102 T 560,96 T 680,93" stroke="#f43f5e" stroke-width="2" fill="none"/>
+<circle cx="120" cy="140" r="3" fill="#f43f5e"/>
+<circle cx="280" cy="115" r="3" fill="#f43f5e"/>
+<circle cx="420" cy="102" r="3" fill="#f43f5e"/>
+<circle cx="560" cy="96" r="3" fill="#f43f5e"/>
+<circle cx="680" cy="93" r="3" fill="#f43f5e"/>
+<text x="690" y="90" font-size="9" fill="#f43f5e" font-weight="600">TF</text>
+
+<!-- SF curve (green) - faster convergence -->
+<path d="M 120,130 Q 150,100 180,82 T 220,75 T 260,73" stroke="#10b981" stroke-width="2.5" fill="none"/>
+<circle cx="120" cy="130" r="4" fill="#10b981"/>
+<circle cx="160" cy="88" r="4" fill="#10b981"/>
+<circle cx="200" cy="78" r="4" fill="#10b981"/>
+<circle cx="260" cy="73" r="4" fill="#10b981"/>
+<text x="275" y="70" font-size="9" fill="#10b981" font-weight="600">Self Forcing</text>
+<text x="275" y="82" font-size="8" fill="#10b981">~1.5h 收敛</text>
+
+<!-- Annotation -->
+<line x1="260" y1="73" x2="260" y2="180" stroke="#10b981" stroke-width="1" stroke-dasharray="3,2" opacity="0.5"/>
+<text x="265" y="175" font-size="8" fill="#10b981">~8 min</text>
+
+<!-- Per-iteration time comparison (inset) -->
+<rect x="420" y="45" width="270" height="70" rx="8" fill="#f0fdf4" stroke="#34d399" stroke-width="1"/>
+<text x="555" y="60" text-anchor="middle" font-size="9" fill="#10b981" font-weight="600">单次迭代时间对比</text>
+<rect x="440" y="68" width="30" height="12" fill="#f59e0b" opacity="0.6"/>
+<text x="455" y="78" text-anchor="middle" font-size="7" fill="#fff">DF</text>
+<rect x="480" y="65" width="30" height="15" fill="#f43f5e" opacity="0.6"/>
+<text x="495" y="75" text-anchor="middle" font-size="7" fill="#fff">TF</text>
+<rect x="520" y="67" width="30" height="13" fill="#a855f7" opacity="0.6"/>
+<text x="535" y="77" text-anchor="middle" font-size="7" fill="#fff">SF-1</text>
+<rect x="560" y="63" width="30" height="17" fill="#c084fc" opacity="0.6"/>
+<text x="575" y="73" text-anchor="middle" font-size="7" fill="#fff">SF-2</text>
+<rect x="600" y="60" width="30" height="20" fill="#34d399" opacity="0.6"/>
+<text x="615" y="70" text-anchor="middle" font-size="7" fill="#fff">SF-4</text>
+<text x="555" y="100" text-anchor="middle" font-size="7" fill="#787887">SF 迭代时间与 TF/DF 可比</text>
+</svg>
+</div>
+<p style="font-size:12px;color:var(--ink-muted);text-align:center;font-style:italic;margin-top:-12px">图 5：训练效率对比。Self Forcing 在 ~8 分钟内达到 DF/TF 需 30+ 分钟才能达到的质量，总训练时间约 1.5 小时。</p>
+
+<div class="insight-box">
+<div class="insight-title">反直觉发现：串行训练反而更快</div>
+<p>Self Forcing 的串行自展开看似计算上不可行，但实验揭示了<strong>反直觉的结果</strong>：它比"并行"的 TF/DF 更高效。原因有二：(1) 虽然自展开串行处理帧，但<strong>每帧内的所有 token 仍并行处理</strong>，保持了高 GPU 利用率；(2) TF/DF 需要特殊的注意力掩码来强制因果依赖，引入额外开销（即便使用 FlexAttention），而 Self Forcing 使用 full attention + FlashAttention-3，反而更快。在相同墙钟时间内，Self Forcing 达到的质量远超 TF/DF。</p>
+</div>
+
+<h3>滚动 KV 缓存消融</h3>
+
+<p>使用 KV 重算的滑动窗口在生成 10 秒视频时吞吐仅 4.6 FPS。朴素滚动 KV 缓存维持高吞吐但引入严重视觉伪影。通过局部注意力窗口训练，Self Forcing 在消除伪影的同时保持 16.1 FPS 的高吞吐——比 KV 重算快 3.5 倍。</p>
+</section>
+
+<!-- ===== Chapter 9 ===== -->
+<section class="chapter" id="ch9">
+<div class="chapter-num">CHAPTER 09</div>
+<h2 class="chapter-title">讨论：并行预训练 + 串行后训练的新范式</h2>
+
+<h3>并行化训练的根本局限</h3>
+
+<p>并行化训练是 Transformer 成功的关键——使高效扩展成为可能。但这种并行性引入了根本性的局限。已有研究表明并行架构在序列状态跟踪问题中内在限制了表达能力。Self Forcing 揭示了另一个关键局限：<strong>并行化训练范式造成了训练与推理分布之间的错位</strong>，导致误差随时间累积。</p>
+
+<div class="insight-box">
+<div class="insight-title">范式主张：并行预训练 + 串行后训练</div>
+<p>论文倡导一种新范式——<strong>并行预训练与串行后训练相结合</strong>。预训练阶段利用并行化实现高效扩展，后训练阶段通过串行自展开对齐训练-推理分布。这一范式转变在语言建模中已通过强化学习获得势头（如 DeepSeek-R1），Self Forcing 代表了视频领域迈向这一方向的第一步。该框架具有通用性，可应用于其他序列领域，尤其是连续数据。</p>
+</div>
+
+<h3>AR、Diffusion 与 GAN 的互补性</h3>
+
+<p>自回归模型、扩散模型和 GAN 传统上被视为不同的生成建模范式。Self Forcing 揭示了它们的<strong>互补本质</strong>：</p>
+
+<div class="compare-grid">
+<div class="compare-card">
+<div class="cc-icon">🔗</div>
+<div class="cc-title">AR + Diffusion</div>
+<div class="cc-desc">自回归和扩散提供了互补的分布分解方式——链式法则 vs 潜变量，可以嵌套组合。AR 分解时间维度，Diffusion 分解每帧内的空间维度。</div>
+</div>
+<div class="compare-card">
+<div class="cc-icon">⚖️</div>
+<div class="cc-title">GAN 的核心思想</div>
+<div class="cc-desc">GAN 的本质——通过从隐式生成器采样来匹配其分布到目标分布——可以用来训练由 AR-Diffusion 分解驱动的生成器。分布匹配不依赖于特定的散度度量。</div>
+</div>
+<div class="compare-card">
+<div class="cc-icon">🔄</div>
+<div class="cc-title">三者协同</div>
+<div class="cc-desc">Self Forcing = AR（时间分解）+ Diffusion（空间去噪）+ GAN/DMD/SiD（分布匹配）。三者各司其职，形成完整的生成框架。</div>
+</div>
+</div>
+
+<h3>局限性与未来方向</h3>
+
+<p>论文坦诚指出两个主要局限：(1) 虽然有效缓解了训练上下文长度内的误差累积，但生成<strong>远超训练长度</strong>的视频时仍可观察到质量退化；(2) 梯度截断策略虽然必要于显存效率，但可能限制模型学习<strong>长程依赖</strong>的能力。</p>
+
+<p>未来方向包括：改进外推技术、探索 inherently recurrent 架构如 State Space Models（Mamba 等）以更好平衡显存效率与长上下文建模。</p>
+</section>
+
+<!-- ===== Chapter 10 ===== -->
+<section class="chapter" id="ch10">
+<div class="chapter-num">CHAPTER 10</div>
+<h2 class="chapter-title">自主科研问题</h2>
+
+<div class="research-q">
+<div class="rq-tag">问题 01</div>
+<div class="rq-title">梯度截断的最优策略是什么？是否存在自适应截断点选择？</div>
+<p>当前策略为每个 block 随机均匀采样截断步 $s$。但不同去噪步的梯度信号质量不同——早期步（高噪声）的梯度可能噪声更大，后期步（低噪声）的梯度更精确但可能过拟合到细节。能否设计<strong>自适应截断策略</strong>，根据当前生成质量动态选择截断点？例如，使用 critic 网络的置信度来指导 $s$ 的采样分布。理论分析上，截断引入的偏差与方差之间的 trade-off 可以形式化为偏差-方差分解问题。</p>
+</div>
+
+<div class="research-q">
+<div class="rq-tag">问题 02</div>
+<div class="rq-title">Self Forcing 能否与 State Space Models 结合实现真正的无限长视频生成？</div>
+<p>论文指出梯度截断限制了长程依赖学习，并建议探索 SSM（如 Mamba）。但 SSM 的固定大小隐状态与 diffusion model 的迭代去噪过程存在<strong>根本性张力</strong>：SSM 假设状态转移是确定性的，而 diffusion 每步注入随机噪声。如何设计一个既保留 SSM 线性复杂度优势、又能处理 diffusion 随机性的混合架构？Po et al. (2025) 的 Long-context SSM Video World Models 提供了初步探索，但尚未与 Self Forcing 范式结合。</p>
+</div>
+
+<div class="research-q">
+<div class="rq-tag">问题 03</div>
+<div class="rq-title">分布匹配损失的选择如何影响模式覆盖与模式坍塌？</div>
+<p>DMD（反向 KL）、SiD（Fisher 散度）和 GAN（Jensen-Shannon 散度）在模式覆盖上有不同特性：反向 KL 倾向于 mode-seeking（追求高质量但可能降低多样性），JS 散度更 mode-covering。实验中三者表现相近（84.31/84.07/83.88），但在特定维度上差异显著——SiD 的质量分最高（85.52）但语义分最低（78.24）。这暗示<strong>不同散度可能在优化不同维度</strong>。能否设计混合损失，在不同维度上取各家之长？</p>
+</div>
+
+<div class="research-q">
+<div class="rq-tag">问题 04</div>
+<div class="rq-title">Self Forcing 范式能否迁移到语言建模的后训练阶段？</div>
+<p>论文明确指出 Self Forcing 与语言建模中 RL 后训练（如 DeepSeek-R1）的类比。但视频生成中的分布匹配损失（DMD/SiD/GAN）依赖于连续空间中的 score function 或判别器，而语言是离散的。<strong>能否设计离散版本的分布匹配损失</strong>用于语言模型的后训练？例如，使用强化学习中的 reward model 作为"real score"，当前策略作为"fake score"，通过类似的分数差引导梯度更新？这将桥接视频和语言两个领域的后训练范式。</p>
+</div>
+
+<div class="research-q">
+<div class="rq-tag">问题 05</div>
+<div class="rq-title">训练上下文长度与推理外推能力的关系如何量化？</div>
+<p>论文观察到生成远超训练长度的视频时质量退化，但未给出定量分析。<strong>是否存在一个临界长度比</strong>（推理长度/训练长度），超过后质量急剧下降？这与曝光偏差的残余程度如何关联？如果能建立这一关系，就可以指导训练时选择合适的上下文长度，在计算成本与外推能力之间取得最优平衡。滚动 KV 缓存的局部注意力窗口训练是否改变了这一临界比？</p>
+</div>
+</section>
+
+<!-- ===== Code Appendix ===== -->
+<section class="chapter" id="code">
+<div class="chapter-num">CODE APPENDIX</div>
+<h2 class="chapter-title">核心代码实现</h2>
+
+<p>以下代码基于 <a href="https://github.com/guandeh17/Self-Forcing">guandeh17/Self-Forcing</a> 开源仓库分析整理，展示三个核心模块的实现细节。</p>
+
+<h3>代码 1：自展开训练核心循环</h3>
+
+<div class="code-block">
+<div class="code-header">
+<span class="ch-label">self_forcing_training.py — inference_with_trajectory</span>
+<span class="ch-tag">示意性实现</span>
+</div>
+<pre><code><span class="com"># pipeline/self_forcing_training.py</span>
+<span class="kw">def</span> <span class="fn">inference_with_trajectory</span>(self, noise, initial_latent=<span class="kw">None</span>, **conditional_dict):
+    <span class="com">"""自展开生成，带随机梯度截断"""</span>
+    <span class="com"># 初始化 KV 缓存（训练时也使用）</span>
+    self._initialize_kv_cache(batch_size, dtype, device)
+    self._initialize_crossattn_cache(batch_size, dtype, device)
+    
+    <span class="com"># 为每个 block 随机采样截断步 s，跨 GPU 同步</span>
+    exit_flags = self.generate_and_sync_list(
+        len(all_num_frames), num_denoising_steps, device=device)
+    
+    <span class="com"># 仅最后 21 帧保留梯度</span>
+    start_gradient_frame_index = num_output_frames - <span class="num">21</span>
+    output = torch.zeros_like(noise)
+    
+    <span class="kw">for</span> block_index, current_num_frames <span class="kw">in</span> enumerate(all_num_frames):
+        noisy_input = noise[:, start:start + current_num_frames]
+        
+        <span class="com"># === 空间去噪循环 (如 4 步: 1000→750→500→250) ===</span>
+        <span class="kw">for</span> index, current_timestep <span class="kw">in</span> enumerate(self.denoising_step_list):
+            exit_flag = (index == exit_flags[block_index])
+            
+            <span class="kw">if</span> not exit_flag:
+                <span class="com"># 非截断点：不计算梯度</span>
+                <span class="kw">with</span> torch.no_grad():
+                    _, denoised_pred = self.generator(
+                        noisy_image_or_video=noisy_input,
+                        conditional_dict=conditional_dict,
+                        timestep=current_timestep,
+                        kv_cache=self.kv_cache1,           <span class="com"># 传入 KV 缓存</span>
+                        crossattn_cache=self.crossattn_cache,
+                        current_start=start * self.frame_seq_length)
+                    <span class="com"># 加噪到下一步</span>
+                    noisy_input = self.scheduler.add_noise(
+                        denoised_pred, torch.randn_like(denoised_pred),
+                        self.denoising_step_list[index + <span class="num">1</span>])
+            <span class="kw">else</span>:
+                <span class="com"># 截断点：根据帧位置决定是否保留梯度</span>
+                <span class="kw">if</span> start < start_gradient_frame_index:
+                    <span class="kw">with</span> torch.no_grad():  <span class="com"># 前 N-21 帧截断</span>
+                        _, denoised_pred = self.generator(noisy_input, ...)
+                <span class="kw">else</span>:
+                    <span class="com"># 最后 21 帧保留梯度路径</span>
+                    _, denoised_pred = self.generator(noisy_input, ...)
+                <span class="kw">break</span>  <span class="com"># 退出该 block 的去噪循环</span>
+        
+        output[:, start:start + current_num_frames] = denoised_pred
+        
+        <span class="com"># 用干净输出更新 KV 缓存（梯度隔离）</span>
+        <span class="kw">with</span> torch.no_grad():
+            self.generator(
+                noisy_image_or_video=denoised_pred,
+                timestep=self.context_noise,
+                kv_cache=self.kv_cache1,
+                current_start=start * self.frame_seq_length)
+        
+        start += current_num_frames
+    
+    <span class="kw">return</span> output, denoised_timestep_from, denoised_timestep_to</code></pre>
+</div>
+
+<h3>代码 2：DMD 分布匹配损失</h3>
+
+<div class="code-block">
+<div class="code-header">
+<span class="ch-label">model/dmd.py — DMD Loss</span>
+<span class="ch-tag">可运行实现</span>
+</div>
+<pre><code><span class="com"># model/dmd.py</span>
+<span class="kw">class</span> <span class="fn">DMD</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">_compute_kl_grad</span>(self, noisy_video, estimated_clean, timestep,
+                     conditional_dict, unconditional_dict):
+        <span class="com">"""计算 KL 散度梯度 (DMD 论文 eq. 7)"""</span>
+        <span class="com"># Step 1: fake score（学生模型预测）</span>
+        _, pred_fake_cond = self.fake_score(
+            noisy_image_or_video=noisy_video,
+            conditional_dict=conditional_dict, timestep=timestep)
+        <span class="kw">if</span> self.fake_guidance_scale != <span class="num">0.0</span>:
+            _, pred_fake_uncond = self.fake_score(
+                noisy_image_or_video=noisy_video,
+                conditional_dict=unconditional_dict, timestep=timestep)
+            pred_fake = pred_fake_cond + (
+                pred_fake_cond - pred_fake_uncond) * self.fake_guidance_scale
+        <span class="kw">else</span>:
+            pred_fake = pred_fake_cond
+        
+        <span class="com"># Step 2: real score（冻结教师模型，带 CFG）</span>
+        <span class="kw">with</span> torch.no_grad():
+            _, pred_real_cond = self.real_score(
+                noisy_image_or_video=noisy_video,
+                conditional_dict=conditional_dict, timestep=timestep)
+            _, pred_real_uncond = self.real_score(
+                noisy_image_or_video=noisy_video,
+                conditional_dict=unconditional_dict, timestep=timestep)
+            pred_real = pred_real_cond + (
+                pred_real_cond - pred_real_uncond) * self.real_guidance_scale
+        
+        <span class="com"># Step 3: DMD 梯度 = fake_score - real_score</span>
+        grad = pred_fake - pred_real
+        
+        <span class="com"># Step 4: 梯度归一化 (DMD 论文 eq. 8)</span>
+        <span class="kw">if</span> self.normalization:
+            p_real = estimated_clean - pred_real
+            normalizer = torch.abs(p_real).mean(dim=[<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>], keepdim=<span class="kw">True</span>)
+            grad = grad / normalizer
+        <span class="kw">return</span> torch.nan_to_num(grad), log_dict
+    
+    <span class="kw">def</span> <span class="fn">compute_distribution_matching_loss</span>(self, video, conditional_dict,
+                                          unconditional_dict, gradient_mask=<span class="kw">None</span>):
+        <span class="com">"""计算 DMD 损失"""</span>
+        <span class="com"># 随机采样时间步</span>
+        timestep = self._get_timestep(min_t, max_t)
+        noise = torch.randn_like(video)
+        noisy_latent = self.scheduler.add_noise(video, noise, timestep)
+        
+        <span class="com"># 计算 KL 梯度（real_score 部分不计算梯度）</span>
+        <span class="kw">with</span> torch.no_grad():
+            grad, log_dict = self._compute_kl_grad(
+                noisy_video=noisy_latent,
+                estimated_clean=video, ...)
+        
+        <span class="com"># DMD 损失 = 0.5 * MSE(x, x - grad.detach())</span>
+        <span class="kw">if</span> gradient_mask <span class="kw">is not</span> <span class="kw">None</span>:
+            loss = <span class="num">0.5</span> * F.mse_loss(
+                video.double()[gradient_mask],
+                (video.double() - grad.double()).detach()[gradient_mask])
+        <span class="kw">else</span>:
+            loss = <span class="num">0.5</span> * F.mse_loss(
+                video.double(),
+                (video.double() - grad.double()).detach())
+        <span class="kw">return</span> loss, log_dict</code></pre>
+</div>
+
+<h3>代码 3：滚动 KV 缓存推理</h3>
+
+<div class="code-block">
+<div class="code-header">
+<span class="ch-label">causal_inference.py — Rolling KV Cache Inference</span>
+<span class="ch-tag">可运行实现</span>
+</div>
+<pre><code><span class="com"># pipeline/causal_inference.py</span>
+<span class="kw">class</span> <span class="fn">CausalInferencePipeline</span>:
+    <span class="kw">def</span> <span class="fn">_initialize_kv_cache</span>(self, batch_size, dtype, device):
+        <span class="com">"""初始化固定大小 KV 缓存（支持滚动覆盖）"""</span>
+        <span class="kw">if</span> self.local_attn_size != -<span class="num">1</span>:
+            <span class="com"># 局部注意力窗口大小（滚动覆盖）</span>
+            kv_cache_size = self.local_attn_size * self.frame_seq_length
+        <span class="kw">else</span>:
+            kv_cache_size = <span class="num">32760</span>  <span class="com"># 全量缓存</span>
+        
+        kv_cache = []
+        <span class="kw">for</span> _ <span class="kw">in</span> range(self.num_transformer_blocks):  <span class="com"># 30 层</span>
+            kv_cache.append({
+                <span class="str">"k"</span>: torch.zeros([batch_size, kv_cache_size, <span class="num">12</span>, <span class="num">128</span>],
+                                 dtype=dtype, device=device),
+                <span class="str">"v"</span>: torch.zeros([batch_size, kv_cache_size, <span class="num">12</span>, <span class="num">128</span>],
+                                 dtype=dtype, device=device),
+                <span class="str">"global_end_index"</span>: torch.tensor([<span class="num">0</span>]),  <span class="com"># 写入位置</span>
+                <span class="str">"local_end_index"</span>: torch.tensor([<span class="num">0</span>])   <span class="com"># 滚动窗口位置</span>
+            })
+        <span class="kw">return</span> kv_cache
+    
+    <span class="kw">def</span> <span class="fn">inference</span>(self, noise, text_prompts, initial_latent=<span class="kw">None</span>, ...):
+        <span class="com"># 重置 KV 缓存位置索引（无需重新分配内存）</span>
+        <span class="kw">for</span> block_index <span class="kw">in</span> range(len(self.kv_cache1)):
+            self.kv_cache1[block_index][<span class="str">"global_end_index"</span>] = torch.tensor([<span class="num">0</span>])
+            self.kv_cache1[block_index][<span class="str">"local_end_index"</span>] = torch.tensor([<span class="num">0</span>])
+            self.crossattn_cache[block_index][<span class="str">"is_init"</span>] = <span class="kw">False</span>
+        
+        <span class="com"># 缓存初始上下文（图像 latent）</span>
+        current_start_frame = <span class="num">0</span>
+        <span class="kw">if</span> initial_latent <span class="kw">is not</span> <span class="kw">None</span>:
+            self.generator(
+                noisy_image_or_video=initial_latent[:, :<span class="num">1</span>],
+                timestep=torch.zeros([batch_size, <span class="num">1</span>]),
+                kv_cache=self.kv_cache1,
+                current_start=<span class="num">0</span>)
+            current_start_frame += <span class="num">1</span>
+        
+        <span class="com"># 时间维度自回归循环</span>
+        all_num_frames = [self.num_frame_per_block] * num_blocks
+        <span class="kw">for</span> current_num_frames <span class="kw">in</span> all_num_frames:
+            noisy_input = noise[:, start:start + current_num_frames]
+            
+            <span class="com"># 空间去噪 (4 步)</span>
+            <span class="kw">for</span> index, t <span class="kw">in</span> enumerate(self.denoising_step_list):
+                _, denoised = self.generator(
+                    noisy_image_or_video=noisy_input,
+                    timestep=t, kv_cache=self.kv_cache1,
+                    current_start=current_start_frame * self.frame_seq_length)
+                
+                <span class="kw">if</span> index < len(self.denoising_step_list) - <span class="num">1</span>:
+                    noisy_input = self.scheduler.add_noise(
+                        denoised, torch.randn_like(denoised),
+                        self.denoising_step_list[index + <span class="num">1</span>])
+            
+            output[:, start:start + current_num_frames] = denoised
+            
+            <span class="com"># 用干净输出更新 KV 缓存</span>
+            self.generator(
+                noisy_image_or_video=denoised,
+                timestep=torch.zeros_like(t),
+                kv_cache=self.kv_cache1,
+                current_start=current_start_frame * self.frame_seq_length)
+            
+            current_start_frame += current_num_frames
+            <span class="com"># KV 缓存满时自动驱逐最旧帧（由 local_end_index 控制）</span>
+        
+        video = self.vae.decode_to_pixel(output)
+        <span class="kw">return</span> (video * <span class="num">0.5</span> + <span class="num">0.5</span>).clamp(<span class="num">0</span>, <span class="num">1</span>), output</code></pre>
+</div>
+
+<h3>系统架构分解</h3>
+
+<div class="arch-tree"><span class="root">Self Forcing 系统</span>
+├── <span class="branch">输入处理</span>
+│   ├── 文本编码器 (Qwen2.5-7B prompt 扩展)
+│   ├── 因果 3D VAE (latent 压缩)
+│   └── 图像 latent 初始化 (i2v)
+├── <span class="branch">核心架构</span>
+│   ├── Causal DiT (Wan2.1-1.3B, 30层 Transformer)
+│   ├── KV 缓存系统 (训练+推理共用)
+│   └── FlashAttention-3 (full attention, 无掩码)
+├── <span class="branch">训练管线</span>
+│   ├── ODE 初始化 (16k 解对, 因果注意力微调)
+│   ├── 自展开训练 (Self-Rollout + 随机截断)
+│   └── 分布匹配损失 (DMD/SiD/GAN)
+├── <span class="branch">推理管线</span>
+│   ├── 4-step 去噪调度 [1000,750,500,250]
+│   ├── 滚动 KV 缓存 (固定大小, 驱逐最旧)
+│   └── 局部注意力窗口训练 (消除 first-frame 依赖)
+└── <span class="leaf">输出处理</span>
+    └── VAE 解码 → 像素空间视频</div>
+
+<h3>关键训练超参数</h3>
+
+<table class="data-table">
+<thead>
+<tr><th>参数</th><th>DMD</th><th>SiD</th><th>GAN</th></tr>
+</thead>
+<tbody>
+<tr><td>Real Score Network</td><td>Wan2.1-14B</td><td>Wan2.1-1.3B</td><td>N/A</td></tr>
+<tr><td>Critic 初始化</td><td>Wan2.1-1.3B</td><td>Wan2.1-1.3B</td><td>Wan2.1-1.3B</td></tr>
+<tr><td>Batch Size</td><td>64</td><td>64</td><td>768</td></tr>
+<tr><td>学习率 (Gθ)</td><td>2e-6</td><td>2e-6</td><td>2e-6</td></tr>
+<tr><td>学习率 (fψ)</td><td>4e-7</td><td>2e-6</td><td>2e-6</td></tr>
+<tr><td>Gen/Critic 更新比</td><td>5</td><td>5</td><td>1</td></tr>
+<tr><td>EMA Decay</td><td>0.99</td><td>0.99</td><td>0.99</td></tr>
+<tr><td>训练时间</td><td>~1.5h</td><td>2-3h</td><td>2-3h</td></tr>
+<tr><td>数据需求</td><td>无数据</td><td>无数据</td><td>需要真实视频</td></tr>
+</tbody>
+</table>
+</section>
+
+</main>
+
+<!-- ===== Footer ===== -->
+<footer>
+<p>Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion — NeurIPS 2025 Spotlight</p>
+<p>Adobe Research & UT Austin | arXiv:2506.08009</p>
+<div class="footer-links">
+<a href="https://self-forcing.github.io/">项目主页</a>
+<a href="https://github.com/guandeh17/Self-Forcing">代码仓库</a>
+<a href="https://arxiv.org/abs/2506.08009">论文 PDF</a>
+</div>
+</footer>
+
+<script>
+// Nav scroll effect
+window.addEventListener('scroll', () => {
+  const nav = document.getElementById('nav');
+  if (window.scrollY > 50) nav.classList.add('scrolled');
+  else nav.classList.remove('scrolled');
+});
+</script>
+</body>
+</html>

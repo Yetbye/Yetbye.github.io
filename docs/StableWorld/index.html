@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StableWorld: 动态帧驱逐机制实现长时交互视频稳定性 | 论文精读</title>
+<meta name="description" content="StableWorld 论文精读：通过 ORB+RANSAC 几何一致性检测的动态帧驱逐机制，从根源抑制交互视频生成中的场景坍塌问题。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@400;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+window.MathJax={
+  tex:{
+    inlineMath:[['\\(','\\)'],['$','$']],
+    displayMath:[['$$','$$']],
+    processEscapes:true
+  },
+  options:{
+    skipHtmlTags:['script','noscript','style','textarea','pre','code']
+  },
+  chtml:{scale:1.05},
+  startup:{
+    typeset:true
+  }
+};
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+<script>
+// CDN fallback chain: unpkg -> jsdelivr -> cdnjs
+window.addEventListener('error', function(e) {
+  if (e.target && e.target.id === 'MathJax-script') {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+    s.async = true;
+    s.id = 'MathJax-script-fallback';
+    document.head.appendChild(s);
+  }
+}, true);
+setTimeout(function() {
+  if (!window.MathJax || !window.MathJax.startup || !window.MathJax.startup.promise) {
+    var existing = document.getElementById('MathJax-script-fallback');
+    if (!existing) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+      s.async = true;
+      s.id = 'MathJax-script-fallback';
+      document.head.appendChild(s);
+    }
+  }
+}, 5000);
+</script>
+<style>
+:root{--lavender:#a855f7;--lavender-light:#c084fc;--lavender-dark:#7c3aed;--coral:#fb7185;--coral-light:#fda4af;--mint:#34d399;--mint-light:#6ee7b7;--mint-dark:#059669;--amber:#fbbf24;--amber-light:#fcd34d;--amber-dark:#d97706;--cream:#faf8f5;--cream-dark:#f5f0e8;--text-primary:#1f2937;--text-secondary:#4b5563;--text-muted:#6b7280;--border:#e5e7eb;--code-bg:#1e1e2e;--code-text:#cdd6f4;--shadow-sm:0 1px 3px rgba(0,0,0,.06);--shadow-md:0 4px 16px rgba(0,0,0,.08);--shadow-lg:0 12px 40px rgba(0,0,0,.12);--maxw:820px;--radius:12px;--paper-cream:#f5f0e8}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:80px}
+body{font-family:'Noto Sans SC',sans-serif;background:var(--cream);color:var(--text-primary);line-height:1.8;font-size:16px;overflow-x:hidden}
+h1,h2,h3,h4,h5{font-family:'Noto Serif SC',serif;font-weight:700;line-height:1.4}
+a{color:var(--lavender-dark);text-decoration:none;transition:color .2s}
+a:hover{color:var(--coral)}
+img{max-width:100%;display:block;border-radius:var(--radius)}
+code{font-family:'JetBrains Mono',monospace}
+.progress-bar{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--lavender),var(--coral),var(--amber));width:0;z-index:1001;transition:width .1s}
+.nav{position:fixed;top:0;left:0;right:0;z-index:1000;background:rgba(250,248,245,.7);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-bottom:1px solid rgba(168,85,247,.12);transition:all .3s}
+.nav.scrolled{background:rgba(250,248,245,.85);box-shadow:var(--shadow-sm)}
+.nav-inner{max-width:var(--maxw);margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.nav-logo{font-family:'Noto Serif SC',serif;font-weight:700;font-size:17px;color:var(--lavender-dark);white-space:nowrap}
+.nav-links{display:flex;gap:4px;list-style:none;flex-wrap:wrap}
+.nav-links a{font-size:13px;color:var(--text-secondary);padding:6px 10px;border-radius:8px;transition:all .2s;white-space:nowrap}
+.nav-links a:hover{background:rgba(168,85,247,.1);color:var(--lavender-dark)}
+.nav-toggle{display:none;background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-secondary)}
+.hero{min-height:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:100px 24px 60px;position:relative;background:linear-gradient(180deg,#faf8f5 0%,#f5f0ff 40%,#fdf2f8 70%,#faf8f5 100%);overflow:hidden}
+.hero::before{content:'';position:absolute;top:10%;left:50%;transform:translateX(-50%);width:600px;height:600px;background:radial-gradient(circle,rgba(168,85,247,.08) 0%,transparent 70%);border-radius:50%;pointer-events:none}
+.hero::after{content:'';position:absolute;bottom:0;left:0;right:0;height:200px;background:linear-gradient(180deg,transparent,var(--cream));pointer-events:none}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,rgba(168,85,247,.12),rgba(251,113,133,.12));border:1px solid rgba(168,85,247,.25);color:var(--lavender-dark);padding:8px 20px;border-radius:30px;font-size:13px;font-weight:500;margin-bottom:28px;backdrop-filter:blur(10px);position:relative;z-index:1}
+.hero-badge .dot{width:8px;height:8px;background:var(--coral);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.3)}}
+.hero-title{font-size:clamp(28px,5vw,46px);font-weight:900;color:var(--text-primary);margin-bottom:20px;max-width:720px;position:relative;z-index:1;letter-spacing:-.02em}
+.hero-title .accent{background:linear-gradient(135deg,var(--lavender),var(--coral));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.hero-tagline{font-size:clamp(14px,2.5vw,18px);color:var(--text-secondary);margin-bottom:16px;font-weight:500;position:relative;z-index:1}
+.hero-tagline .sep{margin:0 10px;color:var(--lavender-light)}
+.hero-desc{font-size:15px;color:var(--text-muted);max-width:580px;line-height:1.9;margin-bottom:40px;position:relative;z-index:1}
+.hero-image-card{width:100%;max-width:680px;border-radius:20px;overflow:hidden;box-shadow:var(--shadow-lg);position:relative;z-index:1;border:1px solid rgba(168,85,247,.15);background:linear-gradient(135deg,#f5f0ff,#fdf2f8)}
+.hero-image-card img{width:100%;height:auto;display:block}
+.img-placeholder{width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--lavender-light),var(--coral-light));color:#fff;font-family:'Noto Serif SC',serif;font-size:18px;font-weight:600;text-align:center;padding:40px}
+.scroll-indicator{margin-top:40px;display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--text-muted);font-size:12px;position:relative;z-index:1}
+.scroll-indicator .arrow{width:20px;height:20px;border-right:2px solid var(--lavender);border-bottom:2px solid var(--lavender);transform:rotate(45deg);animation:bounce 2s infinite}
+@keyframes bounce{0%,100%{transform:rotate(45deg) translate(0,0)}50%{transform:rotate(45deg) translate(4px,4px)}}
+.main{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+.chapter{padding:60px 0;position:relative}
+.chapter-header{margin-bottom:36px}
+.chapter-num{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--lavender);background:rgba(168,85,247,.08);padding:4px 12px;border-radius:20px;margin-bottom:12px;font-weight:500}
+.chapter-title{font-size:clamp(22px,4vw,30px);color:var(--text-primary);margin-bottom:8px}
+.chapter-subtitle{font-size:14px;color:var(--text-muted);font-weight:400}
+p{margin-bottom:18px;color:var(--text-secondary)}
+strong{color:var(--text-primary);font-weight:600}
+.highlight-l{color:var(--lavender-dark);font-weight:600}
+.highlight-c{color:var(--coral);font-weight:600}
+.highlight-m{color:var(--mint-dark);font-weight:600}
+.highlight-a{color:var(--amber-dark);font-weight:600}
+.figure{margin:36px 0;text-align:center}
+.figure svg{max-width:100%;height:auto;display:block;margin:0 auto}
+.figure img{margin:0 auto;box-shadow:var(--shadow-md);border:1px solid var(--border)}
+.figure-caption{margin-top:14px;font-size:13px;color:var(--text-muted);font-style:italic;line-height:1.6}
+.figure-caption strong{font-style:normal;color:var(--text-secondary)}
+.insight-box{background:linear-gradient(135deg,rgba(52,211,153,.08),rgba(52,211,153,.03));border-left:4px solid var(--mint);border-radius:0 12px 12px 0;padding:24px 28px;margin:32px 0;position:relative}
+.insight-box::before{content:'深层洞察';position:absolute;top:-10px;left:20px;background:var(--mint-dark);color:#fff;font-size:11px;padding:3px 12px;border-radius:10px;font-weight:500;letter-spacing:1px}
+.insight-box p{margin-bottom:0;color:var(--text-secondary)}
+.insight-box p:last-child{margin-bottom:0}
+.rq-card{background:linear-gradient(135deg,rgba(251,191,36,.06),rgba(251,191,36,.02));border:1px solid rgba(251,191,36,.2);border-radius:12px;padding:28px;margin:28px 0;position:relative}
+.rq-card::before{content:attr(data-tag);position:absolute;top:-10px;left:24px;background:linear-gradient(135deg,var(--amber),var(--amber-dark));color:#fff;font-size:11px;padding:3px 14px;border-radius:10px;font-weight:600;letter-spacing:1px}
+.rq-card h4{font-size:17px;color:var(--text-primary);margin-bottom:14px;margin-top:4px}
+.rq-card p{margin-bottom:12px;font-size:14px}
+.rq-card .rq-label{display:inline-block;font-size:12px;color:var(--amber-dark);font-weight:600;margin-right:6px}
+.math-card{background:var(--cream-dark);border:1px solid var(--border);border-radius:12px;padding:24px 28px;margin:28px 0}
+.math-card h4{font-size:15px;color:var(--lavender-dark);margin-bottom:16px}
+.math-card .step{margin-bottom:14px;padding-left:24px;position:relative;font-size:14px;color:var(--text-secondary)}
+.math-card .step::before{content:attr(data-n);position:absolute;left:0;top:0;width:18px;height:18px;background:var(--lavender);color:#fff;border-radius:50%;font-size:11px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace}
+.math-card .step:last-child{margin-bottom:0}
+.table-wrap{overflow-x:auto;margin:28px 0;border-radius:12px;box-shadow:var(--shadow-sm)}
+table{width:100%;border-collapse:collapse;font-size:14px;background:#fff}
+th{background:linear-gradient(135deg,var(--lavender),var(--lavender-dark));color:#fff;padding:14px 16px;text-align:left;font-weight:500;font-size:13px}
+td{padding:12px 16px;border-bottom:1px solid var(--border);color:var(--text-secondary)}
+tr:hover td{background:rgba(168,85,247,.03)}
+.best{color:var(--mint-dark);font-weight:700}
+.code-block{background:var(--code-bg);border-radius:12px;margin:28px 0;overflow:hidden;box-shadow:var(--shadow-md)}
+.code-header{background:rgba(0,0,0,.2);padding:12px 20px;display:flex;align-items:center;justify-content:space-between}
+.code-header .dots{display:flex;gap:6px}
+.code-header .dot{width:12px;height:12px;border-radius:50%}
+.code-header .dot:nth-child(1){background:#f38ba8}
+.code-header .dot:nth-child(2){background:#f9e2af}
+.code-header .dot:nth-child(3){background:#a6e3a1}
+.code-header .title{color:#a6adc8;font-size:13px;font-family:'JetBrains Mono',monospace}
+.code-block pre{padding:20px 24px;overflow-x:auto}
+.code-block code{color:var(--code-text);font-size:13px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.divider{text-align:center;padding:40px 0;color:var(--lavender-light);font-size:24px}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px;margin:28px 0}
+.stat-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center;box-shadow:var(--shadow-sm);transition:transform .2s}
+.stat-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-md)}
+.stat-card .num{font-size:28px;font-weight:900;font-family:'Noto Serif SC',serif;background:linear-gradient(135deg,var(--lavender),var(--coral));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.stat-card .label{font-size:12px;color:var(--text-muted);margin-top:6px}
+footer{text-align:center;padding:40px 24px;color:var(--text-muted);font-size:13px;border-top:1px solid var(--border);margin-top:40px}
+@media(max-width:768px){
+.nav-links{display:none;position:absolute;top:100%;left:0;right:0;background:rgba(250,248,245,.98);backdrop-filter:blur(20px);flex-direction:column;padding:12px;gap:2px;border-bottom:1px solid var(--border)}
+.nav-links.open{display:flex}
+.nav-toggle{display:block}
+.hero{padding:90px 16px 40px}
+.main{padding:0 16px}
+.chapter{padding:40px 0}
+.insight-box,.rq-card,.math-card{padding:20px;margin-left:-8px;margin-right:-8px}
+}
+
+/* === FORMAT FIXES v1 === */
+/* Stats grid 必须并行4列 */
+.stats-grid,.stats-row,.hero-stats,.stat-grid{
+  display:grid !important;
+  grid-template-columns:repeat(4,1fr) !important;
+  gap:12px !important;
+  max-width:720px !important;
+  margin:24px auto !important;
+}
+.stat-card,.stat-item,.stat-box{
+  text-align:center !important;
+  padding:16px !important;
+}
+/* figure 居中对齐 */
+.figure,.fig,.img-wrap{margin:24px auto !important;text-align:center !important}
+.figure img,.fig img,.img-wrap img,.figure figure img{display:block;margin:0 auto !important;max-width:100% !important}
+/* SVG 居中 */
+.svg-wrap,.svg-container{text-align:center !important;margin:24px auto !important}
+.svg-wrap svg,.svg-container svg{display:block;margin:0 auto !important;max-width:100% !important}
+/* hero 不要太大 */
+.hero{min-height:auto !important;padding:100px 24px 60px !important}
+/* 减少过度效果 - 移除非必要动画 */
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+.scroll-indicator{animation:bounce 2s infinite}
+/* 确保关键交互保留hover效果 */
+a:hover,button:hover,input:focus{transition:all .2s !important}
+
+</style>
+</head>
+<body>
+<div class="progress-bar" id="progressBar"></div>
+<nav class="nav" id="nav"><div class="nav-inner"><a href="#hero" class="nav-logo">StableWorld 论文精读</a><button class="nav-toggle" id="navToggle" aria-label="菜单">&#9776;</button><ul class="nav-links" id="navLinks"><li><a href="../index.html">« 合辑</a></li><li><a href="#ch1">场景坍塌</a></li><li><a href="#ch2">漂移分析</a></li><li><a href="#ch3">核心方法</a></li><li><a href="#ch4">ORB度量</a></li><li><a href="#ch5">实验结果</a></li><li><a href="#ch6">消融研究</a></li><li><a href="#ch7">跨模型泛化</a></li><li><a href="#ch8">总结</a></li><li><a href="#ch9">科研问题</a></li></ul></div></nav>
+
+<section class="hero" id="hero">
+<div class="hero-badge"><span class="dot"></span>arXiv 2601.15281 &middot; 2026.01 &middot; PRLab NJU / HKU / UCAS / Tencent / NTU</div>
+<h1 class="hero-title">从帧间微漂移到<span class="accent">动态帧驱逐</span>的交互视频稳定性</h1>
+<p class="hero-tagline">ORB+RANSAC 几何一致性<span class="sep">&times;</span>滑动窗口驱逐<span class="sep">&times;</span>模型无关即插即用</p>
+<p class="hero-desc">StableWorld 揭示了交互视频生成中场景坍塌的根源——同一场景内微小帧间漂移的逐步累积，并提出动态帧驱逐机制，在 Matrix-Game 2.0 / Open-Oasis / Hunyuan-GameCraft 三大模型上实现视觉质量最高 14.6% 的提升，计算开销仅增加 1-2%。</p>
+<div class="hero-image-card"><img src="assets/cover.webp" alt="StableWorld 封面图" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="img-placeholder" style="display:none">StableWorld &mdash; 动态帧驱逐实现长时交互视频稳定性</div></div>
+<div class="scroll-indicator"><span>向下滚动阅读</span><div class="arrow"></div></div>
+</section>
+
+<main class="main">
+
+<!-- ==================== Chapter 1 ==================== -->
+<section class="chapter" id="ch1">
+<div class="chapter-header">
+<span class="chapter-num">CHAPTER 01</span>
+<h2 class="chapter-title">交互视频中的场景坍塌难题</h2>
+<p class="chapter-subtitle">为什么世界模型在长时间交互中会逐渐退化？</p>
+</div>
+
+<p>随着视频生成技术的飞速发展，世界模型（World Model）已成为理解真实世界交互、预测环境动态的重要范式。然而，一个被长期忽视却极为关键的问题是：<span class="highlight-c">交互视频生成中的场景坍塌（Scene Collapse）</span>——随着生成帧数的增加，场景逐渐偏离初始清晰状态，最终演变为视觉上完全不一致的退化输出。</p>
+
+<p>StableWorld 论文首先对这一现象进行了系统性分析。研究者在 <strong>Matrix-Game 2.0</strong>、<strong>Open-Oasis</strong> 和 <strong>Hunyuan-GameCraft 1.0</strong> 三个主流交互视频模型上观察到了一致的渐进式场景坍塌现象。值得注意的是，这种坍塌在静态或缓慢变化的环境中尤为严重，而在频繁场景切换时反而较少出现。</p>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig5_sliding_window.webp" alt="频繁场景切换下无坍塌">
+<p class="figure-caption"><strong>图 1（论文 Figure 6）：</strong>在频繁场景切换条件下，原始模型不会出现场景坍塌。这一对比说明坍塌并非源于动作控制或运动复杂度，而是与同一场景内视觉信息的保持和传播方式密切相关。</p>
+</div>
+
+<div class="insight-box">
+<p><strong>坍塌的反直觉特性：</strong>场景坍塌并非在运动复杂时更严重，反而在场景几乎不变时最为显著。这意味着问题的根源不在于运动估计的精度，而在于同一场景信息在自回归传递过程中的"记忆衰减"——模型在反复看到相似帧时，会逐渐丢失对原始场景的精确表征。</p>
+</div>
+
+<p>这一发现具有重要的方法论意义：它将研究焦点从"如何更好地跟随动作"转移到了"如何更好地保持场景记忆"。StableWorld 正是基于这一核心洞察，提出了一个简洁而有效的解决方案。</p>
+
+<div class="stat-grid">
+<div class="stat-card"><div class="num">3</div><div class="label">测试世界模型数量</div></div>
+<div class="stat-card"><div class="num">42</div><div class="label">测试场景总数</div></div>
+<div class="stat-card"><div class="num">178</div><div class="label">生成视频总数量</div></div>
+<div class="stat-card"><div class="num">45-60s</div><div class="label">每段视频时长</div></div>
+</div>
+</section>
+
+<div class="divider">&#10047;</div>
+
+<!-- ==================== Chapter 2 ==================== -->
+<section class="chapter" id="ch2">
+<div class="chapter-header">
+<span class="chapter-num">CHAPTER 02</span>
+<h2 class="chapter-title">帧间漂移的累积效应分析</h2>
+<p class="chapter-subtitle">微小偏差如何在数十帧内被放大为场景崩溃？</p>
+</div>
+
+<p>为了理解场景坍塌的机制，研究者从最简单的交互形式——静态交互入手，生成长时静态视频序列并测量帧间均方误差（MSE）距离。结果揭示了一个清晰的模式：<span class="highlight-l">虽然相邻帧之间的差异微小，但这些微小漂移随时间逐步累积</span>，导致与初始清晰状态的显著偏差。</p>
+
+<div class="figure">
+<svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="bgGrad1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#a855f7" stop-opacity="0.06"/><stop offset="100%" stop-color="#fb7185" stop-opacity="0.06"/></linearGradient>
+</defs>
+<rect x="0" y="0" width="720" height="320" rx="12" fill="url(#bgGrad1)" stroke="#e5e7eb" stroke-width="1"/>
+<text x="360" y="28" text-anchor="middle" font-family="Noto Serif SC" font-size="15" font-weight="700" fill="#7c3aed">帧间 MSE 漂移累积可视化</text>
+<!-- axes -->
+<line x1="80" y1="260" x2="680" y2="260" stroke="#9ca3af" stroke-width="1.5"/>
+<line x1="80" y1="260" x2="80" y2="50" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="380" y="300" text-anchor="middle" font-size="12" fill="#6b7280">帧编号 k</text>
+<text x="30" y="160" text-anchor="middle" font-size="12" fill="#6b7280" transform="rotate(-90,30,160)">MSE 漂移</text>
+<!-- grid lines -->
+<line x1="80" y1="100" x2="680" y2="100" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="4,4"/>
+<line x1="80" y1="160" x2="680" y2="160" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="4,4"/>
+<line x1="80" y1="210" x2="680" y2="210" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="4,4"/>
+<!-- interval=1 curve (slow growth) -->
+<polyline points="80,255 160,252 240,247 320,240 400,230 480,218 560,203 640,185" fill="none" stroke="#a855f7" stroke-width="2.5" stroke-linecap="round"/>
+<!-- interval=5 curve -->
+<polyline points="80,255 160,245 240,230 320,210 400,185 480,158 560,128 640,98" fill="none" stroke="#fb7185" stroke-width="2.5" stroke-linecap="round"/>
+<!-- interval=10 curve -->
+<polyline points="80,255 160,238 240,215 320,185 400,150 480,115 560,80 640,60" fill="none" stroke="#fbbf24" stroke-width="2.5" stroke-linecap="round"/>
+<!-- interval=20 curve (fastest growth) -->
+<polyline points="80,255 160,230 240,195 320,155 400,115 480,80 560,60 640,55" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round"/>
+<!-- legend -->
+<rect x="100" y="45" width="12" height="3" rx="1" fill="#a855f7"/><text x="118" y="50" font-size="11" fill="#4b5563">间隔=1帧</text>
+<rect x="210" y="45" width="12" height="3" rx="1" fill="#fb7185"/><text x="228" y="50" font-size="11" fill="#4b5563">间隔=5帧</text>
+<rect x="320" y="45" width="12" height="3" rx="1" fill="#fbbf24"/><text x="338" y="50" font-size="11" fill="#4b5563">间隔=10帧</text>
+<rect x="440" y="45" width="12" height="3" rx="1" fill="#34d399"/><text x="458" y="50" font-size="11" fill="#4b5563">间隔=20帧</text>
+<!-- annotations -->
+<circle cx="640" cy="185" r="4" fill="#a855f7"/>
+<text x="650" y="180" font-size="10" fill="#7c3aed">渐进累积</text>
+<circle cx="640" cy="55" r="4" fill="#34d399"/>
+<text x="650" y="50" font-size="10" fill="#059669">快速退化</text>
+</svg>
+<p class="figure-caption"><strong>图 2（自绘 SVG，基于论文 Figure 3 分析）：</strong>不同帧间隔下 MSE 漂移的累积趋势。间隔越大（如对比第 k 帧与第 k+20 帧），漂移越显著。虽然相邻帧间偏差微小，但长期累积最终导致像素空间的可见场景坍塌。</p>
+</div>
+
+<p>进一步的频域分析揭示了更深层的机制。研究者通过扩大 KV-cache 窗口大小来验证"使用更干净的历史帧可以抑制退化"这一假说。</p>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig8_qualitative.webp" alt="频域分析">
+<p class="figure-caption"><strong>图 3（论文 Fig. 8）：</strong>频域幅度差异分析。随着窗口大小从 9 增加到 36、90，目标帧与首帧之间的频率波动逐渐减小，表明保留更早的干净帧可以有效抑制误差累积。</p>
+</div>
+
+<div class="insight-box">
+<p><strong>窗口大小的边际递减效应：</strong>将窗口从 9 扩大到 90 确实能抑制频域波动，但计算开销随窗口大小线性增长。论文发现，真正起作用的不是窗口的绝对大小，而是窗口中是否保留了若干干净的早期帧——在固定窗口中保留前 3 帧即可获得与大窗口相近的稳定性，这一发现为后续的驱逐机制设计提供了直接动机。</p>
+</div>
+
+<div class="insight-box">
+<p><strong>频率域视角的启示：</strong>在频域中，场景坍塌表现为高频分量的逐渐失真——初始帧的纹理细节在反复自回归传递中被"平滑化"。这意味着即使像素空间的 MSE 看起来很小，频域中的高频信息已经在悄然退化。频域分析为检测"隐性漂移"提供了一种比像素 MSE 更敏感的工具。</p>
+</div>
+
+<div class="math-card">
+<h4>关键数学表达：交互视频生成过程</h4>
+<div class="step" data-n="1">交互式生成的条件概率：\(p_\theta(x_k \mid x_{\{1:k-1\}}^{\text{subset}}, a_k)\)，其中 \(x_{\{1:k-1\}}^{\text{subset}}\) 是记忆缓冲区中选取的历史帧子集，\(a_k\) 是当前动作。</div>
+<div class="step" data-n="2">结合扩散与自回归的联合生成：\(p_\theta(x_k^t \mid x_k^{t-1}, x_{\{1:k-1\}}^{\text{subset}}, a_k) = \mathcal{N}(x_k^t; \mu_\theta(x_k^{t-1}, x_{\{1:k-1\}}^{\text{subset}}, a_k, t), \sigma_t^2 I)\)</div>
+<div class="step" data-n="3">其中 \(x_k^t\) 是第 \(k\) 帧在扩散时间步 \(t\) 的去噪状态。帧内去噪捕获空间细节，帧间自回归捕获时间依赖——但误差正通过这条路径不断传播。</div>
+</div>
+</section>
+
+<div class="divider">&#10047;</div>
+
+<!-- ==================== Chapter 3 ==================== -->
+<section class="chapter" id="ch3">
+<div class="chapter-header">
+<span class="chapter-num">CHAPTER 03</span>
+<h2 class="chapter-title">核心方法：动态帧驱逐机制</h2>
+<p class="chapter-subtitle">如何在保持运动连续性的同时阻止误差累积？</p>
+</div>
+
+<p>基于上述分析，StableWorld 提出了一个优雅的解决方案：<span class="highlight-l">动态帧驱逐机制（Dynamic Frame Eviction Mechanism）</span>。核心思想是：在滑动窗口更新时，不再简单地丢弃最老的帧，而是通过几何一致性检测来智能选择哪些帧应该被保留、哪些应该被驱逐。</p>
+
+<div class="figure">
+<svg viewBox="0 0 720 420" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="winGrad" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#a855f7" stop-opacity="0.12"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0.03"/></linearGradient>
+<linearGradient id="evictGrad" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#fb7185" stop-opacity="0.2"/><stop offset="100%" stop-color="#fb7185" stop-opacity="0.05"/></linearGradient>
+<linearGradient id="keepGrad" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#34d399" stop-opacity="0.2"/><stop offset="100%" stop-color="#34d399" stop-opacity="0.05"/></linearGradient>
+</defs>
+<text x="360" y="25" text-anchor="middle" font-family="Noto Serif SC" font-size="15" font-weight="700" fill="#7c3aed">StableWorld 滑动窗口驱逐策略</text>
+<!-- Vanilla sliding window -->
+<text x="180" y="60" text-anchor="middle" font-size="13" font-weight="600" fill="#e11d48">原始方法（Vanilla）</text>
+<rect x="30" y="70" width="300" height="80" rx="10" fill="url(#winGrad)" stroke="#a855f7" stroke-width="1.5"/>
+<rect x="50" y="85" width="35" height="50" rx="6" fill="#e5e7eb" stroke="#d1d5db" stroke-width="1"/>
+<text x="67" y="114" text-anchor="middle" font-size="10" fill="#6b7280">P0</text>
+<rect x="95" y="85" width="35" height="50" rx="6" fill="#e5e7eb" stroke="#d1d5db" stroke-width="1"/>
+<text x="112" y="114" text-anchor="middle" font-size="10" fill="#6b7280">P1</text>
+<rect x="140" y="85" width="35" height="50" rx="6" fill="#e5e7eb" stroke="#d1d5db" stroke-width="1"/>
+<text x="157" y="114" text-anchor="middle" font-size="10" fill="#6b7280">P2</text>
+<rect x="185" y="85" width="35" height="50" rx="6" fill="#e5e7eb" stroke="#d1d5db" stroke-width="1"/>
+<text x="202" y="114" text-anchor="middle" font-size="10" fill="#6b7280">...</text>
+<rect x="230" y="85" width="35" height="50" rx="6" fill="#d1fae5" stroke="#34d399" stroke-width="2"/>
+<text x="247" y="114" text-anchor="middle" font-size="10" fill="#059669">Pn-2</text>
+<rect x="275" y="85" width="35" height="50" rx="6" fill="#d1fae5" stroke="#34d399" stroke-width="2"/>
+<text x="292" y="114" text-anchor="middle" font-size="10" fill="#059669">Pn-1</text>
+<text x="180" y="175" text-anchor="middle" font-size="11" fill="#e11d48">简单丢弃最老帧 P0</text>
+<text x="180" y="192" text-anchor="middle" font-size="11" fill="#e11d48">误差持续累积</text>
+<!-- Arrow -->
+<text x="360" y="120" text-anchor="middle" font-size="22" fill="#a855f7">&rarr;</text>
+<!-- StableWorld sliding window -->
+<text x="540" y="60" text-anchor="middle" font-size="13" font-weight="600" fill="#059669">StableWorld</text>
+<rect x="390" y="70" width="300" height="80" rx="10" fill="url(#winGrad)" stroke="#a855f7" stroke-width="1.5"/>
+<rect x="410" y="85" width="35" height="50" rx="6" fill="#d1fae5" stroke="#34d399" stroke-width="2"/>
+<text x="427" y="114" text-anchor="middle" font-size="10" fill="#059669">Ref</text>
+<rect x="455" y="85" width="35" height="50" rx="6" fill="#fee2e2" stroke="#fb7185" stroke-width="2" stroke-dasharray="4,2"/>
+<text x="472" y="114" text-anchor="middle" font-size="10" fill="#e11d48">M1</text>
+<rect x="500" y="85" width="35" height="50" rx="6" fill="#fee2e2" stroke="#fb7185" stroke-width="2" stroke-dasharray="4,2"/>
+<text x="517" y="114" text-anchor="middle" font-size="10" fill="#e11d48">M2</text>
+<rect x="545" y="85" width="35" height="50" rx="6" fill="#e5e7eb" stroke="#d1d5db" stroke-width="1"/>
+<text x="562" y="114" text-anchor="middle" font-size="10" fill="#6b7280">...</text>
+<rect x="590" y="85" width="35" height="50" rx="6" fill="#d1fae5" stroke="#34d399" stroke-width="2"/>
+<text x="607" y="114" text-anchor="middle" font-size="10" fill="#059669">Rc</text>
+<rect x="635" y="85" width="35" height="50" rx="6" fill="#d1fae5" stroke="#34d399" stroke-width="2"/>
+<text x="652" y="114" text-anchor="middle" font-size="10" fill="#059669">New</text>
+<text x="540" y="175" text-anchor="middle" font-size="11" fill="#059669">驱逐漂移帧 M1/M2</text>
+<text x="540" y="192" text-anchor="middle" font-size="11" fill="#059669">保留参考帧 + 近期帧</text>
+<!-- Legend -->
+<rect x="120" y="220" width="16" height="12" rx="3" fill="#d1fae5" stroke="#34d399" stroke-width="1.5"/>
+<text x="142" y="230" font-size="11" fill="#4b5563">保留帧（几何一致）</text>
+<rect x="310" y="220" width="16" height="12" rx="3" fill="#fee2e2" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="4,2"/>
+<text x="332" y="230" font-size="11" fill="#4b5563">驱逐帧（可能漂移）</text>
+<!-- Step-by-step flow -->
+<text x="360" y="265" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="600" fill="#7c3aed">驱逐决策流程</text>
+<rect x="60" y="280" width="110" height="50" rx="8" fill="#fff" stroke="#a855f7" stroke-width="1.5"/>
+<text x="115" y="300" text-anchor="middle" font-size="10" fill="#7c3aed" font-weight="600">Step 1</text>
+<text x="115" y="318" text-anchor="middle" font-size="9" fill="#4b5563">ORB 特征提取</text>
+<line x1="170" y1="305" x2="200" y2="305" stroke="#a855f7" stroke-width="1.5" marker-end="url(#arrow)"/>
+<rect x="200" y="280" width="110" height="50" rx="8" fill="#fff" stroke="#a855f7" stroke-width="1.5"/>
+<text x="255" y="300" text-anchor="middle" font-size="10" fill="#7c3aed" font-weight="600">Step 2</text>
+<text x="255" y="318" text-anchor="middle" font-size="9" fill="#4b5563">最近邻匹配</text>
+<line x1="310" y1="305" x2="340" y2="305" stroke="#a855f7" stroke-width="1.5"/>
+<rect x="340" y="280" width="110" height="50" rx="8" fill="#fff" stroke="#a855f7" stroke-width="1.5"/>
+<text x="395" y="300" text-anchor="middle" font-size="10" fill="#7c3aed" font-weight="600">Step 3</text>
+<text x="395" y="318" text-anchor="middle" font-size="9" fill="#4b5563">RANSAC 几何验证</text>
+<line x1="450" y1="305" x2="480" y2="305" stroke="#a855f7" stroke-width="1.5"/>
+<rect x="480" y="280" width="110" height="50" rx="8" fill="#fff" stroke="#a855f7" stroke-width="1.5"/>
+<text x="535" y="300" text-anchor="middle" font-size="10" fill="#7c3aed" font-weight="600">Step 4</text>
+<text x="535" y="318" text-anchor="middle" font-size="9" fill="#4b5563">相似度 &gt; 阈值？</text>
+<!-- Decision branches -->
+<line x1="535" y1="330" x2="535" y2="355" stroke="#34d399" stroke-width="1.5"/>
+<text x="555" y="348" font-size="9" fill="#059669">是：保留</text>
+<line x1="535" y1="355" x2="650" y2="355" stroke="#fb7185" stroke-width="1.5"/>
+<rect x="610" y="340" width="90" height="35" rx="6" fill="#fee2e2" stroke="#fb7185" stroke-width="1.5"/>
+<text x="655" y="362" text-anchor="middle" font-size="10" fill="#e11d48" font-weight="600">驱逐该帧</text>
+<line x1="480" y1="330" x2="480" y2="380" stroke="#9ca3af" stroke-width="1" stroke-dasharray="3,2"/>
+<text x="360" y="400" text-anchor="middle" font-size="11" fill="#6b7280">始终保留最近帧 + 选择性保留最早参考帧，驱逐中间漂移帧</text>
+</svg>
+<p class="figure-caption"><strong>图 4（自绘 SVG）：</strong>StableWorld 动态帧驱逐机制的完整流程。上半部分对比了原始方法与 StableWorld 的窗口管理策略；下半部分展示了驱逐决策的四步流程。</p>
+</div>
+
+<p>具体来说，当窗口需要滑动时，StableWorld 将窗口中的帧分为三类：</p>
+
+<p><strong>1. 参考帧（Reference Frame）\(\mathbf{P}_0\)</strong>：窗口中最早、退化最少的帧，作为几何一致性检测的基准。</p>
+<p><strong>2. 中间帧（Middle Frames）\(\mathbf{P}_1, \ldots, \mathbf{P}_K\)</strong>：介于参考帧和最近帧之间的帧，是驱逐的候选对象。</p>
+<p><strong>3. 近期帧（Recent Frames）</strong>：窗口末尾的若干帧，始终保留以维持运动连续性和视觉平滑度。</p>
+
+<div class="insight-box">
+<p><strong>"保留最老"与"保留最新"的辩证关系：</strong>论文的精妙之处在于同时保留了两类帧——最早的参考帧提供全局一致性锚点，最新的帧提供局部运动连续性。中间的帧则成为"缓冲区"，其驱逐决策取决于几何一致性。这种设计同时解决了"误差累积"和"场景切换灵活性"两个看似矛盾的目标。</p>
+</div>
+
+<div class="insight-box">
+<p><strong>滑动窗口 vs. 固定缓冲区：</strong>相比简单地扩大 KV-cache 窗口来保留更多历史帧（计算开销大），StableWorld 的驱逐策略在固定窗口大小下实现了更优的稳定性-效率权衡。关键区别在于：大窗口保留了所有信息（包括已退化的帧），而驱逐策略只保留"有价值"的帧——干净的参考帧和最近的运动帧。</p>
+</div>
+</section>
+
+<div class="divider">&#10047;</div>
+
+<!-- ==================== Chapter 4 ==================== -->
+<section class="chapter" id="ch4">
+<div class="chapter-header">
+<span class="chapter-num">CHAPTER 04</span>
+<h2 class="chapter-title">ORB + RANSAC：几何一致性度量</h2>
+<p class="chapter-subtitle">为什么 ORB 优于 SSIM 和余弦相似度？</p>
+</div>
+
+<p>驱逐决策的核心在于如何衡量两帧之间的"几何一致性"。StableWorld 采用了经典的 <strong>ORB（Oriented FAST and Rotated BRIEF）</strong> 特征匹配结合 <strong>RANSAC</strong> 几何验证方案。这一选择并非随意——论文通过消融实验证明了 ORB 在此场景下的独特优势。</p>
+
+<div class="math-card">
+<h4>ORB 几何一致性计算的完整数学推导</h4>
+<div class="step" data-n="1"><strong>特征提取：</strong>从参考帧 \(\mathbf{P}_0\) 和中间帧 \(\mathbf{P}_k\) 中分别提取 ORB 描述子集合 \(\{d_i^{(0)}\}_{i=1}^{M_0}\) 和 \(\{d_j^{(k)}\}_{j=1}^{M_k}\)。</div>
+<div class="step" data-n="2"><strong>最近邻匹配 + Lowe 比率测试：</strong>候选对应关系 \(G = \{(i,j) \mid \|d_i^{(0)} - d_j^{(k)}\| \lt \tau\}\)，其中 \(\tau\) 是比率测试阈值，\(g = |G|\) 为存活对应数。</div>
+<div class="step" data-n="3"><strong>RANSAC 几何验证：</strong>分别使用 Homography (H) 和 Fundamental 矩阵 (F) 模型进行内点验证：\(I_H = \{(i,j) \in G \mid \text{SampsonErr}_H(i,j) \le \epsilon\}\)，\(I_F = \{(i,j) \in G \mid \text{SampsonErr}_F(i,j) \le \epsilon\}\)。</div>
+<div class="step" data-n="4"><strong>内点比率与最终得分：</strong>\(r_H = |I_H|/g\)，\(r_F = |I_F|/g\)，最终相似度 \(s(\mathbf{P}_0, \mathbf{P}_k) = \max(r_H, r_F)\)。取最大值是因为 H 和 F 模型分别适用于平面和非平面场景。</div>
+</div>
+
+<div class="figure">
+<svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+<text x="360" y="25" text-anchor="middle" font-family="Noto Serif SC" font-size="15" font-weight="700" fill="#7c3aed">三种相似度度量的特性对比</text>
+<!-- Three metric cards -->
+<rect x="30" y="50" width="200" height="200" rx="12" fill="#fff" stroke="#a855f7" stroke-width="1.5"/>
+<text x="130" y="80" text-anchor="middle" font-size="14" font-weight="700" fill="#7c3aed">ORB+RANSAC</text>
+<text x="130" y="105" text-anchor="middle" font-size="11" fill="#34d399" font-weight="600">StableWorld 选择</text>
+<circle cx="130" cy="135" r="8" fill="#34d399"/><text x="150" y="140" font-size="10" fill="#4b5563">旋转不变性</text>
+<circle cx="130" cy="160" r="8" fill="#34d399"/><text x="150" y="165" font-size="10" fill="#4b5563">几何变换敏感</text>
+<circle cx="130" cy="185" r="8" fill="#34d399"/><text x="150" y="190" font-size="10" fill="#4b5563">噪声鲁棒</text>
+<circle cx="130" cy="210" r="8" fill="#34d399"/><text x="150" y="215" font-size="10" fill="#4b5563">区分度适中</text>
+
+<rect x="260" y="50" width="200" height="200" rx="12" fill="#fff" stroke="#fb7185" stroke-width="1.5"/>
+<text x="360" y="80" text-anchor="middle" font-size="14" font-weight="700" fill="#e11d48">SSIM</text>
+<text x="360" y="105" text-anchor="middle" font-size="11" fill="#fb7185" font-weight="600">过于敏感</text>
+<circle cx="360" cy="135" r="8" fill="#fbbf24"/><text x="380" y="140" font-size="10" fill="#4b5563">像素级比较</text>
+<circle cx="360" cy="160" r="8" fill="#fb7185"/><text x="380" y="165" font-size="10" fill="#4b5563">对透视变化极敏感</text>
+<circle cx="360" cy="185" r="8" fill="#fb7185"/><text x="380" y="190" font-size="10" fill="#4b5563">过早驱逐干净帧</text>
+<circle cx="360" cy="210" r="8" fill="#34d399"/><text x="380" y="215" font-size="10" fill="#4b5563">计算简单</text>
+
+<rect x="490" y="50" width="200" height="200" rx="12" fill="#fff" stroke="#fbbf24" stroke-width="1.5"/>
+<text x="590" y="80" text-anchor="middle" font-size="14" font-weight="700" fill="#d97706">余弦相似度</text>
+<text x="590" y="105" text-anchor="middle" font-size="11" fill="#fbbf24" font-weight="600">不够敏感</text>
+<circle cx="590" cy="135" r="8" fill="#fbbf24"/><text x="610" y="140" font-size="10" fill="#4b5563">全局特征向量</text>
+<circle cx="590" cy="160" r="8" fill="#fb7185"/><text x="610" y="165" font-size="10" fill="#4b5563">对空间变换不敏感</text>
+<circle cx="590" cy="185" r="8" fill="#fb7185"/><text x="610" y="190" font-size="10" fill="#4b5563">漏检场景切换</text>
+<circle cx="590" cy="210" r="8" fill="#34d399"/><text x="610" y="215" font-size="10" fill="#4b5563">计算快速</text>
+</svg>
+<p class="figure-caption"><strong>图 5（自绘 SVG）：</strong>三种相似度度量的定性对比。ORB+RANSAC 在旋转不变性、几何变换敏感度和噪声鲁棒性之间取得了最佳平衡。</p>
+</div>
+
+<p>论文的消融实验（Figure 10）提供了定量证据：对于一组包含渐进视角变化的测试图像，SSIM 从 1.00 骤降至 0.08（过于敏感），余弦相似度仅从 1.00 降至 0.84（不够敏感），而 ORB 从 1.00 降至 0.32，提供了合理的区分度。</p>
+
+<div class="insight-box">
+<p><strong>ORB 的旋转不变性是关键优势：</strong>交互视频中相机的旋转和平移是常见操作。SSIM 基于像素亮度的统计比较，对相机旋转极度敏感——轻微的旋转变换就会导致 SSIM 急剧下降，从而错误地驱逐干净帧。ORB 描述子本身具有旋转不变性，能更好地区分"同一场景的不同视角"和"真正不同的场景"。</p>
+</div>
+
+<div class="insight-box">
+<p><strong>双模型几何验证的互补性：</strong>同时使用 Homography 和 Fundamental 矩阵是一种被低估的设计选择。Homography 假设场景为平面（适用于墙壁、地面等），Fundamental 矩阵适用于一般三维场景。取两者的最大内点比率，确保了在不同几何结构下的鲁棒性——这一细节虽然微小，但在复杂交互场景中至关重要。</p>
+</div>
+
+<div class="code-block">
+<div class="code-header"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><span class="title">orb_similarity.py &mdash; ORB 几何一致性检测核心实现 [可信度: 高，基于论文 Section 3.3 公式还原]</span></div>
+<pre><code>import cv2
+import numpy as np
+
+def orb_geometric_similarity(frame_ref, frame_target, 
+                              ratio_thresh=0.75, ransac_thresh=3.0):
+    """
+    基于 ORB + RANSAC 的帧间几何一致性检测。
+    
+    参数:
+        frame_ref: 参考帧 P0 (BGR)
+        frame_target: 目标帧 Pk (BGR)
+        ratio_thresh: Lowe 比率测试阈值
+        ransac_thresh: RANSAC Sampson 误差容差
+    
+    返回:
+        similarity: 几何一致性得分 s(P0, Pk) in [0, 1]
+    """
+    # Step 1: ORB 特征提取
+    orb = cv2.ORB_create(nfeatures=1000)
+    kp1, des1 = orb.detectAndCompute(frame_ref, None)
+    kp2, des2 = orb.detectAndCompute(frame_target, None)
+    
+    if des1 is None or des2 is None:
+        return 0.0
+    
+    # Step 2: 最近邻匹配 + Lowe 比率测试
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING)
+    raw_matches = bf.knnMatch(des1, des2, k=2)
+    
+    good_matches = []
+    for m, n in raw_matches:
+        if m.distance &lt; ratio_thresh * n.distance:
+            good_matches.append(m)
+    
+    g = len(good_matches)
+    if g &lt; 4:  # RANSAC 最少需要 4 个对应点
+        return 0.0
+    
+    pts1 = np.float32([kp1[m.queryIdx].pt for m in good_matches])
+    pts2 = np.float32([kp2[m.trainIdx].pt for m in good_matches])
+    
+    # Step 3: RANSAC 几何验证 (Homography + Fundamental)
+    # Homography model
+    H, mask_H = cv2.findHomography(pts1, pts2, cv2.RANSAC, ransac_thresh)
+    r_H = np.sum(mask_H) / g if mask_H is not None else 0.0
+    
+    # Fundamental matrix model
+    F, mask_F = cv2.findFundamentalMat(pts1, pts2, cv2.RANSAC, 
+                                         ransac_thresh, confidence=0.99)
+    r_F = np.sum(mask_F) / g if mask_F is not None else 0.0
+    
+    # Step 4: 最终相似度 s(P0, Pk) = max(r_H, r_F)
+    similarity = max(r_H, r_F)
+    
+    return similarity</code></pre>
+</div>
+
+<div class="insight-box">
+<p><strong>阈值 0.75 的经验合理性：</strong>论文测试了 0.35、0.55、0.75、0.95 四个阈值。过低的阈值（0.35）导致旧帧保留过久，干扰新场景生成；过高的阈值（0.95）导致干净帧被过早驱逐。0.75 在"保持稳定性"和"允许场景切换"之间取得了最佳平衡——这一经验阈值本质上编码了"两个场景至少有 75% 的几何重叠才视为同一场景"的先验假设。</p>
+</div>
+</section>
+
+<div class="divider">&#10047;</div>
+
+<!-- ==================== Chapter 5 ==================== -->
+<section class="chapter" id="ch5">
+<div class="chapter-header">
+<span class="chapter-num">CHAPTER 05</span>
+<h2 class="chapter-title">实验结果：全面的定量与定性评估</h2>
+<p class="chapter-subtitle">StableWorld 在多个维度上带来了怎样的提升？</p>
+</div>
+
+<p>StableWorld 的实验评估覆盖了 <strong>VBench-Long</strong> 基准的多个维度和大规模 <strong>用户研究</strong>，结果一致表明该方法在视觉质量、时间一致性和运动平滑度上均取得了显著提升。</p>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig8_qualitative.webp" alt="用户研究结果">
+<p class="figure-caption"><strong>图 6（论文 Table 2）：</strong>用户研究结果。20 位参与者在 30 个视频上评估三个模型的视频质量、时间一致性和运动平滑度。StableWorld 在所有模型和所有维度上获得了绝大多数投票。</p>
+</div>
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>方法</th><th>延迟</th><th>图像质量 ↑</th><th>美学质量 ↑</th><th>动态度 ↑</th><th>时间闪烁 ↓</th><th>运动平滑 ↑</th><th>主体一致性 ↑</th><th>背景一致性 ↑</th></tr>
+</thead>
+<tbody>
+<tr><td>Matrix-Game 2.0</td><td>×1.00</td><td>63.39</td><td>38.83</td><td>56.19</td><td>95.19</td><td>97.41</td><td>96.49</td><td>97.52</td></tr>
+<tr><td><strong>+ StableWorld</strong></td><td>×1.01</td><td class="best">73.52</td><td class="best">53.44</td><td class="best">56.66</td><td class="best">95.96</td><td class="best">98.13</td><td class="best">97.02</td><td class="best">97.74</td></tr>
+<tr><td>Open-Oasis</td><td>×1.00</td><td>66.37</td><td>43.80</td><td>16.81</td><td>99.53</td><td>99.52</td><td>98.94</td><td>99.18</td></tr>
+<tr><td><strong>+ StableWorld</strong></td><td>×1.02</td><td class="best">73.75</td><td class="best">48.73</td><td class="best">20.04</td><td class="best">99.67</td><td class="best">99.62</td><td>98.84</td><td class="best">99.52</td></tr>
+<tr><td>Hunyuan-GameCraft</td><td>×1.00</td><td>57.91</td><td>48.38</td><td>98.00</td><td>95.66</td><td>98.27</td><td>97.21</td><td>96.83</td></tr>
+<tr><td><strong>+ StableWorld</strong></td><td>×1.02</td><td class="best">65.91</td><td class="best">57.44</td><td class="best">98.66</td><td class="best">96.05</td><td>98.29</td><td>97.08</td><td class="best">97.06</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="stat-grid">
+<div class="stat-card"><div class="num">+14.6%</div><div class="label">Matrix-Game 美学质量提升</div></div>
+<div class="stat-card"><div class="num">+7.4%</div><div class="label">Open-Oasis 图像质量提升</div></div>
+<div class="stat-card"><div class="num">+9.1%</div><div class="label">Hunyuan 美学质量提升</div></div>
+<div class="stat-card"><div class="num">1.00-1.02×</div><div class="label">额外计算开销</div></div>
+</div>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig8_qualitative.webp" alt="定性对比">
+<p class="figure-caption"><strong>图 7（论文 Figure 8）：</strong>三个模型上原始版本与 StableWorld 版本的定性对比。StableWorld 版本在长时间生成后保持了更高的场景稳定性和更平滑的运动过渡。</p>
+</div>
+
+<div class="insight-box">
+<p><strong>时间质量指标的"反常"现象：</strong>论文坦率地指出了一个反直觉现象：StableWorld 在时间闪烁和运动平滑度上的提升幅度不大。原因是当原始模型发生场景坍塌后，生成的帧几乎静止不动——这反而"稳定"了时间质量指标。这提醒我们，现有评估指标在极端退化场景下可能产生误导，需要设计更鲁棒的评估方法。</p>
+</div>
+
+<div class="insight-box">
+<p><strong>近乎为零的计算开销是工程价值的关键：</strong>ORB 特征提取和 RANSAC 验证都是在像素空间的轻量操作，相比扩散模型的前向推理可以忽略不计。1-2% 的开销意味着 StableWorld 几乎是"免费"的改进——这种低侵入性使其在实际部署中极具吸引力。</p>
+</div>
+</section>
+
+<div class="divider">&#10047;</div>
+
+<!-- ==================== Chapter 6 ==================== -->
+<section class="chapter" id="ch6">
+<div class="chapter-header">
+<span class="chapter-num">CHAPTER 06</span>
+<h2 class="chapter-title">消融研究：窗口大小、度量与阈值</h2>
+<p class="chapter-subtitle">每个设计选择背后的权衡与洞察</p>
+</div>
+
+<p>论文通过三组消融实验系统验证了 StableWorld 各组件的有效性，每组实验都揭示了有趣的设计权衡。</p>
+
+<h3 style="font-size:18px;margin:24px 0 16px;color:var(--lavender-dark)">6.1 窗口大小的影响</h3>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig13_eviction.webp" alt="不同窗口大小对比">
+<p class="figure-caption"><strong>图 8（论文 Figure 13）：</strong>不同窗口大小下的 StableWorld 表现。窗口大小为 9（默认）表现最佳；窗口增大到 18 或 36 时，过多的历史帧引入了旧场景的残余伪影，干扰新场景的生成。</p>
+</div>
+
+<div class="insight-box">
+<p><strong>窗口大小的"甜蜜点"效应：</strong>更大的窗口不一定更好——窗口=36 时旧场景残余信息干扰新场景生成的现象尤为明显。这说明在驱逐机制中，"信息量"与"信息质量"之间存在张力：保留更多帧增加了信息量，但也引入了更多已退化的帧。StableWorld 的驱逐策略本质上是在做"信息质量过滤"。</p>
+</div>
+
+<h3 style="font-size:18px;margin:24px 0 16px;color:var(--lavender-dark)">6.2 相似度度量对比</h3>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig5_sliding_window.webp" alt="不同度量对比">
+<p class="figure-caption"><strong>图 9（论文 Figure 7）：</strong>不同相似度度量下的 StableWorld 表现。基于余弦相似度的版本偶尔遗漏场景切换；基于 SSIM 的版本过早驱逐干净帧导致更严重的累积误差。</p>
+</div>
+
+<h3 style="font-size:18px;margin:24px 0 16px;color:var(--lavender-dark)">6.3 阈值敏感性分析</h3>
+
+<div class="figure">
+<svg viewBox="0 0 720 240" xmlns="http://www.w3.org/2000/svg">
+<text x="360" y="25" text-anchor="middle" font-family="Noto Serif SC" font-size="15" font-weight="700" fill="#7c3aed">ORB 相似度阈值的效果分析</text>
+<!-- Four threshold scenarios -->
+<g transform="translate(30,50)">
+<rect width="150" height="150" rx="10" fill="#fff" stroke="#fb7185" stroke-width="1.5"/>
+<text x="75" y="25" text-anchor="middle" font-size="13" font-weight="700" fill="#e11d48">\(\theta=0.35\)</text>
+<rect x="15" y="40" width="120" height="12" rx="3" fill="#fee2e2" stroke="#fb7185" stroke-width="1"/>
+<text x="75" y="70" text-anchor="middle" font-size="10" fill="#4b5563">旧帧保留过久</text>
+<text x="75" y="88" text-anchor="middle" font-size="10" fill="#4b5563">阻碍新场景生成</text>
+<text x="75" y="120" text-anchor="middle" font-size="18" fill="#fb7185">差</text>
+</g>
+<g transform="translate(200,50)">
+<rect width="150" height="150" rx="10" fill="#fff" stroke="#fbbf24" stroke-width="1.5"/>
+<text x="75" y="25" text-anchor="middle" font-size="13" font-weight="700" fill="#d97706">\(\theta=0.55\)</text>
+<rect x="15" y="40" width="120" height="12" rx="3" fill="#fef3c7" stroke="#fbbf24" stroke-width="1"/>
+<text x="75" y="70" text-anchor="middle" font-size="10" fill="#4b5563">仍有过量保留</text>
+<text x="75" y="88" text-anchor="middle" font-size="10" fill="#4b5563">场景间干扰明显</text>
+<text x="75" y="120" text-anchor="middle" font-size="18" fill="#d97706">中</text>
+</g>
+<g transform="translate(370,50)">
+<rect width="150" height="150" rx="10" fill="#fff" stroke="#34d399" stroke-width="2"/>
+<text x="75" y="25" text-anchor="middle" font-size="13" font-weight="700" fill="#059669">\(\theta=0.75\)</text>
+<rect x="15" y="40" width="120" height="12" rx="3" fill="#d1fae5" stroke="#34d399" stroke-width="1"/>
+<text x="75" y="70" text-anchor="middle" font-size="10" fill="#4b5563">最佳平衡点</text>
+<text x="75" y="88" text-anchor="middle" font-size="10" fill="#4b5563">稳定 + 灵活切换</text>
+<text x="75" y="120" text-anchor="middle" font-size="18" fill="#059669">最优</text>
+</g>
+<g transform="translate(540,50)">
+<rect width="150" height="150" rx="10" fill="#fff" stroke="#fbbf24" stroke-width="1.5"/>
+<text x="75" y="25" text-anchor="middle" font-size="13" font-weight="700" fill="#d97706">\(\theta=0.95\)</text>
+<rect x="15" y="40" width="120" height="12" rx="3" fill="#fef3c7" stroke="#fbbf24" stroke-width="1"/>
+<text x="75" y="70" text-anchor="middle" font-size="10" fill="#4b5563">干净帧被过早驱逐</text>
+<text x="75" y="88" text-anchor="middle" font-size="10" fill="#4b5563">累积误差增加</text>
+<text x="75" y="120" text-anchor="middle" font-size="18" fill="#d97706">中</text>
+</g>
+</svg>
+<p class="figure-caption"><strong>图 10（自绘 SVG，基于论文 Figure 12 分析）：</strong>不同 ORB 相似度阈值的效果对比。0.75 在"防止误差累积"和"允许场景灵活性"之间实现了最优权衡。</p>
+</div>
+
+<div class="code-block">
+<div class="code-header"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><span class="title">frame_eviction.py &mdash; 完整的滑动窗口帧驱逐逻辑 [可信度: 高，基于论文 Section 3.3 + Appendix A 还原]</span></div>
+<pre><code>import numpy as np
+from typing import List, Tuple
+
+class StableWorldEvictor:
+    """
+    StableWorld 动态帧驱逐机制实现。
+    在滑动窗口中智能选择驱逐帧，抑制累积误差。
+    """
+    
+    def __init__(self, window_size: int = 9, 
+                 num_earlier: int = 6,
+                 similarity_threshold: float = 0.75):
+        self.window_size = window_size
+        self.num_earlier = num_earlier  # 早期帧数量
+        self.threshold = similarity_threshold
+        self.frame_buffer: List[np.ndarray] = []
+    
+    def add_frame(self, new_frame: np.ndarray) -> List[np.ndarray]:
+        """添加新帧并执行驱逐策略，返回更新后的缓冲区。"""
+        self.frame_buffer.append(new_frame)
+        
+        if len(self.frame_buffer) &lt;= self.window_size:
+            return self.frame_buffer  # 窗口未满，无需驱逐
+        
+        # 执行驱逐决策
+        evict_idx = self._select_eviction_target()
+        if evict_idx is not None:
+            self.frame_buffer.pop(evict_idx)
+        
+        return self.frame_buffer
+    
+    def _select_eviction_target(self) -> int:
+        """选择应该被驱逐的帧索引。"""
+        n = len(self.frame_buffer)
+        if n &lt;= self.window_size:
+            return None
+        
+        # 参考帧: 最早的帧 P0
+        ref_frame = self.frame_buffer[0]
+        
+        # 中间帧: P1 到 P_{K} (K = num_earlier - 1)
+        K = min(self.num_earlier - 1, n - 2)
+        
+        # 逐帧检查几何一致性
+        last_similar_idx = 0
+        for k in range(1, K + 1):
+            similarity = orb_geometric_similarity(
+                ref_frame, self.frame_buffer[k]
+            )
+            if similarity &gt;= self.threshold:
+                last_similar_idx = k
+            else:
+                break  # 首次不满足则停止检查
+        
+        # 驱逐策略：
+        # - 如果所有中间帧都满足阈值，驱逐最远的中间帧
+        # - 否则驱逐最后一个满足阈值的帧的前一帧
+        if last_similar_idx == K:
+            return K  # 驱逐最远的中间帧
+        else:
+            return max(last_similar_idx, 1)  # 驱逐漂移帧</code></pre>
+</div>
+
+<div class="insight-box">
+<p><strong>阈值选择的空间一致性：</strong>值得注意的是，论文在所有三个模型上使用了相同的阈值 0.75，这表明 ORB 几何一致性得分具有跨模型的可迁移性。这种一致性源于 ORB 特征描述的是底层几何结构而非模型特定的视觉风格，为方法的通用性提供了理论基础。</p>
+</div>
+</section>
+
+<div class="divider">&#10047;</div>
+
+<!-- ==================== Chapter 7 ==================== -->
+<section class="chapter" id="ch7">
+<div class="chapter-header">
+<span class="chapter-num">CHAPTER 07</span>
+<h2 class="chapter-title">跨模型泛化：即插即用的稳定性保障</h2>
+<p class="chapter-subtitle">同一机制如何适配三种截然不同的世界模型？</p>
+</div>
+
+<p>StableWorld 最引人注目的特性之一是其 <span class="highlight-l">模型无关性（Model-Agnostic）</span>。论文在三个架构差异显著的世界模型上验证了方法的有效性，且每个模型的适配仅需调整少量超参数。</p>
+
+<div class="figure">
+<svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="mgGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#a855f7" stop-opacity="0.12"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0.03"/></linearGradient>
+<linearGradient id="oaGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fb7185" stop-opacity="0.12"/><stop offset="100%" stop-color="#fb7185" stop-opacity="0.03"/></linearGradient>
+<linearGradient id="hgGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#34d399" stop-opacity="0.12"/><stop offset="100%" stop-color="#34d399" stop-opacity="0.03"/></linearGradient>
+</defs>
+<text x="360" y="22" text-anchor="middle" font-family="Noto Serif SC" font-size="15" font-weight="700" fill="#7c3aed">StableWorld 跨模型适配架构图</text>
+<!-- Central StableWorld box -->
+<rect x="270" y="40" width="180" height="55" rx="12" fill="#fff" stroke="#7c3aed" stroke-width="2.5"/>
+<text x="360" y="62" text-anchor="middle" font-size="14" font-weight="700" fill="#7c3aed">StableWorld</text>
+<text x="360" y="80" text-anchor="middle" font-size="10" fill="#6b7280">ORB + RANSAC 驱逐机制</text>
+<!-- Three model boxes -->
+<rect x="20" y="130" width="190" height="110" rx="12" fill="url(#mgGrad)" stroke="#a855f7" stroke-width="1.5"/>
+<text x="115" y="155" text-anchor="middle" font-size="13" font-weight="700" fill="#7c3aed">Matrix-Game 2.0</text>
+<text x="115" y="175" text-anchor="middle" font-size="10" fill="#4b5563">窗口=9, 每步3帧</text>
+<text x="115" y="195" text-anchor="middle" font-size="10" fill="#4b5563">检查第3、6帧</text>
+<rect x="40" y="210" width="150" height="18" rx="4" fill="#a855f7" opacity="0.15"/>
+<text x="115" y="223" text-anchor="middle" font-size="10" font-weight="600" fill="#7c3aed">美学质量 +14.6%</text>
+
+<rect x="265" y="130" width="190" height="110" rx="12" fill="url(#oaGrad)" stroke="#fb7185" stroke-width="1.5"/>
+<text x="360" y="155" text-anchor="middle" font-size="13" font-weight="700" fill="#e11d48">Open-Oasis</text>
+<text x="360" y="175" text-anchor="middle" font-size="10" fill="#4b5563">窗口=16, 每步1帧</text>
+<text x="360" y="195" text-anchor="middle" font-size="10" fill="#4b5563">检查第1、6、12帧</text>
+<rect x="285" y="210" width="150" height="18" rx="4" fill="#fb7185" opacity="0.15"/>
+<text x="360" y="223" text-anchor="middle" font-size="10" font-weight="600" fill="#e11d48">图像质量 +7.4%</text>
+
+<rect x="510" y="130" width="190" height="110" rx="12" fill="url(#hgGrad)" stroke="#34d399" stroke-width="1.5"/>
+<text x="605" y="155" text-anchor="middle" font-size="13" font-weight="700" fill="#059669">Hunyuan-GameCraft</text>
+<text x="605" y="175" text-anchor="middle" font-size="10" fill="#4b5563">Chunk=33帧</text>
+<text x="605" y="195" text-anchor="middle" font-size="10" fill="#4b5563">跨chunk帧合并</text>
+<rect x="530" y="210" width="150" height="18" rx="4" fill="#34d399" opacity="0.15"/>
+<text x="605" y="223" text-anchor="middle" font-size="10" font-weight="600" fill="#059669">美学质量 +9.1%</text>
+
+<!-- Arrows from center to each model -->
+<line x1="320" y1="95" x2="150" y2="130" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="5,3"/>
+<line x1="360" y1="95" x2="360" y2="130" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="5,3"/>
+<line x1="400" y1="95" x2="570" y2="130" stroke="#34d399" stroke-width="1.5" stroke-dasharray="5,3"/>
+
+<!-- Bottom: shared threshold badge -->
+<rect x="230" y="260" width="260" height="30" rx="8" fill="#fff" stroke="#e5e7eb" stroke-width="1"/>
+<text x="360" y="280" text-anchor="middle" font-size="12" font-weight="600" fill="#7c3aed">共享阈值 \(\theta=0.75\) &middot; 计算开销 1.00-1.02×</text>
+</svg>
+<p class="figure-caption"><strong>图 10（自绘 SVG）：</strong>StableWorld 的跨模型适配架构。同一套 ORB+RANSAC 检测机制通过调整窗口配置和帧检查策略，即可适配三种架构差异显著的世界模型，且共享相同的相似度阈值 0.75。</p>
+</div>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig17_longhorizon.webp" alt="长时域对比1">
+<p class="figure-caption"><strong>图 11（论文 Figure 17）：</strong>长时域交互下的场景稳定性对比。StableWorld 在超过 700 帧的生成中保持了清晰的场景结构，而原始模型已出现严重的视觉退化。</p>
+</div>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig17_longhorizon.webp" alt="长时域对比2">
+<p class="figure-caption"><strong>图 12（论文 Figure 18）：</strong>另一组长时域对比，展示了 StableWorld 在不同场景和动作条件下的稳定性优势。</p>
+</div>
+
+<div class="code-block">
+<div class="code-header"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><span class="title">model_config.py &mdash; 三个模型的 StableWorld 配置适配 [可信度: 高，基于论文 Section 4.2 实现细节]</span></div>
+<pre><code>"""
+StableWorld 跨模型配置适配。
+展示了如何用最小的配置调整将方法应用于不同世界模型。
+"""
+
+# ============================================================
+# Matrix-Game 2.0 配置
+# - 每步生成 3 帧，KV-cache 长度 9
+# - 检查第 3 帧和第 6 帧的 ORB 相似度
+# ============================================================
+MATRIX_GAME_CONFIG = {
+    "window_size": 9,
+    "frames_per_step": 3,
+    "earlier_frames": 6,       # 前 6 帧作为"早期帧"
+    "check_indices": [2, 5],   # 检查第 3、6 帧 (0-indexed)
+    "similarity_threshold": 0.75,
+}
+
+# ============================================================
+# Open-Oasis 配置
+# - 每步生成 1 帧，默认窗口大小 16
+# - 检查第 1、6、12 帧
+# ============================================================
+OPEN_OASIS_CONFIG = {
+    "window_size": 16,
+    "frames_per_step": 1,
+    "earlier_frames": 12,      # 前 12 帧作为"早期帧"
+    "check_indices": [0, 5, 11],
+    "similarity_threshold": 0.75,
+}
+
+# ============================================================
+# Hunyuan-GameCraft 1.0 配置
+# - 每步生成 33 帧（chunk），窗口由新帧组成
+# - 比较前一窗口的第 1、6、12 帧与新窗口的对应帧
+# ============================================================
+HUNYUAN_GAMECRAFT_CONFIG = {
+    "chunk_size": 33,
+    "check_indices": [0, 5, 11],
+    "merge_threshold": 0.75,   # 相似度高于阈值则合并旧帧
+    "similarity_threshold": 0.75,
+}
+
+# 关键发现：所有模型使用相同阈值 0.75
+# 这表明 ORB 几何一致性具有跨模型的可迁移性
+print("所有模型共享的阈值:", MATRIX_GAME_CONFIG["similarity_threshold"])
+print("额外计算开销: 1.00-1.02x (几乎为零)")</code></pre>
+</div>
+
+<div class="insight-box">
+<p><strong>不同架构的适配策略差异：</strong>Matrix-Game 2.0 采用标准滑动窗口驱逐；Open-Oasis 逐帧生成所以检查更密集的帧位置；Hunyuan-GameCraft 以 33 帧为一个 chunk 生成，需要跨 chunk 的帧合并策略。三种适配策略的核心都是 ORB 一致性检测，但触发时机和帧选择策略因模型生成节奏而异——这种"检测机制不变、调度策略灵活"的设计是即插即用的关键。</p>
+</div>
+
+<div class="insight-box">
+<p><strong>自回归视频生成的通用退化模式：</strong>三个模型虽然架构不同（有的基于扩散、有的基于自回归、有的混合架构），但都表现出相同的场景坍塌模式。这暗示了一个更深层的规律：只要生成过程依赖历史帧的有限子集作为条件，误差累积就是不可避免的。StableWorld 本质上是在信息传递层面做了一次"质量控制"。</p>
+</div>
+
+<p>论文还将 StableWorld 应用于 <strong>Self-Forcing</strong> 框架下的自回归视频生成，进一步验证了方法在训练-推理对齐场景中的有效性。这一扩展表明，动态帧驱逐不仅可以作为推理时的后处理技术，也可以作为训练过程中的正则化策略。</p>
+</section>
+
+<div class="divider">&#10047;</div>
+
+<!-- ==================== Chapter 8 ==================== -->
+<section class="chapter" id="ch8">
+<div class="chapter-header">
+<span class="chapter-num">CHAPTER 08</span>
+<h2 class="chapter-title">总结与前瞻</h2>
+<p class="chapter-subtitle">从诊断到治疗，StableWorld 的贡献与启示</p>
+</div>
+
+<p>StableWorld 论文的贡献可以概括为三个层面：</p>
+
+<p><span class="highlight-l">诊断层面：</span>系统揭示了交互视频生成中场景坍塌的根源——同一场景内微小帧间漂移的逐步累积。这一发现将研究焦点从"动作跟随精度"转移到了"场景记忆保持"。</p>
+
+<p><span class="highlight-m">方法层面：</span>提出了简洁而有效的动态帧驱逐机制，通过 ORB+RANSAC 几何一致性检测智能选择保留帧，在固定窗口大小下实现了优于大窗口的稳定性表现，且计算开销近乎为零。</p>
+
+<p><span class="highlight-a">验证层面：</span>在三个主流世界模型（Matrix-Game 2.0、Open-Oasis、Hunyuan-GameCraft 1.0）上验证了方法的通用性，实现了视觉质量最高 14.6% 的提升和用户研究中 76.8%-96.4% 的偏好率。</p>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig16_additional.webp" alt="额外定性结果">
+<p class="figure-caption"><strong>图 13（论文 Figure 16）：</strong>更多场景下的定性对比，展示了 StableWorld 在不同环境（自然场景、游戏世界等）中的稳定性和视觉质量优势。</p>
+</div>
+
+<div class="insight-box">
+<p><strong>"简单方法"的深刻启示：</strong>StableWorld 使用的是 ORB+RANSAC 这种 2011 年就提出的技术，没有引入任何可学习参数或额外训练，却取得了显著效果。这提醒我们，在追求复杂架构创新的同时，不应忽视经典计算机视觉技术在特定问题上的独特价值。有时候，正确的"诊断"比复杂的"处方"更重要。</p>
+</div>
+
+<div class="insight-box">
+<p><strong>未来方向：从被动驱逐到主动预防：</strong>StableWorld 的驱逐策略是在推理阶段被动地过滤退化帧。一个自然的延伸方向是将这一思想融入训练过程——例如在训练时模拟帧退化模式并训练模型主动补偿，或者在架构层面引入显式的"场景记忆"模块。这可能从根本上解决误差累积问题，而非仅在推理阶段做缓解。</p>
+</div>
+</section>
+
+<div class="divider">&#10047;</div>
+
+<!-- ==================== Chapter 9: Research Questions ==================== -->
+<section class="chapter" id="ch9">
+<div class="chapter-header">
+<span class="chapter-num">RESEARCH QUESTIONS</span>
+<h2 class="chapter-title">开放科研问题</h2>
+<p class="chapter-subtitle">StableWorld 指向的五个前沿研究方向</p>
+</div>
+
+<div class="rq-card" data-tag="RQ 1">
+<h4>可学习的帧质量评估能否替代手工 ORB+RANSAC？</h4>
+<p><span class="rq-label">理论分析：</span>ORB 特征基于局部梯度模式，对纹理丰富区域有效但对弱纹理场景（如纯色墙壁、天空）可能特征不足。一个端到端的帧质量评估网络可以通过学习跨域的"场景一致性"表示来突破这一限制，但也面临"用什么数据训练"和"如何避免过拟合到特定生成模型"的挑战。</p>
+<p><span class="rq-label">调查方向：</span>探索基于 DINOv2 或 CLIP 视觉特征的帧间一致性度量；研究是否可以用合成退化数据训练轻量级质量评估器；对比学习方法学习"同一场景的不同视角"与"不同场景"的嵌入距离。</p>
+</div>
+
+<div class="rq-card" data-tag="RQ 2">
+<h4>自适应阈值策略能否替代固定阈值 0.75？</h4>
+<p><span class="rq-label">理论分析：</span>固定阈值假设了所有场景的几何一致性分布相同，但不同环境（室内 vs 室外、静态 vs 动态）的帧间变化模式差异显著。自适应阈值可以根据近期帧的一致性分布动态调整驱逐灵敏度，在场景变化剧烈时更宽容、在静态场景中更严格。</p>
+<p><span class="rq-label">调查方向：</span>基于滑动窗口内历史一致性得分的统计量（均值、方差）动态计算阈值；引入场景类型先验（通过轻量分类器）设置不同基准阈值；研究阈值对生成视频时长和场景复杂度的交互效应。</p>
+</div>
+
+<div class="rq-card" data-tag="RQ 3">
+<h4>如何将驱逐机制扩展到分钟级长视频生成？</h4>
+<p><span class="rq-label">理论分析：</span>当前实验的视频时长为 45-60 秒。在更长时域（数分钟甚至数小时）的生成中，参考帧本身也可能随时间退化——即使保留了最早的帧，它与当前帧的语义关联可能已经很弱。需要设计多层级的记忆结构，在不同时间尺度上维护不同粒度的场景信息。</p>
+<p><span class="rq-label">调查方向：</span>设计分层参考帧策略（短期、中期、长期）；探索周期性"场景重锚定"机制；研究将关键帧存储与帧驱逐结合的混合方案；分析帧驱逐在超长序列中的计算复杂度增长模式。</p>
+</div>
+
+<div class="rq-card" data-tag="RQ 4">
+<h4>多模态稳定性：视觉之外的帧驱逐如何设计？</h4>
+<p><span class="rq-label">理论分析：</span>交互视频通常伴随音频、触觉等多模态信号。当前方法仅在视觉空间检测几何一致性，但物理世界的交互涉及声学环境、物体材质等更丰富的信息。当视觉场景保持不变但物理属性变化时（如开门改变声学环境），纯视觉驱逐可能做出错误决策。</p>
+<p><span class="rq-label">调查方向：</span>探索音频-视觉联合一致性度量；研究物理属性（如碰撞、材质变化）对帧驱逐决策的影响；设计多模态融合的场景变化检测器；评估驱逐策略对下游物理模拟任务的影响。</p>
+</div>
+
+<div class="rq-card" data-tag="RQ 5">
+<h4>训练时误差注入与推理时帧驱逐的协同优化</h4>
+<p><span class="rq-label">理论分析：</span>StableWorld 和 Self-Forcing 分别代表了推理时和训练时的误差缓解策略。Self-Forcing 通过在训练中模拟自回归退化来缩小训练-推理分布差距；StableWorld 通过推理时帧过滤来阻止误差传播。二者是否可以协同？例如，在训练时引入"帧质量感知"的损失函数，让模型学会区分和处理退化帧。</p>
+<p><span class="rq-label">调查方向：</span>设计将帧驱逐信号反向传播到训练过程的方案；研究课程学习策略：先在高质量帧上训练，逐步引入退化帧；探索是否可以在训练时学习"哪些帧应该被驱逐"的策略而非依赖 ORB；分析训练时误差注入与推理时帧驱逐的互补性和替代性。</p>
+</div>
+
+</section>
+
+</main>
+
+<footer>
+<p>基于论文 "StableWorld: Towards Stable and Consistent Long Interactive Video Generation" (arXiv:2601.15281v1) 的深度解读</p>
+<p>作者: Ying Yang, Zhengyao Lv, Tianlin Pan, Haofan Wang, Binxin Yang, Hubery Yin, Chen Li, Ziwei Liu, Chenyang Si</p>
+<p style="margin-top:8px">PRLab NJU &middot; HKU &middot; UCAS &middot; LibLib.ai &middot; Tencent &middot; NTU &middot; 2026</p>
+</footer>
+
+<script>
+// Progress bar + nav scroll
+const progressBar=document.getElementById('progressBar');
+const nav=document.getElementById('nav');
+const navToggle=document.getElementById('navToggle');
+const navLinks=document.getElementById('navLinks');
+navToggle.addEventListener('click',()=>navLinks.classList.toggle('open'));
+window.addEventListener('scroll',()=>{
+  const scrollTop=window.scrollY;
+  const docHeight=document.documentElement.scrollHeight-window.innerHeight;
+  progressBar.style.width=(scrollTop/docHeight*100)+'%';
+  nav.classList.toggle('scrolled',scrollTop>50);
+},{passive:true});
+// Close mobile nav on link click
+navLinks.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>navLinks.classList.remove('open')));
+</script>
+</body>
+</html>

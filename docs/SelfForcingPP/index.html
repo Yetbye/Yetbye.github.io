@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Self-Forcing++: 迈向分钟级高质量视频生成</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- MathJax 3.x with three-layer CDN fallback and skipHtmlTags -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true
+  },
+  chtml: { scale: 1.05 },
+  startup: { typeset: true },
+  options: {
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+  }
+};
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js" onerror="this.remove();document.write('<script src=\"https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js\"><\/script>')"></script>
+<script>
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    if (!window.MathJax || !window.MathJax.startup || !window.MathJax.startup.promise) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+      document.head.appendChild(s);
+    }
+  }, 5000);
+});
+</script>
+
+<style>
+:root {
+  --lav-50:#faf5ff;--lav-100:#f3e8ff;--lav-200:#e9d5ff;--lav-300:#d8b4fe;
+  --lav-400:#c084fc;--lav-500:#a855f7;--lav-600:#9333ea;--lav-700:#7e22ce;
+  --coral-100:#ffe4e6;--coral-200:#fecdd3;--coral-300:#fda4af;--coral-400:#fb7185;--coral-500:#f43f5e;
+  --mint-100:#d1fae5;--mint-200:#a7f3d0;--mint-300:#6ee7b7;--mint-400:#34d399;--mint-500:#10b981;
+  --warm-100:#fef3c7;--warm-200:#fde68a;--amber-500:#f59e0b;
+  --ink:#1e1b4b;--ink-soft:#4c4b5e;--ink-muted:#787887;
+  --paper:#ffffff;--paper-warm:#faf8f5;--paper-cream:#fdf6e3;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans SC',sans-serif;background:var(--paper-warm);color:var(--ink);line-height:1.8;overflow-x:hidden}
+h1,h2,h3,h4{font-family:'Noto Serif SC',serif;font-weight:700}
+
+/* Navigation */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(250,248,245,0.85);backdrop-filter:blur(16px) saturate(1.5);border-bottom:1px solid rgba(192,132,252,0.15);padding:10px 24px}
+nav .nav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+nav .logo{font-family:'Noto Serif SC',serif;font-weight:900;font-size:18px;background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+nav .nav-links{display:flex;gap:6px;flex-wrap:wrap}
+nav .nav-links a{font-size:12px;color:var(--ink-soft);text-decoration:none;padding:4px 10px;border-radius:100px;transition:all .2s}
+nav .nav-links a:hover{background:var(--lav-100);color:var(--lav-600)}
+
+/* Hero */
+.hero{position:relative;min-height:96vh;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:120px 24px 80px;background:linear-gradient(135deg,#faf5ff 0%,#f3e8ff 18%,#fdf4e3 50%,#fffbeb 100%)}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 520px 320px at 12% 22%,rgba(192,132,252,0.16),transparent 60%),radial-gradient(ellipse 520px 320px at 88% 78%,rgba(251,191,36,0.13),transparent 60%)}
+.hero-wrap{position:relative;z-index:2;width:100%;max-width:780px;text-align:center}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,0.6);backdrop-filter:blur(12px) saturate(1.5);border:1px solid rgba(192,132,252,0.3);color:var(--lav-600);padding:7px 20px;border-radius:100px;font-family:'Noto Sans SC',sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;margin-bottom:20px;box-shadow:0 4px 20px rgba(192,132,252,0.12)}
+.hero h1{font-family:'Noto Serif SC',serif;font-size:clamp(2.8rem,8vw,5rem);font-weight:900;letter-spacing:-0.03em;line-height:1.1;margin:12px 0 10px;background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 38%,var(--coral-500) 62%,var(--amber-500) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:clamp(0.95rem,2.5vw,1.25rem);color:var(--ink-soft);font-weight:400;line-height:1.6;margin-bottom:8px}
+.hero-art{margin:20px auto 8px;max-width:760px;width:100%}
+.hero-img{width:100%;height:auto;border-radius:24px;box-shadow:0 24px 70px -24px rgba(30,27,75,0.18);border:1px solid rgba(192,132,252,0.12)}
+.hero-caption{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--ink-muted);margin-top:8px}
+.scroll-indicator{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:4px;color:var(--ink-muted);text-transform:uppercase;animation:bounce 2s infinite}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+
+/* Content */
+.content{max-width:820px;margin:0 auto;padding:60px 24px}
+section{margin-bottom:80px;scroll-margin-top:80px}
+.section-tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--lav-600);background:var(--lav-50);padding:4px 14px;border-radius:100px;margin-bottom:12px}
+h2{font-size:clamp(1.6rem,4vw,2.2rem);margin-bottom:16px;color:var(--ink);line-height:1.3}
+h3{font-size:clamp(1.15rem,3vw,1.45rem);margin:24px 0 12px;color:var(--lav-700)}
+p{margin-bottom:14px;color:var(--ink-soft);font-size:15px;line-height:1.85}
+strong{color:var(--ink);font-weight:600}
+em{color:var(--lav-600);font-style:normal;font-weight:500}
+
+/* Formula */
+.formula{background:var(--paper-cream);border-left:3px solid var(--lav-400);padding:16px 20px;margin:16px 0;border-radius:0 12px 12px 0;overflow-x:auto}
+.formula-label{font-size:11px;font-weight:700;color:var(--lav-600);margin-bottom:6px;letter-spacing:1px}
+
+/* Insight box */
+.insight{background:linear-gradient(135deg,var(--mint-100) 0%,var(--mint-50,#ecfdf5) 100%);border:1px solid var(--mint-300);border-left:4px solid var(--mint-400);padding:18px 22px;margin:20px 0;border-radius:0 16px 16px 0}
+.insight-title{font-weight:700;color:var(--mint-500);font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.insight-title::before{content:'';display:inline-block;width:16px;height:16px;background:var(--mint-400);border-radius:50%;flex-shrink:0}
+.insight p{color:var(--ink-soft);font-size:14px;margin:0}
+
+/* Deep insight (lavender) */
+.deep-insight{background:linear-gradient(135deg,var(--lav-50) 0%,var(--lav-100) 100%);border:1px solid var(--lav-300);border-left:4px solid var(--lav-500);padding:18px 22px;margin:20px 0;border-radius:0 16px 16px 0}
+.deep-insight-title{font-weight:700;color:var(--lav-600);font-size:13px;margin-bottom:8px}
+
+/* Code block */
+.code-block{background:#1e1b4b;border-radius:12px;padding:20px 24px;margin:20px 0;overflow-x:auto;position:relative}
+.code-block::before{content:attr(data-label);position:absolute;top:-10px;left:20px;background:var(--lav-500);color:white;font-size:10px;font-weight:700;padding:2px 12px;border-radius:100px;letter-spacing:1px}
+.code-block pre{margin:0}
+.code-block code{font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.65;color:#e0e0e0}
+.code-block .kw{color:#c084fc}
+.code-block .str{color:#6ee7b7}
+.code-block .com{color:#787887}
+.code-block .fn{color:#fbbf24}
+.code-block .num{color:#fb7185}
+
+/* Figure */
+.figure{margin:24px 0;text-align:center}
+.figure img{max-width:100%;border-radius:12px;box-shadow:0 8px 30px -12px rgba(30,27,75,0.15);border:1px solid rgba(192,132,252,0.1)}
+.figure-caption{font-size:12px;color:var(--ink-muted);margin-top:8px;line-height:1.5}
+
+/* Table */
+.result-table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}
+.result-table th{background:var(--lav-100);color:var(--lav-700);padding:8px 10px;text-align:center;font-weight:600;border-radius:6px}
+.result-table td{padding:8px 10px;text-align:center;border-bottom:1px solid var(--lav-100)}
+.result-table tr:hover{background:var(--lav-50)}
+.result-table .best{color:var(--mint-500);font-weight:700}
+.result-table .ours{background:var(--mint-50,#ecfdf5)}
+
+/* Research question */
+.rq-card{background:linear-gradient(135deg,var(--warm-100) 0%,#fefce8 100%);border:1px solid var(--warm-200);border-left:4px solid var(--amber-500);padding:18px 22px;margin:16px 0;border-radius:0 16px 16px 0}
+.rq-tag{display:inline-block;background:var(--amber-500);color:white;font-size:10px;font-weight:700;padding:2px 10px;border-radius:100px;margin-bottom:8px;letter-spacing:1px}
+.rq-card h4{font-size:15px;color:var(--ink);margin-bottom:8px}
+.rq-card p{font-size:14px;margin:0}
+
+/* Compare cards */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:20px 0}
+.compare-card{padding:16px;border-radius:12px;border:1px solid}
+.compare-card.bad{border-color:var(--coral-300);background:var(--coral-100)}
+.compare-card.mid{border-color:var(--warm-200);background:var(--warm-100)}
+.compare-card.good{border-color:var(--mint-300);background:var(--mint-100)}
+.compare-card h4{font-size:13px;margin-bottom:8px}
+.compare-card p{font-size:12px;margin:0;line-height:1.6}
+.compare-card .emoji{font-size:24px;display:block;margin-bottom:6px}
+
+/* SVG container */
+.svg-container{margin:24px 0;text-align:center;overflow-x:auto}
+.svg-container svg{max-width:100%;height:auto}
+.svg-caption{font-size:12px;color:var(--ink-muted);margin-top:6px}
+
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0}
+.stat-card{background:var(--paper);border:1px solid var(--lav-200);border-radius:12px;padding:16px;text-align:center}
+.stat-card .num{font-size:28px;font-weight:900;background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.stat-card .label{font-size:11px;color:var(--ink-muted);margin-top:4px}
+
+/* Summary */
+.summary-box{background:linear-gradient(135deg,var(--lav-50),var(--coral-100));border:1px solid var(--lav-200);border-radius:16px;padding:24px;margin:20px 0}
+.summary-box h3{color:var(--lav-700);margin-top:0}
+
+footer{text-align:center;padding:40px 24px;background:var(--ink);color:var(--ink-muted);font-size:12px}
+footer a{color:var(--lav-400);text-decoration:none}
+
+@media(max-width:640px){
+  .compare-grid{grid-template-columns:1fr}
+  nav .nav-links{display:none}
+}
+</style>
+</head>
+<body>
+
+<nav>
+<div class="nav-inner">
+<span class="logo">Self-Forcing++</span>
+<div class="nav-links"><a href="../index.html">« 合辑</a>
+<a href="#ch1">瓶颈分析</a>
+<a href="#ch2">噪声初始化</a>
+<a href="#ch3">扩展DMD</a>
+<a href="#ch4">KV Cache</a>
+<a href="#ch5">GRPO</a>
+<a href="#ch6">评估指标</a>
+<a href="#ch7">代码解析</a>
+<a href="#ch8">实验结果</a>
+<a href="#ch9">科研问题</a>
+</div>
+</div>
+</nav>
+
+<!-- ========== HERO ========== -->
+<div class="hero" id="hero">
+<div class="hero-wrap">
+<div class="hero-badge">arXiv preprint · ICLR 2026</div>
+<h1>Self-Forcing++</h1>
+<p class="hero-sub">Backward Noise Init × Extended DMD × 255秒视频生成 × 50×时长突破</p>
+<div class="hero-art">
+<img src="assets/cover.webp" alt="Self-Forcing++ Cover" class="hero-img">
+</div>
+<p class="hero-caption">水彩写意 · 延展的胶片卷象征分钟级视频生成，金色涟漪代表反向噪声注入，中心漩涡汇聚象征Extended DMD校正</p>
+</div>
+<div class="scroll-indicator">Scroll to Read</div>
+</div>
+
+<div class="content">
+
+<!-- ========== CH1 ========== -->
+<section id="ch1">
+<span class="section-tag">CH1 · 问题分析</span>
+<h2>长视频生成的 Horizon Scaling 瓶颈</h2>
+
+<p>扩散Transformer（DiT）架构虽然在图像和短视频生成中取得了突破性进展，但其<strong>双向注意力机制</strong>天然不支持流式生成，绝大多数SOTA模型被限制在5-10秒的短视频范围内。为突破这一限制，研究者们探索了将双向教师模型蒸馏为自回归学生模型的技术路径。</p>
+
+<div class="figure">
+<img src="assets/fig2_workflow.webp" alt="Workflow comparison">
+<div class="figure-caption">Figure 2 — CausVid、Self-Forcing与Self-Forcing++的训练-推理工作流对比。仅Self-Forcing++实现了训练推理对齐</div>
+</div>
+
+<h3>技术路径演进：CausVid → Self-Forcing → Self-Forcing++</h3>
+
+<div class="compare-grid">
+<div class="compare-card bad">
+<span class="emoji">😞</span>
+<h4>CausVid</h4>
+<p>推理使用KV Cache但训练仍依赖重叠帧重计算。训练-推理不匹配导致<strong>过曝光</strong>问题，时间一致性差</p>
+</div>
+<div class="compare-card mid">
+<span class="emoji">😐</span>
+<h4>Self-Forcing</h4>
+<p>训练时引入KV Cache对齐训练推理，消除过曝光。但训练被限制在<strong>5秒教师视野</strong>内，超出后质量急剧下降</p>
+</div>
+<div class="compare-card good">
+<span class="emoji">😊</span>
+<h4>Self-Forcing++</h4>
+<p>训练时扩展到N≫5秒，用滚动KV Cache + 反向噪声初始化 + 扩展DMD，实现<strong>255秒</strong>高质量生成</p>
+</div>
+</div>
+
+<h3>双重训练-推理失配</h3>
+
+<p>Self-Forcing++论文揭示了一个关键洞察：限制自回归长视频生成质量的核心障碍是<strong>双重训练-推理失配</strong>。</p>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：双重失配的本质</div>
+<p><strong>时间失配</strong>：训练时模型仅生成5秒视频（教师最大视野），推理时却需生成100秒以上。模型从未见过"5秒之后"的世界。<br><strong>监督失配</strong>：训练时教师对每一帧提供密集监督，学生很少暴露于长rollout中自然产生的复合误差。这导致学生模型缺乏"从错误中恢复"的能力。</p>
+</div>
+
+<!-- SVG 1: Dual mismatch -->
+<div class="svg-container">
+<svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="g1a" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#fb7185"/><stop offset="100%" stop-color="#f43f5e"/></linearGradient>
+<linearGradient id="g1b" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#fbbf24"/><stop offset="100%" stop-color="#f59e0b"/></linearGradient>
+<linearGradient id="g1c" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#34d399"/><stop offset="100%" stop-color="#10b981"/></linearGradient>
+</defs>
+<!-- Training bar -->
+<text x="20" y="30" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">训练视野</text>
+<rect x="20" y="40" width="100" height="30" rx="6" fill="url(#g1a)" opacity="0.85"/>
+<text x="70" y="60" text-anchor="middle" font-size="11" fill="white" font-weight="600">5秒</text>
+<text x="130" y="60" font-size="10" fill="#787887">← 教师最大视野</text>
+
+<!-- Inference bar -->
+<text x="20" y="95" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">推理视野</text>
+<rect x="20" y="105" width="680" height="30" rx="6" fill="url(#g1b)" opacity="0.3"/>
+<rect x="20" y="105" width="100" height="30" rx="6" fill="url(#g1a)" opacity="0.85"/>
+<text x="70" y="125" text-anchor="middle" font-size="11" fill="white" font-weight="600">5s</text>
+<rect x="120" y="105" width="580" height="30" rx="6" fill="url(#g1b)" opacity="0.5"/>
+<text x="410" y="125" text-anchor="middle" font-size="11" fill="#1e1b4b" font-weight="600">95秒未训练区域 → 误差累积</text>
+
+<!-- Gap arrow -->
+<line x1="120" y1="75" x2="120" y2="100" stroke="#f43f5e" stroke-width="2" stroke-dasharray="3,3"/>
+<text x="135" y="90" font-size="10" fill="#f43f5e" font-weight="600">时间失配</text>
+
+<!-- Self-Forcing++ solution -->
+<text x="20" y="170" font-size="13" font-weight="700" fill="#10b981" font-family="Noto Sans SC">Self-Forcing++ 训练视野</text>
+<rect x="20" y="180" width="680" height="30" rx="6" fill="url(#g1c)" opacity="0.3"/>
+<rect x="20" y="180" width="680" height="30" rx="6" fill="url(#g1c)" opacity="0.6"/>
+<text x="360" y="200" text-anchor="middle" font-size="11" fill="white" font-weight="600">N ≫ 5秒 (扩展到100秒+)</text>
+
+<!-- Alignment arrow -->
+<line x1="700" y1="145" x2="700" y2="175" stroke="#10b981" stroke-width="2"/>
+<text x="640" y="165" font-size="10" fill="#10b981" font-weight="600">训练=推理 ✓</text>
+
+<!-- Labels -->
+<text x="20" y="240" font-size="11" fill="#787887" font-family="Noto Sans SC">关键洞察：超出训练视野的rollout仍保持结构连贯性（如运动停滞），说明问题不在自回归机制本身，而在误差累积</text>
+<text x="20" y="260" font-size="11" fill="#787887" font-family="Noto Sans SC">解决方案：让学生在自身生成的长rollout上学习从错误中恢复 → Backward Noise Init + Extended DMD</text>
+</svg>
+</div>
+<div class="svg-caption">图示：训练-推理视野失配与Self-Forcing++的解决方案</div>
+
+<div class="insight">
+<div class="insight-title">架构洞察：误差累积 ≠ 自回归失效</div>
+<p>论文的一个关键观察是：超出训练视野的rollout<strong>仍保持结构连贯性</strong>，即使这种连贯性表现为运动停滞等不理想伪影。这说明自回归机制本身（通过KV Cache维护上下文）是有效的，真正的问题是<strong>复合误差在连续latent空间的放大</strong>。这一洞察直接启发了"让学生在自身长rollout上学习恢复"的核心策略。</p>
+</div>
+</section>
+
+<!-- ========== CH2 ========== -->
+<section id="ch2">
+<span class="section-tag">CH2 · 核心方法</span>
+<h2>Backward Noise Initialization — 反向噪声初始化</h2>
+
+<p>将学生-教师蒸馏从短视野扩展到长视野时，一个核心挑战是<strong>噪声初始化策略</strong>。在短视野设置中（视频长度≤T帧），学生可以直接在教师采样的完整轨迹上监督，每条轨迹从随机噪声出发。但在长视野生成中，从纯随机噪声出发的轨迹与前文内容<strong>脱耦</strong>，导致根本性的上下文失配。</p>
+
+<h3>公式推导</h3>
+
+<p>Self-Forcing++的核心创新是：先让学生模型自展开生成N帧干净轨迹（N≫T），然后根据扩散噪声调度将噪声<strong>重新注入</strong>已去噪的latent向量：</p>
+
+<div class="formula">
+<div class="formula-label">Eq (1): Backward Noise Initialization</div>
+$$x_t = (1 - \sigma_t) x_0 + \sigma_t \epsilon, \quad \text{where} \quad x_0 = x_{t-1} - \sigma_{t-1} \hat{\epsilon}_\theta(x_{t-1}, t-1)$$
+</div>
+
+<p>其中 $\epsilon \sim \mathcal{N}(0, \mathbf{I})$ 为高斯噪声，$\hat{\epsilon}_\theta$ 为参数化的噪声预测网络，$x_0$ 通过学生模型的上一步预测计算得到。这个加噪后的 $x_t$ 同时作为教师和学生模型分布计算的起始状态。</p>
+
+<div class="deep-insight">
+<div class="deep-insight-title">数学直觉：为什么"反向加噪"有效</div>
+<p>标准前向加噪 $\ x_t = (1-\sigma_t)x_0 + \sigma_t\epsilon\ $ 中的 $x_0$ 如果是从<strong>随机噪声</strong>出发生成的，则与前面已生成的内容无关。而Self-Forcing++的 $x_0 = x_{t-1} - \sigma_{t-1}\hat{\epsilon}_\theta(x_{t-1}, t-1)$ 是从学生模型<strong>自身长rollout</strong>中提取的帧，天然保持了与前文的时间依赖性。重新加噪后，教师和学生都在"含有前文信息"的噪声上做分布匹配，确保了长视频的时序一致性。</p>
+</div>
+
+<h3>与已有方法的区别</h3>
+
+<p>虽然类似的"重新注入噪声"技术在先前工作中已被使用（如DMD2、CausVid、Self-Forcing），但Self-Forcing++的<strong>动机和应用场景截然不同</strong>：</p>
+
+<div class="result-table">
+<table>
+<tr><th>方法</th><th>噪声注入用途</th><th>训练视野</th><th>动机</th></tr>
+<tr><td>DMD2</td><td>增强单次生成质量</td><td>单张图片</td><td>避免需要真实训练数据</td></tr>
+<tr><td>CausVid</td><td>短视频蒸馏</td><td>5秒</td><td>提升蒸馏效率</td></tr>
+<tr><td>Self-Forcing</td><td>对齐训练推理</td><td>5秒</td><td>消除过曝光</td></tr>
+<tr class="ours"><td class="best">Self-Forcing++</td><td class="best">维持长视频时序一致性</td><td class="best">N≫5秒(100秒+)</td><td class="best">跨段上下文对齐</td></tr>
+</table>
+</div>
+
+<!-- SVG 2: Backward Noise Init flow -->
+<div class="svg-container">
+<svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="g2a" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#a855f7"/><stop offset="100%" stop-color="#9333ea"/></linearGradient>
+<linearGradient id="g2b" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#fbbf24"/><stop offset="100%" stop-color="#f59e0b"/></linearGradient>
+<linearGradient id="g2c" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#34d399"/><stop offset="100%" stop-color="#10b981"/></linearGradient>
+<marker id="arr2" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#787887"/></marker>
+</defs>
+
+<!-- Step 1: Student rollout -->
+<text x="20" y="25" font-size="12" font-weight="700" fill="#9333ea" font-family="Noto Sans SC">Step 1: 学生自展开 N 帧</text>
+<rect x="20" y="35" width="680" height="40" rx="8" fill="#f3e8ff" stroke="#d8b4fe"/>
+<!-- Frame blocks -->
+<g font-size="9" font-family="JetBrains Mono">
+<rect x="30" y="43" width="30" height="24" rx="3" fill="url(#g2a)" opacity="0.4"/><text x="45" y="58" text-anchor="middle" fill="white">x₁</text>
+<rect x="65" y="43" width="30" height="24" rx="3" fill="url(#g2a)" opacity="0.5"/><text x="80" y="58" text-anchor="middle" fill="white">x₂</text>
+<rect x="100" y="43" width="30" height="24" rx="3" fill="url(#g2a)" opacity="0.6"/><text x="115" y="58" text-anchor="middle" fill="white">x₃</text>
+<text x="145" y="58" font-size="14" fill="#787887">...</text>
+<rect x="165" y="43" width="30" height="24" rx="3" fill="url(#g2a)" opacity="0.7"/><text x="180" y="58" text-anchor="middle" fill="white">xᵢ</text>
+<text x="205" y="58" font-size="14" fill="#787887">...</text>
+<rect x="225" y="43" width="30" height="24" rx="3" fill="url(#g2a)" opacity="0.8"/><text x="240" y="58" text-anchor="middle" fill="white">xᵢ₊ₖ</text>
+<text x="265" y="58" font-size="14" fill="#787887">...</text>
+<rect x="290" y="43" width="30" height="24" rx="3" fill="url(#g2a)" opacity="0.9"/><text x="305" y="58" text-anchor="middle" fill="white">xₙ</text>
+</g>
+<text x="340" y="58" font-size="10" fill="#787887" font-family="Noto Sans SC">N ≫ T (如100秒 vs 5秒)</text>
+
+<!-- Arrow down -->
+<line x1="180" y1="80" x2="180" y2="105" stroke="#787887" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+<!-- Step 2: Window selection -->
+<text x="20" y="125" font-size="12" font-weight="700" fill="#f59e0b" font-family="Noto Sans SC">Step 2: 滑动窗口采样 W = V[i:i+K]</text>
+<rect x="20" y="135" width="680" height="40" rx="8" fill="#fffbeb" stroke="#fde68a"/>
+<g font-size="9" font-family="JetBrains Mono">
+<rect x="30" y="143" width="30" height="24" rx="3" fill="#e9d5ff"/>
+<rect x="65" y="143" width="30" height="24" rx="3" fill="#e9d5ff"/>
+<rect x="100" y="143" width="30" height="24" rx="3" fill="#e9d5ff"/>
+<text x="145" y="158" font-size="14" fill="#787887">...</text>
+<!-- Selected window -->
+<rect x="165" y="143" width="30" height="24" rx="3" fill="url(#g2b)"/><text x="180" y="158" text-anchor="middle" fill="white" font-weight="600">xᵢ</text>
+<rect x="200" y="143" width="25" height="24" rx="3" fill="url(#g2b)" opacity="0.8"/>
+<rect x="225" y="143" width="30" height="24" rx="3" fill="url(#g2b)"/><text x="240" y="158" text-anchor="middle" fill="white" font-weight="600">xᵢ₊ₖ</text>
+<text x="265" y="158" font-size="14" fill="#787887">...</text>
+<rect x="290" y="143" width="30" height="24" rx="3" fill="#e9d5ff"/>
+</g>
+<text x="340" y="158" font-size="10" fill="#f59e0b" font-family="Noto Sans SC">i ~ Uniform{0, ..., N-K}  K ≈ 5秒</text>
+
+<!-- Arrow down -->
+<line x1="180" y1="180" x2="180" y2="205" stroke="#787887" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+<!-- Step 3: Backward noise init -->
+<text x="20" y="225" font-size="12" font-weight="700" fill="#10b981" font-family="Noto Sans SC">Step 3: 反向加噪 → 教师学生分布匹配</text>
+<rect x="20" y="235" width="340" height="50" rx="8" fill="#d1fae5" stroke="#6ee7b7"/>
+<text x="35" y="255" font-size="11" fill="#10b981" font-weight="600" font-family="Noto Sans SC">教师模型 T_ϕ</text>
+<text x="35" y="272" font-size="10" fill="#4c4b5e" font-family="JetBrains Mono">x_t = (1-σ_t)·x₀ + σ_t·ε</text>
+<text x="200" y="272" font-size="10" fill="#4c4b5e">→ 真实分布</text>
+
+<rect x="380" y="235" width="320" height="50" rx="8" fill="#d1fae5" stroke="#6ee7b7"/>
+<text x="395" y="255" font-size="11" fill="#10b981" font-weight="600" font-family="Noto Sans SC">学生模型 G_θ</text>
+<text x="395" y="272" font-size="10" fill="#4c4b5e" font-family="JetBrains Mono">x₀ = x_{t-1} - σ_{t-1}·ε̂_θ</text>
+<text x="570" y="272" font-size="10" fill="#4c4b5e">→ 学生分布</text>
+
+<!-- DMD loss arrow -->
+<line x1="360" y1="260" x2="380" y2="260" stroke="#10b981" stroke-width="2" marker-end="url(#arr2)"/>
+<text x="355" y="252" font-size="9" fill="#10b981" font-weight="600">DMD</text>
+</svg>
+</div>
+<div class="svg-caption">图示：Backward Noise Initialization 三步流程 — 自展开 → 窗口采样 → 反向加噪分布匹配</div>
+
+<div class="insight">
+<div class="insight-title">替代方案分析：为什么不直接在长rollout上监督</div>
+<p>一个自然的疑问是：为什么不直接让学生在长rollout的每一帧上计算DMD loss？答案是<strong>计算成本</strong>。对100秒视频的每一帧都做教师前向传播是不现实的。滑动窗口采样（Step 2）巧妙地解决了这个问题：每次训练迭代只需对K≈5秒的窗口做分布匹配，但窗口的位置在N=100秒的rollout中随机变化，使模型逐步学会在不同时间段纠正误差。</p>
+</div>
+</section>
+
+<!-- ========== CH3 ========== -->
+<section id="ch3">
+<span class="section-tag">CH3 · 核心方法</span>
+<h2>Extended DMD — 扩展分布匹配蒸馏</h2>
+
+<p>标准DMD（Distribution Matching Distillation）通过最小化学生与教师分布之间的反向KL散度来蒸馏模型。然而，Self-Forcing等方法的训练被限制在教师模型能可靠生成的5秒窗口内，导致学生模型在超出此范围时质量急剧下降。</p>
+
+<h3>标准DMD回顾</h3>
+
+<div class="formula">
+<div class="formula-label">Eq (3): 标准DMD梯度</div>
+$$\nabla_\theta \mathcal{L}_{\text{DMD}} = \mathbb{E}_t \left[ \nabla_\theta \text{KL}(p_{\text{fake},t} \| p_{\text{real},t}) \right] = -\mathbb{E}_t \left[ \int \left( s_{\text{real}}(\Phi(G_\theta(z), t), t) - s_{\text{fake}}(\Phi(G_\theta(z), t), t) \right) \frac{dG_\theta(z)}{d\theta} dz \right]$$
+</div>
+
+<p>其中 $s_{\text{real}}$ 和 $s_{\text{fake}}$ 分别是教师（real score）和学生蒸馏模型（fake score）的分数函数，$G_\theta(z)$ 是学生生成器，$\Phi(\cdot, t)$ 是时间步 $t$ 的变换过程。</p>
+
+<h3>扩展DMD：滑动窗口策略</h3>
+
+<p>Self-Forcing++的核心扩展是：让学生模型先rollout到N帧（N≫T），然后从生成的序列中<strong>均匀采样</strong>一个长度为K的连续窗口，在该窗口内计算学生与教师的分布差异：</p>
+
+<div class="formula">
+<div class="formula-label">Eq (2): Extended DMD 梯度</div>
+$$\nabla_\theta \mathcal{L}_{\text{DMD}}^{\text{extended}} = \mathbb{E}_t \mathbb{E}_z \left[ \nabla_\theta \text{KL}\left( p_{S_\theta,t}(z) \| p_t^T(z) \right) \right] \approx -\mathbb{E}_t \mathbb{E}_{i \sim \text{Unif}\{1, \ldots, N-K+1\}} \left[ \int \left( s_t^T(\Phi(G_\theta(z_i), t), t) - s_\theta^S(\Phi(G_\theta(z_i), t), t) \right) \frac{dG_\theta(z_i)}{d\theta} dz_i \right]$$
+</div>
+
+<p>其中 $G_\theta(z)$ 表示给定latent $z$ 的学生生成器rollout，$i \sim \text{Unif}\{0, \ldots, N-K\}$ 是从长度为N的rollout中均匀采样的起始索引，提取长度为K的窗口。窗口大小K通常选择与教师模型原始训练视野一致。</p>
+
+<div class="deep-insight">
+<div class="deep-insight-title">跨论文连接：教师模型的"世界知识"假设</div>
+<p>Extended DMD的理论基础来自一个关键假设：虽然教师模型仅在5秒片段上训练，但它从海量视频语料中隐式捕获了"世界"的底层数据分布。因此，<strong>任何短的连续视频片段都可以看作是某个有效长视频序列的边际分布的采样</strong>（Alonso et al., 2024; Bruce et al., 2024; Li et al., 2025）。这意味着教师可以在长rollout的任意局部窗口上提供有效监督，无需自己能生成长视频。</p>
+</div>
+
+<h3>Remark：双向扩散的自回归适配</h3>
+
+<div class="insight">
+<div class="insight-title">数学直觉：Remark的深层含义</div>
+<p>论文的Remark指出：<em>"双向扩散可以看作是在不同去噪时间步渐进修复退化目标的过程。我们的方法将这一思想适配到自回归视频生成范式中——让短视野教师在不同的时间帧上渐进修复学生的退化rollout，然后将这些纠正知识蒸馏回学生模型。"</em> 这个类比揭示了Extended DMD的本质：教师不是在"生成"长视频，而是在"修复"学生长rollout中的局部退化。</p>
+</div>
+
+<!-- SVG 3: Extended DMD sliding window -->
+<div class="svg-container">
+<svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="g3a" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#a855f7" stop-opacity="0.3"/><stop offset="50%" stop-color="#a855f7" stop-opacity="0.6"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0.3"/></linearGradient>
+<marker id="arr3" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#9333ea"/></marker>
+</defs>
+
+<!-- Long rollout -->
+<text x="20" y="25" font-size="12" font-weight="700" fill="#9333ea" font-family="Noto Sans SC">学生 N 帧 Rollout (100秒)</text>
+<rect x="20" y="35" width="680" height="35" rx="8" fill="url(#g3a)"/>
+<text x="360" y="57" text-anchor="middle" font-size="11" fill="#9333ea" font-weight="600" font-family="Noto Sans SC">G_θ(z) → 完整自展开轨迹</text>
+
+<!-- Window positions -->
+<text x="20" y="95" font-size="11" fill="#787887" font-family="Noto Sans SC">迭代 1: 窗口位置</text>
+<rect x="20" y="100" width="680" height="20" rx="4" fill="#f3e8ff"/>
+<rect x="30" y="102" width="68" height="16" rx="3" fill="#fbbf24"/><text x="64" y="114" text-anchor="middle" font-size="9" fill="white" font-weight="600">W₁ (5s)</text>
+
+<text x="20" y="135" font-size="11" fill="#787887" font-family="Noto Sans SC">迭代 2: 窗口位置</text>
+<rect x="20" y="140" width="680" height="20" rx="4" fill="#f3e8ff"/>
+<rect x="200" y="142" width="68" height="16" rx="3" fill="#fbbf24"/><text x="234" y="154" text-anchor="middle" font-size="9" fill="white" font-weight="600">W₂ (5s)</text>
+
+<text x="20" y="175" font-size="11" fill="#787887" font-family="Noto Sans SC">迭代 3: 窗口位置</text>
+<rect x="20" y="180" width="680" height="20" rx="4" fill="#f3e8ff"/>
+<rect x="450" y="182" width="68" height="16" rx="3" fill="#fbbf24"/><text x="484" y="194" text-anchor="middle" font-size="9" fill="white" font-weight="600">W₃ (5s)</text>
+
+<!-- Teacher correction -->
+<text x="20" y="225" font-size="11" fill="#10b981" font-family="Noto Sans SC">每个窗口内：教师 T_ϕ 提供局部分布监督 → 学生学习在任意时间段纠正误差</text>
+
+<!-- Arrows from windows to teacher -->
+<line x1="64" y1="118" x2="64" y2="220" stroke="#9333ea" stroke-width="1" stroke-dasharray="2,2" opacity="0.5"/>
+<line x1="234" y1="158" x2="234" y2="220" stroke="#9333ea" stroke-width="1" stroke-dasharray="2,2" opacity="0.5"/>
+<line x1="484" y1="198" x2="484" y2="220" stroke="#9333ea" stroke-width="1" stroke-dasharray="2,2" opacity="0.5"/>
+</svg>
+</div>
+<div class="svg-caption">图示：Extended DMD的滑动窗口机制 — 每次迭代在N帧rollout中随机采样K帧窗口做分布匹配</div>
+</section>
+
+<!-- ========== CH4 ========== -->
+<section id="ch4">
+<span class="section-tag">CH4 · 架构设计</span>
+<h2>Rolling KV Cache — 训练推理统一</h2>
+
+<p>KV Cache是自回归视频生成的核心效率机制。然而，先前方法在训练和推理之间的Cache使用方式不一致，导致了严重的不匹配问题。</p>
+
+<h3>三代方法的KV Cache对比</h3>
+
+<div class="result-table">
+<table>
+<tr><th>方法</th><th>训练时Cache</th><th>推理时Cache</th><th>不匹配?</th><th>后果</th></tr>
+<tr><td>CausVid</td><td>重叠帧重计算</td><td>使用KV Cache</td><td style="color:#f43f5e;font-weight:600">是</td><td>过曝光、效率低</td></tr>
+<tr><td>Self-Forcing</td><td>固定Cache + 首帧masking</td><td>滚动Cache</td><td style="color:#f59e0b;font-weight:600">部分</td><td>误差累积、时序闪烁</td></tr>
+<tr class="ours"><td class="best">Self-Forcing++</td><td class="best">滚动Cache</td><td class="best">滚动Cache</td><td class="best">否 ✓</td><td class="best">无需masking，自然消除</td></tr>
+</table>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">架构洞察：为什么Self-Forcing的"部分缓解"不够</div>
+<p>Self-Forcing试图通过在训练时使用固定Cache + masking第一帧来部分缓解不匹配。但这只解决了<strong>Cache状态</strong>的不一致，没有解决<strong>视野长度</strong>的不一致——训练时仍是5秒，推理时却是100秒。Self-Forcing++通过在训练时也使用滚动Cache并扩展到N帧rollout，<strong>同时解决了状态和长度两个维度的不匹配</strong>，从根本上消除了train-inference gap。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">设计Rationale：简化即力量</div>
+<p>Self-Forcing++的Cache设计哲学是<strong>"自然消除"而非"人为修补"</strong>。不需要latent frame masking，不需要重叠帧重计算，不需要attention sink frames（不同于LongLive和Rolling Forcing）。训练和推理使用完全相同的滚动Cache逻辑，这种一致性使模型在训练时学到的能力可以直接迁移到推理。论文超参：滚动窗口大小为21个latent帧（≈5秒）。</p>
+</div>
+</section>
+
+<!-- ========== CH5 ========== -->
+<section id="ch5">
+<span class="section-tag">CH5 · 强化学习</span>
+<h2>GRPO with Optical Flow Reward</h2>
+
+<p>使用滑动窗口或稀疏注意力的生成模型在长序列生成中存在一个普遍问题：<strong>长程记忆的逐渐丢失</strong>。这表现为物体突然出现/消失或不自然的快速场景切换。Self-Forcing++展示了GRPO（Group Relative Policy Optimization）可以有效缓解这一现象。</p>
+
+<h3>GRPO目标函数</h3>
+
+<div class="formula">
+<div class="formula-label">Eq (5): GRPO 目标函数</div>
+$$J(\theta) = \mathbb{E}_{\{o_i\}_{i=1}^G \sim \pi_{\theta_{\text{old}}}(\cdot|c)} \mathbb{E}_{a_{t,i} \sim \pi_{\theta_{\text{old}}}(\cdot|s_{t,i})} \left[ \frac{1}{G} \sum_{i=1}^G \frac{1}{T} \sum_{t=1}^T \min \left( \rho_{t,i} A_i, \, \text{clip}(\rho_{t,i}, 1-\epsilon, 1+\epsilon) A_i \right) \right]$$
+</div>
+
+<p>其中重要性权重 $\rho_{t,i} = \frac{\pi_\theta(a_{t,i} | s_{t,i})}{\pi_{\theta_{\text{old}}}(a_{t,i} | s_{t,i})}$，$\pi_\theta(a_{t,i}|s_{t,i})$ 表示时间步 $t$ 输出 $o_i$ 的策略函数，$\epsilon$ 是裁剪超参数。</p>
+
+<div class="formula">
+<div class="formula-label">Eq (6): 优势计算</div>
+$$A_i = \frac{r_i - \text{mean}(\{r_1, r_2, \ldots, r_G\})}{\text{std}(\{r_1, r_2, \ldots, r_G\})}$$
+</div>
+
+<p>优势 $A_i$ 在一组 $G$ 个输出中计算，实现了组内相对比较，消除了对独立价值网络的需求。</p>
+
+<h3>生成视频的概率分解</h3>
+
+<p>为了将GRPO适配到自回归视频生成，论文推导了生成视频的log概率：</p>
+
+<div class="formula">
+<div class="formula-label">Eq (7): 生成视频的 Log 概率</div>
+$$\log p(x_{1:N}) = \sum_{n=1}^N \log p(x_n | x_{\lt n}) = \sum_{n=1}^N \sum_{t=1}^T \sum_{i=1}^D \left[ -\frac{(x_{t,i}^{(n)} - (1-\sigma_t) x_{0,i}^{(n)})^2}{2\sigma_t^2} - \log \sigma_t - \frac{1}{2} \log(2\pi) \right]$$
+</div>
+
+<p>其中 $x_{0,i}^{(n)}$ 根据Eq(1)计算（条件于之前生成的样本 $x_{\lt n}$），$D$ 是latent维度，$T$ 是非终止采样步数，$N$ 是自回归步数。</p>
+
+<h3>光流奖励</h3>
+
+<p>论文使用<strong>相邻帧光流幅度的相对大小</strong>作为运动连续性的代理奖励。光流幅度的突变（spikes）标志着不自然的场景切换：</p>
+
+<div class="figure">
+<img src="assets/fig5_grpo.webp" alt="GRPO optical flow comparison">
+<div class="figure-caption">Figure 5 — GRPO前后的光流幅度对比。无GRPO时光流方差24.52（突刺明显），有GRPO后降至2.00（平滑过渡）</div>
+</div>
+
+<!-- SVG 5: GRPO optical flow variance -->
+<div class="svg-container">
+<svg viewBox="0 0 720 220" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="g5a" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fb7185" stop-opacity="0.4"/><stop offset="100%" stop-color="#fb7185" stop-opacity="0.05"/></linearGradient>
+<linearGradient id="g5b" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#34d399" stop-opacity="0.4"/><stop offset="100%" stop-color="#34d399" stop-opacity="0.05"/></linearGradient>
+</defs>
+<!-- Axes -->
+<line x1="60" y1="180" x2="700" y2="180" stroke="#787887" stroke-width="1"/>
+<line x1="60" y1="30" x2="60" y2="180" stroke="#787887" stroke-width="1"/>
+<text x="30" y="105" font-size="10" fill="#787887" transform="rotate(-90,30,105)" font-family="Noto Sans SC">光流幅度</text>
+<text x="370" y="210" font-size="10" fill="#787887" font-family="Noto Sans SC">帧索引</text>
+
+<!-- Without GRPO (spiky) -->
+<text x="80" y="45" font-size="11" fill="#f43f5e" font-weight="600" font-family="Noto Sans SC">无 GRPO (方差=24.52)</text>
+<path d="M60,170 L90,165 L120,155 L150,80 L180,160 L210,150 L240,55 L270,165 L300,158 L330,145 L360,70 L390,160 L420,155 L450,150" 
+fill="none" stroke="#f43f5e" stroke-width="2"/>
+<path d="M60,170 L90,165 L120,155 L150,80 L180,160 L210,150 L240,55 L270,165 L300,158 L330,145 L360,70 L390,160 L420,155 L450,150 L450,180 L60,180 Z" 
+fill="url(#g5a)"/>
+
+<!-- With GRPO (smooth) -->
+<text x="480" y="45" font-size="11" fill="#10b981" font-weight="600" font-family="Noto Sans SC">有 GRPO (方差=2.00)</text>
+<path d="M470,165 L490,160 L510,158 L530,155 L550,153 L570,150 L590,148 L610,152 L630,155 L650,150 L680,148 L700,150" 
+fill="none" stroke="#10b981" stroke-width="2"/>
+<path d="M470,165 L490,160 L510,158 L530,155 L550,153 L570,150 L590,148 L610,152 L630,155 L650,150 L680,148 L700,150 L700,180 L470,180 Z" 
+fill="url(#g5b)"/>
+
+<!-- Spike annotations -->
+<circle cx="150" cy="80" r="4" fill="#f43f5e"/>
+<text x="155" y="75" font-size="9" fill="#f43f5e">突刺!</text>
+<circle cx="240" cy="55" r="4" fill="#f43f5e"/>
+<text x="245" y="50" font-size="9" fill="#f43f5e">场景跳变</text>
+<circle cx="360" cy="70" r="4" fill="#f43f5e"/>
+</svg>
+</div>
+<div class="svg-caption">图示：GRPO前后的光流幅度对比 — 突刺被有效抑制，方差从24.52降至2.00</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">跨论文连接：GRPO在视频生成中的挑战</div>
+<p>GRPO从LLM迁移到视频生成面临独特挑战。DanceGRPO首次在多种生成范式上实现稳定策略优化，而GRPO-Guard揭示了重要性比值clip机制的系统性偏差——均值长期低于1导致过度自信正梯度。Self-Forcing++的GRPO使用光流作为奖励信号，巧妙地避开了复杂奖励建模，但其长期稳定性和过度优化风险仍需关注。论文也指出GRPO是可选的增强，不加GRPO的模型已能生成高质量长视频。</p>
+</div>
+</section>
+
+<!-- ========== CH6 ========== -->
+<section id="ch6">
+<span class="section-tag">CH6 · 评估创新</span>
+<h2>Visual Stability — 长视频评估新范式</h2>
+
+<p>Self-Forcing++论文发现广泛使用的VBench基准在长视频评估中存在系统性偏差，高估了过曝光和退化的视频帧。</p>
+
+<div class="figure">
+<img src="assets/fig3_vbench.webp" alt="VBench evaluation bias">
+<div class="figure-caption">Figure 3 — VBench的imaging quality和aesthetic quality评分偏差。退化帧和过曝帧获得不合理的高分</div>
+</div>
+
+<h3>VBench评估偏差的具体表现</h3>
+
+<div class="result-table">
+<table>
+<tr><th>场景</th><th>方法</th><th>VBench评分</th><th>实际情况</th></tr>
+<tr><td>过曝光</td><td>CausVid</td><td>53.64-61.56</td><td style="color:#f43f5e">严重过曝光，运动停滞</td></tr>
+<tr><td>退化</td><td>Self-Forcing</td><td>40.12-61.06</td><td style="color:#f59e0b">全局变暗，运动停滞</td></tr>
+<tr class="ours"><td>正常</td><td class="best">Self-Forcing++</td><td class="best">90.94</td><td class="best">亮度稳定，运动连贯</td></tr>
+</table>
+</div>
+
+<h3>Gemini-2.5-Pro评估协议</h3>
+
+<p>论文采用Gemini-2.5-Pro作为评估器，定义了长视频的关键问题（过曝光和误差累积），设计0-5评分量表：</p>
+
+<div class="formula">
+<div class="formula-label">Visual Stability 评分量表</div>
+$$\text{Score} \in \{0, 1, 2, 3, 4, 5\} \quad \text{其中} \quad 0 = \text{灾难性曝光}, \quad 5 = \text{曝光良好}$$
+</div>
+
+<p>评分聚合到0-100尺度称为<strong>Visual Stability</strong>。为确保与人类判断一致，20个随机采样的MovieGen视频由两位作者独立标注，50秒视频的Spearman秩相关达到<strong>100%</strong>（Top-3方法），所有6个基线为94.2%。</p>
+
+<div class="insight">
+<div class="insight-title">批判评估：为什么VBench会失效</div>
+<p>VBench的imaging quality和aesthetic quality指标使用过时的评估模型，这些模型倾向于给<strong>高对比度但细节丢失</strong>的过曝帧打高分。对于短视频（5秒），这种偏差尚可容忍；但在长视频中，过曝和退化是累积的，VBench的偏差被放大。Visual Stability指标通过Gemini-2.5-Pro的推理能力，能够理解"整体曝光稳定性"而非单帧质量，这更符合人类对长视频质量的感知。</p>
+</div>
+</section>
+
+<!-- ========== CH7 ========== -->
+<section id="ch7">
+<span class="section-tag">CH7 · 代码实现</span>
+<h2>代码实现解析</h2>
+
+<p>Self-Forcing++的官方代码尚未发布，但论文明确指出可基于<a href="https://github.com/guandeh17/Self-Forcing" target="_blank">Self-Forcing baseline仓库</a>复现。以下代码实现基于Self-Forcing baseline仓库分析，结合Self-Forcing++论文方法描述。</p>
+
+<h3>1. Rolling KV Cache 初始化</h3>
+
+<div class="code-block" data-label="示意性实现 — pipeline/causal_inference.py">
+<pre><code><span class="kw">def</span> <span class="fn">_initialize_kv_cache</span>(self, batch_size, dtype, device):
+    <span class="com"># 为 Wan 模型初始化 Rolling KV Cache</span>
+    <span class="com"># 每个Transformer block维护独立的 k/v 张量及双指针</span>
+    kv_cache = []
+    <span class="kw">if</span> self.local_attn_size != -<span class="num">1</span>:
+        <span class="com"># Rolling机制核心：local_attn_size 限制注意力窗口</span>
+        kv_cache_size = self.local_attn_size * self.frame_seq_length
+    <span class="kw">else</span>:
+        kv_cache_size = <span class="num">32760</span>  <span class="com"># 默认大小</span>
+    
+    <span class="kw">for</span> _ <span class="kw">in</span> <span class="fn">range</span>(self.num_transformer_blocks):  <span class="com"># 30个block</span>
+        kv_cache.append({
+            <span class="str">"k"</span>: torch.zeros([batch_size, kv_cache_size, <span class="num">12</span>, <span class="num">128</span>],
+                             dtype=dtype, device=device),
+            <span class="str">"v"</span>: torch.zeros([batch_size, kv_cache_size, <span class="num">12</span>, <span class="num">128</span>],
+                             dtype=dtype, device=device),
+            <span class="str">"global_end_index"</span>: torch.tensor([<span class="num">0</span>], dtype=torch.long, device=device),
+            <span class="str">"local_end_index"</span>: torch.tensor([<span class="num">0</span>], dtype=torch.long, device=device)
+        })
+    self.kv_cache = kv_cache  <span class="com"># 始终存储 clean cache</span></code></pre>
+</div>
+
+<p><strong>设计要点</strong>：`global_end_index` / `local_end_index` 双指针实现滚动窗口。`local_attn_size` 限制注意力窗口大小，超出后自动淘汰最旧的KV（FIFO）。Self-Forcing++的关键改进是在<strong>训练时也使用相同的滚动逻辑</strong>，消除了Self-Forcing中训练用固定Cache、推理用滚动Cache的不匹配。</p>
+
+<h3>2. Self-Rollout 训练循环</h3>
+
+<div class="code-block" data-label="示意性实现 — pipeline/self_forcing_training.py">
+<pre><code><span class="kw">def</span> <span class="fn">inference_with_trajectory</span>(self, noise, **conditional_dict):
+    <span class="com"># === Self-Forcing++ 扩展：N >> T 帧的rollout ===</span>
+    <span class="com"># Self-Forcing baseline: num_frames ≈ 21 (5秒)</span>
+    <span class="com"># Self-Forcing++: num_frames ≈ 420+ (100秒)</span>
+    
+    num_denoising_steps = <span class="fn">len</span>(self.denoising_step_list)
+    <span class="com"># 随机梯度截断点（跨进程同步）</span>
+    exit_flags = self.generate_and_sync_list(num_blocks, num_denoising_steps)
+    start_gradient_frame = num_output_frames - <span class="num">21</span>  <span class="com"># 只对最后21帧计算梯度</span>
+    
+    <span class="kw">for</span> block_idx, current_frames <span class="kw">in</span> <span class="fn">enumerate</span>(all_num_frames):
+        noisy_input = noise[:, start:start+current_frames]
+        
+        <span class="kw">for</span> step_idx, timestep <span class="kw">in</span> <span class="fn">enumerate</span>(self.denoising_step_list):
+            exit_flag = (step_idx == exit_flags[block_idx])
+            
+            <span class="kw">if not</span> exit_flag:
+                <span class="com"># 非退出步：禁用梯度，普通去噪</span>
+                <span class="kw">with</span> torch.no_grad():
+                    _, denoised = self.generator(noisy_input, ...,
+                                kv_cache=self.kv_cache)
+                    noisy_input = self.scheduler.add_noise(denoised, ...)
+            <span class="kw">else</span>:
+                <span class="com"># 退出步：仅最后21帧保留梯度</span>
+                <span class="kw">if</span> current_start &lt; start_gradient_frame:
+                    <span class="kw">with</span> torch.no_grad():
+                        _, denoised = self.generator(...)
+                <span class="kw">else</span>:
+                    _, denoised = self.generator(...)  <span class="com"># 保留梯度</span>
+                <span class="kw">break</span>
+        
+        <span class="com"># 用 context_noise 重新加噪后更新 KV cache</span>
+        <span class="com"># 这就是 Backward Noise Init 的代码体现！</span>
+        context_timestep = torch.ones_like(timestep) * self.context_noise
+        denoised = self.scheduler.add_noise(denoised, ..., context_timestep)
+        <span class="kw">with</span> torch.no_grad():
+            self.generator(denoised, ..., kv_cache=self.kv_cache)</code></pre>
+</div>
+
+<h3>3. DMD Loss 计算</h3>
+
+<div class="code-block" data-label="示意性实现 — model/dmd.py">
+<pre><code><span class="kw">def</span> <span class="fn">_compute_kl_grad</span>(self, noisy_latent, estimated_clean, timestep, ...):
+    <span class="com"># Step 1: fake score (学生蒸馏模型，可训练)</span>
+    _, pred_fake_cond = self.fake_score(noisy_latent, conditional_dict, timestep)
+    <span class="kw">if</span> self.fake_guidance_scale != <span class="num">0.0</span>:
+        _, pred_fake_uncond = self.fake_score(noisy_latent, unconditional_dict, ...)
+        pred_fake = pred_fake_cond + (pred_fake_cond - pred_fake_uncond) * self.fake_guidance_scale
+    <span class="kw">else</span>:
+        pred_fake = pred_fake_cond
+    
+    <span class="com"># Step 2: real score (教师模型，冻结)</span>
+    _, pred_real_cond = self.real_score(noisy_latent, conditional_dict, ...)
+    _, pred_real_uncond = self.real_score(noisy_latent, unconditional_dict, ...)
+    pred_real = pred_real_cond + (pred_real_cond - pred_real_uncond) * self.real_guidance_scale
+    
+    <span class="com"># Step 3: DMD梯度 = fake_score - real_score (论文Eq.3)</span>
+    grad = pred_fake - pred_real
+    
+    <span class="com"># Step 4: 梯度归一化 (论文Eq.8)</span>
+    p_real = estimated_clean - pred_real
+    normalizer = torch.abs(p_real).mean(dim=[<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>], keepdim=<span class="kw">True</span>)
+    grad = grad / normalizer
+    <span class="kw">return</span> torch.nan_to_num(grad)
+
+<span class="kw">def</span> <span class="fn">compute_dmd_loss</span>(self, image_or_video, ...):
+    <span class="kw">with</span> torch.no_grad():
+        timestep = self._get_timestep(...)
+        noise = torch.randn_like(image_or_video)
+        noisy_latent = self.scheduler.add_noise(image_or_video, noise, timestep).detach()
+        grad, logs = self._compute_kl_grad(noisy_latent, image_or_video, timestep, ...)
+    
+    <span class="com"># DMD loss = 0.5 * MSE(x, (x - grad).detach())</span>
+    dmd_loss = <span class="num">0.5</span> * F.mse_loss(image_or_video.double(),
+                          (image_or_video.double() - grad.double()).detach())
+    <span class="kw">return</span> dmd_loss</code></pre>
+</div>
+
+<h3>4. Algorithm 1 完整伪代码</h3>
+
+<div class="code-block" data-label="Algorithm 1 — Self-Forcing++ with Backward Noise Init">
+<pre><code><span class="com"># 输入: 学生G_θ, 教师T_ϕ, Cache大小L, rollout长度N≫5s, 窗口长度K(5s), 去噪步{t₁,...,t_T}</span>
+
+<span class="kw">loop</span>:
+    <span class="com"># Step 1: 学生自展开N帧（使用Rolling KV Cache）</span>
+    V ← Rollout(G_θ, N, L)
+    
+    <span class="com"># Step 2: 从N帧中均匀采样K长度窗口</span>
+    i ~ Uniform{1, ..., N-K+1}
+    W ← V[i : i+K-1]
+    
+    <span class="com"># Step 3: 采样去噪时间步</span>
+    t ~ {t₁, ..., t_T}
+    
+    <span class="com"># Step 4: 反向噪声初始化（核心创新）</span>
+    x_t(W) ← BackwardNoiseInit(W, t)
+    <span class="com"># x_t = (1-σ_t)·x₀ + σ_t·ε, 其中 x₀ 来自学生rollout</span>
+    
+    <span class="com"># Step 5: 计算Extended DMD loss</span>
+    L_DMD ← DMD(G_θ(x_t(W), t), T_ϕ(x_t(W), t))
+    
+    <span class="com"># Step 6: 更新学生参数</span>
+    θ ← θ - η · ∇_θ L_DMD
+
+<span class="com"># Step 7: GRPO微调（可选增强）</span>
+R ← OpticalFlowReward(G_θ)
+θ ← GRPO_update(θ, R)</code></pre>
+</div>
+
+<div class="insight">
+<div class="insight-title">架构洞察：代码与论文的对应关系</div>
+<p>Self-Forcing baseline的 `inference_with_trajectory` 已经实现了梯度截断和KV Cache更新的核心逻辑。Self-Forcing++的关键修改是：(1) 将 `num_frames` 从21扩展到420+；(2) 在训练循环外层添加滑动窗口采样；(3) 将 `context_noise` 更新改为Backward Noise Init的精确公式。DMD loss的实现无需修改——它天然支持在任意窗口上计算分布匹配。</p>
+</div>
+</section>
+
+<!-- ========== CH8 ========== -->
+<section id="ch8">
+<span class="section-tag">CH8 · 实验结果</span>
+<h2>实验结果与训练预算 Scaling</h2>
+
+<h3>短视频竞争力（5秒）</h3>
+
+<div class="result-table">
+<table>
+<tr><th>模型</th><th>参数量</th><th>FPS</th><th>Total↑</th><th>Quality↑</th><th>Semantic↑</th></tr>
+<tr><td>CausVid</td><td>1.3B</td><td>17.0</td><td>82.46</td><td>83.61</td><td>77.84</td></tr>
+<tr><td>Self-Forcing</td><td>1.3B</td><td>17.0</td><td>83.00</td><td>83.71</td><td>80.14</td></tr>
+<tr class="ours"><td class="best">Self-Forcing++</td><td>1.3B</td><td>17.0</td><td class="best">83.11</td><td class="best">83.79</td><td class="best">80.37</td></tr>
+</table>
+</div>
+
+<p>在5秒短视频上，Self-Forcing++与Self-Forcing持平，说明扩展训练视野不会损害短视频质量。</p>
+
+<h3>长视频SOTA（50s/75s/100s）</h3>
+
+<div class="result-table">
+<table>
+<tr><th>方法</th><th>50s Visual Stability↑</th><th>100s Dynamic Degree↑</th><th>100s Text Alignment↑</th></tr>
+<tr><td>CausVid</td><td>40.47</td><td>34.60</td><td>24.41</td></tr>
+<tr><td>Self-Forcing</td><td>40.12</td><td>26.41</td><td>22.00</td></tr>
+<tr class="ours"><td class="best">Self-Forcing++</td><td class="best">90.94</td><td class="best">54.12</td><td class="best">26.04</td></tr>
+</table>
+</div>
+
+<div class="stats-grid">
+<div class="stat-card"><div class="num">126%</div><div class="label">Visual Stability 提升<br>(50s, vs Self-Forcing)</div></div>
+<div class="stat-card"><div class="num">104.9%</div><div class="label">Dynamic Degree 提升<br>(100s, vs Self-Forcing)</div></div>
+<div class="stat-card"><div class="num">50×</div><div class="label">视频长度突破<br>(5s → 255s)</div></div>
+<div class="stat-card"><div class="num">99.9%</div><div class="label">位置编码容量<br>(1024 latent frames)</div></div>
+</div>
+
+<div class="figure">
+<img src="assets/fig4_qualitative.webp" alt="100-second qualitative comparison">
+<div class="figure-caption">Figure 4 — 100秒视频生成的定性对比。基线方法出现运动停滞和过曝光，Self-Forcing++保持连贯运动</div>
+</div>
+
+<h3>消融实验</h3>
+
+<div class="result-table">
+<table>
+<tr><th>方法</th><th>Visual Stability (50s)↑</th><th>说明</th></tr>
+<tr><td>CausVid</td><td>40.47</td><td>基线</td></tr>
+<tr><td>Self-Forcing</td><td>40.12</td><td>基线</td></tr>
+<tr><td>Attn-15 (窗口15帧)</td><td>44.69</td><td>缩短注意力窗口</td></tr>
+<tr><td>Attn-12 (窗口12帧)</td><td>42.19</td><td>更短窗口</td></tr>
+<tr><td>Attn-9 (窗口9帧)</td><td>52.50</td><td>最短窗口，但一致性下降</td></tr>
+<tr class="ours"><td class="best">Self-Forcing++ (完整)</td><td class="best">90.94</td><td class="best">扩展DMD + Rolling Cache</td></tr>
+</table>
+</div>
+
+<p>缩短注意力窗口能带来适度改善（40.12→52.50），但代价是一致性下降。Self-Forcing++的完整方案达到90.94，远超注意力窗口缩减策略。</p>
+
+<h3>训练预算 Scaling 现象</h3>
+
+<p>论文发现了一个令人惊讶的<strong>Scaling现象</strong>：通过增加训练计算量，模型的长视频生成能力出现质变：</p>
+
+<div class="figure">
+<img src="assets/fig6_scaling.webp" alt="Training budget scaling">
+<div class="figure-caption">Figure 6 — 训练预算Scaling：从1×到25×的质变过程，25×预算下生成255秒(4分15秒)视频</div>
+</div>
+
+<!-- SVG 4: Training budget scaling ladder -->
+<div class="svg-container">
+<svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="g4a" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#a855f7" stop-opacity="0.2"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0.8"/></linearGradient>
+<linearGradient id="g4b" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#34d399" stop-opacity="0.2"/><stop offset="100%" stop-color="#34d399" stop-opacity="0.8"/></linearGradient>
+</defs>
+
+<!-- Baseline -->
+<rect x="30" y="240" width="80" height="25" rx="4" fill="#fb7185" opacity="0.6"/>
+<text x="70" y="258" text-anchor="middle" font-size="10" fill="white" font-weight="600">ODE</text>
+<text x="70" y="278" text-anchor="middle" font-size="9" fill="#787887">短视频</text>
+<text x="70" y="230" text-anchor="middle" font-size="8" fill="#787887">低质量</text>
+
+<!-- 1X -->
+<rect x="130" y="215" width="80" height="50" rx="4" fill="url(#g4a)" opacity="0.4"/>
+<text x="170" y="245" text-anchor="middle" font-size="10" fill="white" font-weight="600">1×</text>
+<text x="170" y="278" text-anchor="middle" font-size="9" fill="#787887">5秒连贯</text>
+
+<!-- 4X -->
+<rect x="230" y="175" width="80" height="90" rx="4" fill="url(#g4a)" opacity="0.5"/>
+<text x="270" y="225" text-anchor="middle" font-size="10" fill="white" font-weight="600">4×</text>
+<text x="270" y="278" text-anchor="middle" font-size="9" fill="#787887">一致主体</text>
+
+<!-- 8X -->
+<rect x="330" y="135" width="80" height="130" rx="4" fill="url(#g4a)" opacity="0.6"/>
+<text x="370" y="205" text-anchor="middle" font-size="10" fill="white" font-weight="600">8×</text>
+<text x="370" y="278" text-anchor="middle" font-size="9" fill="#787887">详细背景</text>
+
+<!-- 20X -->
+<rect x="430" y="85" width="80" height="180" rx="4" fill="url(#g4b)" opacity="0.7"/>
+<text x="470" y="180" text-anchor="middle" font-size="10" fill="white" font-weight="600">20×</text>
+<text x="470" y="278" text-anchor="middle" font-size="9" fill="#10b981">50秒稳定</text>
+
+<!-- 25X -->
+<rect x="530" y="35" width="80" height="230" rx="4" fill="url(#g4b)" opacity="0.9"/>
+<text x="570" y="155" text-anchor="middle" font-size="11" fill="white" font-weight="700">25×</text>
+<text x="570" y="278" text-anchor="middle" font-size="9" fill="#10b981" font-weight="600">255秒!</text>
+
+<!-- Quality arrow -->
+<line x1="630" y1="250" x2="630" y2="40" stroke="#10b981" stroke-width="2" marker-end="url(#arr3)"/>
+<text x="645" y="145" font-size="10" fill="#10b981" font-weight="600" transform="rotate(-90,645,145)">质量与时长 →</text>
+
+<!-- Milestone annotations -->
+<text x="180" y="20" font-size="11" fill="#10b981" font-weight="700" font-family="Noto Sans SC">255秒 = 4分15秒 = 99.9% 位置编码容量</text>
+<text x="180" y="35" font-size="10" fill="#787887" font-family="Noto Sans SC">50× 于基线模型 (5秒 → 255秒)</text>
+</svg>
+</div>
+<div class="svg-caption">图示：训练预算Scaling阶梯 — 从1×到25×的质变过程</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">架构洞察：Scaling现象的深层含义</div>
+<p>训练预算Scaling现象表明：<strong>长视频生成能力不是通过更多数据获得的，而是通过更多计算获得的</strong>。这与LLM中的Scaling Law呼应——模型能力的质变来自于计算的量变。1×预算下模型仅能生成5秒连贯视频（类似Self-Forcing），但随着预算增加，模型逐步学会在更长时间范围内维持质量。25×预算下达到255秒，利用了99.9%的位置编码容量。这暗示自回归视频生成存在一个"计算门槛"，跨越后能力出现相变。</p>
+</div>
+
+<h3>NoRepeat Score</h3>
+
+<div class="result-table">
+<table>
+<tr><th>方法</th><th>NoRepeat Score↑</th><th>说明</th></tr>
+<tr><td>NOVA</td><td>67.19</td><td>易出现时间重复</td></tr>
+<tr><td>MAGI-1</td><td>73.44</td><td>—</td></tr>
+<tr><td>CausVid</td><td>92.97</td><td>—</td></tr>
+<tr><td>RIFLEx (参考)</td><td>89.0</td><td>训练免费外推</td></tr>
+<tr><td>SkyReels-V2</td><td>95.31</td><td>Diffusion Forcing</td></tr>
+<tr><td>Self-Forcing</td><td>100.0</td><td>完全无重复</td></tr>
+<tr class="ours"><td class="best">Self-Forcing++</td><td>98.44</td><td>极低重复率</td></tr>
+</table>
+</div>
+
+<p>自回归方法（Self-Forcing和Self-Forcing++）通过KV Cache生成新帧，天然抵抗时间重复，无需RIFLEx的位置编码处理。</p>
+</section>
+
+<!-- ========== CH9 ========== -->
+<section id="ch9">
+<span class="section-tag">CH9 · 科研探索</span>
+<h2>自主科研问题</h2>
+
+<div class="rq-card">
+<span class="rq-tag">问题 1</span>
+<h4>训练预算Scaling的相变点是否可预测？</h4>
+<p>论文观察到1×→4×→8×→20×→25×的渐进质变，但相变点（如"何时从5秒能力跳变到50秒能力"）的预测模型尚不存在。如果能建立训练计算量与最大有效生成时长之间的定量关系（类似LLM的Scaling Law），将极大指导资源分配。<strong>理论分析</strong>：相变可能与学生模型"见过足够多自身的错误模式"有关——当训练迭代数超过某阈值后，模型积累了覆盖长rollout中各种退化模式的"纠正经验"。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">问题 2</span>
+<h4>Attention Sink在自回归视频中是否存在"汇聚坍缩"？</h4>
+<p>LongLive和Rolling Forcing使用attention sink帧维持长程一致性，但LoL工作指出Self-Forcing++结合attention sink时会出现<strong>汇聚坍缩</strong>——RoPE周期性导致远距离帧获得相似嵌入，注意力过度聚焦于sink帧。Self-Forcing++不使用sink避免了此问题，但也牺牲了长程记忆。是否存在一种<strong>动态sink</strong>机制（如Reward Forcing的EMA-Sink）能在保持长程一致性的同时避免坍缩？</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">问题 3</span>
+<h4>Extended DMD的窗口大小K是否应该随训练进度变化？</h4>
+<p>论文固定K≈5秒（教师视野），但一个合理的假设是：训练初期使用小K（快速收敛），后期使用大K（学习更长范围的依赖）。<strong>理论分析</strong>：这类似于课程学习——先学会在短窗口内纠正局部误差，再扩展到长窗口的全局一致性。但大K意味着更多的教师前向传播，计算成本线性增长。是否存在<strong>自适应窗口策略</strong>在效率和质量间取得平衡？</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">问题 4</span>
+<h4>KV Cache的分布漂移如何量化和缓解？</h4>
+<p>论文在Limitations中提到KV Cache的分布漂移问题——长时间rollout后，Cache中存储的KV对可能与当前帧的分布不匹配。论文建议量化latent表示或归一化KV Cache。<strong>理论分析</strong>：这与LLM中的KV Cache量化（如KIVI、KVQuant）面临不同挑战——视频latent的维度更高且时间相关性更强。是否存在一种<strong>基于分布匹配的Cache更新策略</strong>，在淘汰旧KV时考虑分布覆盖而非简单的FIFO？</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">问题 5</span>
+<h4>GRPO的光流奖励是否会限制创意性运动？</h4>
+<p>光流幅度作为运动连续性代理，有效抑制了场景跳变（方差24.52→2.00）。但过度追求光流平滑可能<strong>惩罚合理的快速运动</strong>（如动作场景中的快速切换）。<strong>理论分析</strong>：这与DanceGRPO中讨论的"代理奖励过度优化"问题一致。解决方案可能包括：(1) 基于文本prompt的动态奖励阈值（动作场景允许更高光流方差）；(2) 多目标奖励（光流平滑性 + 运动多样性）；(3) 参考GRPO-Guard的RatioNorm机制防止过度优化。</p>
+</div>
+</section>
+
+<!-- ========== Summary ========== -->
+<section id="summary">
+<span class="section-tag">总结</span>
+<h2>核心贡献与未来方向</h2>
+
+<div class="summary-box">
+<h3>核心贡献</h3>
+<p><strong>1. 瓶颈识别</strong>：揭示自回归长视频生成的核心障碍是双重训练-推理失配（时间+监督），而非自回归机制本身的失效。</p>
+<p><strong>2. 简洁方案</strong>：通过Backward Noise Init + Extended DMD + Rolling KV Cache三合一方案，无需长视频数据集或attention sink，将生成时长从5秒扩展到255秒（50×）。</p>
+<p><strong>3. Scaling发现</strong>：训练预算Scaling是独立于数据规模的质变路径，25×预算下达到99.9%位置编码容量。</p>
+<p><strong>4. 评估创新</strong>：提出Visual Stability指标，使用Gemini-2.5-Pro检测VBench无法发现的过曝光和退化问题。</p>
+</div>
+
+<h3>技术局限</h3>
+<p>论文坦诚了以下局限：(1) 训练速度慢于teacher forcing（长rollout的序列化特性）；(2) 缺乏长期记忆，被遮挡区域可能出现内容发散；(3) 继承Wan2.1-T2V-1.3B的基础能力上限。</p>
+
+<h3>未来方向</h3>
+<p><strong>并行化训练</strong>：探索长rollout的并行化以加速训练。<br><strong>latent保真度控制</strong>：量化KV Cache中的latent表示或归一化防止分布漂移。<br><strong>长期记忆机制</strong>：引入WorldWeaver式的丰富感知或Hunyuan-GameCraft的混合历史条件。</p>
+
+<div class="insight">
+<div class="insight-title">跨论文连接：Diffusion Forcing vs Autoregressive的终结</div>
+<p>Self-Forcing++的Discussion部分提出了一个重要观点：<strong>变噪声上下文（Diffusion Forcing的核心）并非长视频生成的必要条件</strong>。Self-Forcing++仅用clean context + rolling KV cache就达到了SOTA，这挑战了"Diffusion Forcing天然更适合长视频"的假设。论文希望这一发现能帮助社区重新审视DF vs AR的范式选择，推动更简洁高效的长视频生成方法。</p>
+</div>
+</section>
+
+</div>
+
+<footer>
+<p>Self-Forcing++: Towards Minute-Scale High-Quality Video Generation · arXiv:2510.02283 · 2025</p>
+<p style="margin-top:6px">论文博客 · 基于Self-Forcing baseline代码分析 · 所有公式和实验数据均经PDF原文验证</p>
+</footer>
+
+</body>
+</html>

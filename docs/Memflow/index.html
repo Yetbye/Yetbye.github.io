@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MemFlow: 流式自适应记忆驱动长视频叙事一致性 | 论文精读</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- MathJax v3 with three-layer CDN + skipHtmlTags -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true
+  },
+  options: {
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+  },
+  chtml: { scale: 1.05 },
+  startup: {
+    typeset: true,
+    pageReady: function() {
+      return MathJax.startup.defaultPageReady().then(function() {
+        if (MathJax.typesetPromise) {
+          return MathJax.typesetPromise();
+        }
+      });
+    }
+  }
+};
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"
+  onerror="document.getElementById('mathjax-fallback').src='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'">
+</script>
+<script id="mathjax-fallback"></script>
+<script>
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    if (!window.MathJax || !window.MathJax.startup || !window.MathJax.startup.promise) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+      document.head.appendChild(s);
+    } else {
+      if (window.MathJax.typesetPromise && window.MathJax.startup) {
+        MathJax.startup.promise.then(function() {
+          MathJax.typesetPromise().catch(function(){});
+        });
+      }
+    }
+  }, 5000);
+});
+</script>
+
+<style>
+:root {
+  --lav-50:#faf5ff;--lav-100:#f3e8ff;--lav-200:#e9d5ff;--lav-300:#d8b4fe;
+  --lav-400:#c084fc;--lav-500:#a855f7;--lav-600:#9333ea;--lav-700:#7e22ce;
+  --coral-100:#ffe4e6;--coral-200:#fecdd3;--coral-300:#fda4af;--coral-400:#fb7185;--coral-500:#f43f5e;
+  --mint-100:#d1fae5;--mint-200:#a7f3d0;--mint-300:#6ee7b7;--mint-400:#34d399;--mint-500:#10b981;
+  --warm-100:#fef3c7;--warm-200:#fde68a;--warm-300:#fcd34d;--warm-400:#fbbf24;--warm-500:#f59e0b;
+  --ink:#1e1b4b;--ink-soft:#4c4b5e;--ink-muted:#787887;
+  --paper:#ffffff;--paper-warm:#faf8f5;--paper-cream:#fdfbf7;
+  --shadow-sm:0 2px 8px rgba(30,27,75,0.06);
+  --shadow-md:0 8px 30px rgba(30,27,75,0.08);
+  --shadow-lg:0 20px 60px rgba(30,27,75,0.12);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;font-size:16px}
+body{
+  font-family:'Noto Sans SC',sans-serif;color:var(--ink);background:var(--paper-cream);
+  line-height:1.75;overflow-x:hidden;
+}
+h1,h2,h3,h4,h5,h6{font-family:'Noto Serif SC',serif;font-weight:700;letter-spacing:-0.02em}
+
+/* Navigation */
+.nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(253,251,247,0.82);backdrop-filter:blur(20px) saturate(1.5);
+  border-bottom:1px solid rgba(192,132,252,0.12);transition:all .3s ease;
+}
+.nav-inner{max-width:1200px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;justify-content:space-between}
+.nav-brand{font-family:'Noto Serif SC',serif;font-size:15px;font-weight:700;color:var(--lav-600);text-decoration:none}
+.nav-links{display:flex;gap:4px;flex-wrap:wrap}
+.nav-links a{
+  font-size:12px;color:var(--ink-soft);text-decoration:none;padding:6px 12px;border-radius:8px;
+  transition:all .2s;font-weight:500;
+}
+.nav-links a:hover{background:var(--lav-100);color:var(--lav-600)}
+
+/* Hero */
+.hero{
+  position:relative;min-height:96vh;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;padding:120px 24px 80px;
+  background:linear-gradient(135deg,#faf5ff 0%,#f3e8ff 18%,#fdf4e3 50%,#fffbeb 100%);
+}
+.hero::before{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 520px 320px at 12% 22%,rgba(192,132,252,0.16),transparent 60%),
+    radial-gradient(ellipse 520px 320px at 88% 78%,rgba(251,191,36,0.13),transparent 60%);
+}
+.hero-wrap{position:relative;z-index:2;width:100%;max-width:780px;text-align:center}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,0.6);backdrop-filter:blur(12px) saturate(1.5);
+  border:1px solid rgba(192,132,252,0.3);color:var(--lav-600);
+  padding:7px 20px;border-radius:100px;
+  font-family:'Noto Sans SC',sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;
+  margin-bottom:20px;box-shadow:0 4px 20px rgba(192,132,252,0.12);
+}
+.hero h1{
+  font-size:clamp(2.4rem,7vw,4.2rem);font-weight:900;
+  letter-spacing:-0.03em;line-height:1.15;margin:12px 0 10px;
+  background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 38%,var(--coral-500) 62%,var(--warm-400) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero-sub{
+  font-size:clamp(1rem,2.5vw,1.3rem);color:var(--ink-soft);font-weight:400;
+  margin-bottom:8px;font-family:'Noto Sans SC',sans-serif;
+}
+.hero-tagline{
+  font-size:13px;color:var(--ink-muted);font-weight:500;letter-spacing:1px;
+  margin-bottom:24px;
+}
+.hero-art{margin:20px auto 8px;max-width:760px;width:100%}
+.hero-img{
+  width:100%;height:auto;border-radius:24px;
+  box-shadow:0 24px 70px -24px rgba(30,27,75,0.18);
+  border:1px solid rgba(192,132,252,0.12);
+}
+.hero-caption{font-size:11px;color:var(--ink-muted);margin-top:8px}
+.scroll-ind{
+  position:absolute;bottom:30px;left:50%;transform:translateX(-50%);
+  font-size:10px;letter-spacing:3px;color:var(--ink-muted);font-weight:600;
+  animation:bounce 2s infinite;
+}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+
+/* Content */
+.content{max-width:820px;margin:0 auto;padding:60px 24px}
+.chapter{margin-bottom:80px;scroll-margin-top:80px}
+.chapter-num{
+  display:inline-block;font-family:'JetBrains Mono',monospace;font-size:11px;
+  color:var(--lav-500);font-weight:600;letter-spacing:2px;margin-bottom:8px;
+}
+.chapter h2{
+  font-size:clamp(1.6rem,4vw,2.2rem);margin-bottom:24px;
+  background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.chapter h3{font-size:1.25rem;margin:28px 0 12px;color:var(--ink)}
+.chapter p{margin-bottom:16px;color:var(--ink-soft);font-size:15px;line-height:1.85}
+.chapter strong{color:var(--ink);font-weight:600}
+.chapter em{color:var(--lav-600);font-style:normal;font-weight:500}
+
+/* Figure */
+.fig{margin:28px 0;border-radius:16px;overflow:hidden;box-shadow:var(--shadow-md);background:var(--paper)}
+.fig img{width:100%;display:block}
+.fig-caption{padding:12px 16px;font-size:12px;color:var(--ink-muted);line-height:1.5;background:var(--paper-warm)}
+
+/* Insight Box */
+.insight-box{
+  background:linear-gradient(135deg,var(--mint-100) 0%,rgba(209,250,229,0.5) 100%);
+  border-left:4px solid var(--mint-400);border-radius:12px;
+  padding:20px 24px;margin:24px 0;box-shadow:var(--shadow-sm);
+}
+.insight-box .ib-title{
+  font-family:'Noto Serif SC',serif;font-weight:700;font-size:14px;
+  color:var(--mint-500);margin-bottom:8px;display:flex;align-items:center;gap:6px;
+}
+.insight-box .ib-title::before{content:'';width:8px;height:8px;background:var(--mint-400);border-radius:50%}
+.insight-box p{color:var(--ink-soft);font-size:14px;margin:0}
+
+/* Math Block */
+.math-block{
+  background:var(--paper);border:1px solid rgba(192,132,252,0.15);
+  border-radius:12px;padding:20px 24px;margin:20px 0;
+  box-shadow:var(--shadow-sm);overflow-x:auto;
+}
+.math-label{
+  font-size:11px;color:var(--lav-500);font-weight:600;
+  font-family:'JetBrains Mono',monospace;margin-bottom:8px;letter-spacing:1px;
+}
+
+/* Code Block */
+.code-block{
+  background:#1e1b2e;border-radius:12px;overflow:hidden;margin:24px 0;
+  box-shadow:var(--shadow-md);
+}
+.code-header{
+  background:rgba(255,255,255,0.05);padding:10px 16px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.code-header span{font-family:'JetBrains Mono',monospace;font-size:11px;color:#a78bfa;font-weight:500}
+.code-header .tag{
+  font-size:10px;padding:2px 8px;border-radius:4px;
+  background:rgba(167,139,250,0.15);color:#c4b5fd;
+}
+.code-block pre{
+  padding:16px 20px;overflow-x:auto;
+}
+.code-block code{
+  font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.7;color:#e0e0e0;
+}
+
+/* Research Question */
+.rq-card{
+  background:linear-gradient(135deg,var(--coral-100) 0%,rgba(255,228,230,0.4) 100%);
+  border-left:4px solid var(--coral-400);border-radius:12px;
+  padding:20px 24px;margin:20px 0;box-shadow:var(--shadow-sm);
+}
+.rq-card .rq-tag{
+  display:inline-block;font-size:10px;font-weight:700;letter-spacing:1px;
+  color:var(--coral-500);background:rgba(244,63,94,0.1);padding:3px 10px;border-radius:6px;
+  margin-bottom:10px;
+}
+.rq-card h4{font-size:15px;color:var(--ink);margin-bottom:8px}
+.rq-card p{font-size:13px;color:var(--ink-soft);margin:0}
+
+/* Table */
+.result-table{
+  width:100%;border-collapse:collapse;margin:20px 0;font-size:13px;
+  border-radius:12px;overflow:hidden;box-shadow:var(--shadow-sm);
+}
+.result-table th{
+  background:var(--lav-100);color:var(--lav-700);font-weight:600;
+  padding:10px 12px;text-align:left;font-size:12px;
+}
+.result-table td{padding:8px 12px;border-bottom:1px solid rgba(192,132,252,0.08);color:var(--ink-soft)}
+.result-table tr:hover{background:var(--lav-50)}
+.result-table .highlight{background:var(--mint-100);font-weight:600;color:var(--ink)}
+
+/* Compare Card */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
+.compare-card{
+  border-radius:12px;padding:20px;box-shadow:var(--shadow-sm);
+}
+.compare-card.bad{background:linear-gradient(135deg,var(--coral-100),rgba(255,228,230,0.3))}
+.compare-card.good{background:linear-gradient(135deg,var(--mint-100),rgba(209,250,229,0.3))}
+.compare-card h4{font-size:14px;margin-bottom:10px}
+.compare-card p{font-size:13px;margin:0}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+
+/* SVG container */
+.svg-wrap{margin:24px 0;text-align:center}
+.svg-wrap svg{max-width:100%;height:auto}
+.svg-caption{font-size:11px;color:var(--ink-muted);margin-top:8px}
+
+/* Footer */
+.footer{
+  text-align:center;padding:40px 24px;
+  background:linear-gradient(135deg,var(--lav-50),var(--warm-100));
+  border-top:1px solid rgba(192,132,252,0.1);
+}
+.footer p{font-size:12px;color:var(--ink-muted);margin-bottom:6px}
+
+/* Section divider */
+.divider{
+  text-align:center;margin:40px 0;color:var(--lav-300);
+  font-size:20px;letter-spacing:8px;
+}
+
+/* Stats grid */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:24px 0}
+.stat-card{
+  background:var(--paper);border-radius:12px;padding:20px;text-align:center;
+  box-shadow:var(--shadow-sm);border:1px solid rgba(192,132,252,0.1);
+}
+.stat-card .stat-val{
+  font-family:'Noto Serif SC',serif;font-size:28px;font-weight:900;
+  background:linear-gradient(135deg,var(--lav-600),var(--coral-500));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.stat-card .stat-label{font-size:11px;color:var(--ink-muted);margin-top:4px}
+@media(max-width:640px){.stats-grid{grid-template-columns:1fr}}
+
+/* Warning box */
+.warn-box{
+  background:linear-gradient(135deg,var(--warm-100),rgba(254,243,199,0.4));
+  border-left:4px solid var(--warm-400);border-radius:12px;
+  padding:16px 20px;margin:20px 0;
+}
+.warn-box p{font-size:13px;color:var(--ink-soft);margin:0}
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="nav">
+<div class="nav-inner">
+<a href="#hero" class="nav-brand">MemFlow</a>
+<div class="nav-links"><a href="../index.html">« 合辑</a>
+<a href="#ch1">核心挑战</a>
+<a href="#ch2">NAM机制</a>
+<a href="#ch3">SMA机制</a>
+<a href="#ch4">训练策略</a>
+<a href="#ch5">实验结果</a>
+<a href="#ch6">消融分析</a>
+<a href="#ch7">代码实现</a>
+<a href="#ch8">科研问题</a>
+</div>
+</div>
+</nav>
+
+<!-- Hero -->
+<section class="hero" id="hero">
+<div class="hero-wrap">
+<div class="hero-badge">arXiv 2509.22622 &middot; HKU &times; Kuaishou Kling</div>
+<h1>MemFlow</h1>
+<p class="hero-sub">流式自适应记忆驱动长视频叙事一致性</p>
+<p class="hero-tagline">叙事自适应记忆 (NAM) &times; 稀疏记忆激活 (SMA) &times; KV Cache记忆库</p>
+<div class="hero-art">
+<img src="assets/cover.webp" alt="MemFlow Cover" class="hero-img">
+<p class="hero-caption">水彩写意：流动的记忆之河连接远近视频帧，金色记忆节点沿溪流散落，从冷蓝到暖金的渐变映射着从历史到生成的时序流动</p>
+</div>
+</div>
+<div class="scroll-ind">SCROLL TO READ</div>
+</section>
+
+<div class="content">
+
+<!-- ==================== CH1: 核心挑战 ==================== -->
+<div class="chapter" id="ch1">
+<div class="chapter-num">CHAPTER 01</div>
+<h2>核心挑战：流式长视频的记忆困境</h2>
+
+<p>交互式视频生成正成为创意和影视应用的核心技术范式。用户通过<strong>流式文本提示（Streaming Prompts）</strong>实时引导叙事，模型以自回归方式逐块生成视频片段。然而，这一范式面临一个根本性挑战：<strong>如何在长达60秒甚至更久的生成过程中，维持角色、场景和叙事的长期一致性？</strong></p>
+
+<p>现有方法在记忆设计上存在三个根本缺陷：</p>
+
+<div class="compare-grid">
+<div class="compare-card bad">
+<h4>固定记忆策略</h4>
+<p>LongLive 仅保留第一个视频块的KV Cache作为"记忆沉没"（Frame Sink），无法动态适应后续提示切换带来的新元素</p>
+</div>
+<div class="compare-card bad">
+<h4>固定压缩方案</h4>
+<p>FramePack等方法用固定大小压缩历史帧，关键视觉线索可能被无差别丢弃，尤其在场景转换时</p>
+</div>
+</div>
+
+<div class="fig">
+<img src="assets/figure_1.webp" alt="Figure 1 - Consistency comparison">
+<div class="fig-caption">Figure 1: 现有流式交互视频模型（如LongLive）在提示切换后常出现角色重复引入、跨片段不一致等问题。MemFlow通过动态记忆维护长期一致性</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察 1：记忆的"自适应"需求</div>
+<p>不同待生成的视频片段应当参考<strong>不同的历史线索</strong>。例如，当提示从"一个孩子在沙滩上玩气球"切换为"一只狗跑向球"时，模型需要从记忆中检索出包含"球"的视觉上下文，而非仅仅保留第一帧。这种<strong>语义对齐的动态检索</strong>是固定策略无法实现的。</p>
+</div>
+
+<h3>两层约束的交织</h3>
+
+<p>记忆设计必须同时满足两个相互竞争的需求：</p>
+
+<div class="stats-grid">
+<div class="stat-card">
+<div class="stat-val">语义对齐</div>
+<div class="stat-label">记忆必须根据当前提示动态提供相关历史内容</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">容量受限</div>
+<div class="stat-label">GPU显存和生成效率要求记忆规模严格受控</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">实时推理</div>
+<div class="stat-label">记忆机制不能显著拖慢生成速度</div>
+</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察 2：固定策略的根本缺陷</div>
+<p>固定记忆策略（如仅保留首帧）假设所有未来生成都需要相同的上下文，这在交互式多提示场景中是完全错误的。当场景从"室内"切换到"室外"时，首帧的室内场景信息反而会成为干扰。真正的解决方案需要<strong>根据语义相关性动态选择记忆内容</strong>。</p>
+</div>
+
+<!-- SVG: Memory Strategy Comparison -->
+<div class="svg-wrap">
+<svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="fixed-grad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#fecdd3" stop-opacity="0.6"/>
+<stop offset="100%" stop-color="#fecdd3" stop-opacity="0.1"/>
+</linearGradient>
+<linearGradient id="adaptive-grad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d1fae5" stop-opacity="0.6"/>
+<stop offset="100%" stop-color="#d1fae5" stop-opacity="0.1"/>
+</linearGradient>
+</defs>
+<!-- Title -->
+<text x="360" y="22" text-anchor="middle" font-family="Noto Serif SC" font-size="14" font-weight="700" fill="#1e1b4b">记忆策略对比：固定 vs 自适应</text>
+
+<!-- Left: Fixed Strategy -->
+<text x="160" y="55" text-anchor="middle" font-family="Noto Sans SC" font-size="12" font-weight="600" fill="#f43f5e">固定记忆策略</text>
+<rect x="30" y="65" width="260" height="240" rx="12" fill="url(#fixed-grad)" stroke="#fda4af" stroke-width="1.5"/>
+<!-- Timeline -->
+<rect x="50" y="85" width="50" height="28" rx="5" fill="#fda4af" opacity="0.7"/>
+<text x="75" y="104" text-anchor="middle" font-size="9" fill="#9f1239">首帧(记忆)</text>
+<rect x="110" y="85" width="50" height="28" rx="5" fill="#fecdd3" opacity="0.5"/>
+<text x="135" y="104" text-anchor="middle" font-size="8" fill="#881337">块2</text>
+<rect x="170" y="85" width="50" height="28" rx="5" fill="#fecdd3" opacity="0.5"/>
+<text x="195" y="104" text-anchor="middle" font-size="8" fill="#881337">块3</text>
+<rect x="230" y="85" width="50" height="28" rx="5" fill="#fecdd3" opacity="0.5"/>
+<text x="255" y="104" text-anchor="middle" font-size="8" fill="#881337">块4</text>
+<!-- Fixed arrow from chunk1 to all -->
+<line x1="75" y1="118" x2="75" y2="145" stroke="#f43f5e" stroke-width="1.5" marker-end="url(#arr-red)"/>
+<line x1="75" y1="120" x2="135" y2="120" stroke="#f43f5e" stroke-width="1" stroke-dasharray="4,3"/>
+<line x1="75" y1="120" x2="195" y2="120" stroke="#f43f5e" stroke-width="1" stroke-dasharray="4,3"/>
+<line x1="75" y1="120" x2="255" y2="120" stroke="#f43f5e" stroke-width="1" stroke-dasharray="4,3"/>
+<!-- Problem labels -->
+<text x="160" y="165" text-anchor="middle" font-size="10" fill="#9f1239">所有块共享同一记忆</text>
+<text x="160" y="182" text-anchor="middle" font-size="10" fill="#9f1239">场景切换时记忆失效</text>
+<!-- X marks -->
+<text x="200" y="220" font-size="20" fill="#f43f5e" opacity="0.5">✗</text>
+<text x="240" y="250" font-size="16" fill="#f43f5e" opacity="0.4">✗</text>
+<text x="160" y="280" text-anchor="middle" font-size="10" fill="#e11d48" font-style="italic">新元素出现时无法检索相关历史</text>
+
+<!-- Divider -->
+<line x1="320" y1="50" x2="320" y2="310" stroke="#d8b4fe" stroke-width="1" stroke-dasharray="4,4"/>
+
+<!-- Right: Adaptive Strategy (MemFlow) -->
+<text x="520" y="55" text-anchor="middle" font-family="Noto Sans SC" font-size="12" font-weight="600" fill="#10b981">自适应记忆策略 (MemFlow)</text>
+<rect x="390" y="65" width="280" height="240" rx="12" fill="url(#adaptive-grad)" stroke="#6ee7b7" stroke-width="1.5"/>
+<!-- Timeline -->
+<rect x="410" y="85" width="50" height="28" rx="5" fill="#a7f3d0" opacity="0.7"/>
+<text x="435" y="104" text-anchor="middle" font-size="8" fill="#065f46">块1</text>
+<rect x="470" y="85" width="50" height="28" rx="5" fill="#a7f3d0" opacity="0.7"/>
+<text x="495" y="104" text-anchor="middle" font-size="8" fill="#065f46">块2</text>
+<rect x="530" y="85" width="50" height="28" rx="5" fill="#a7f3d0" opacity="0.7"/>
+<text x="555" y="104" text-anchor="middle" font-size="8" fill="#065f46">块3</text>
+<rect x="590" y="85" width="50" height="28" rx="5" fill="#34d399" opacity="0.9"/>
+<text x="615" y="104" text-anchor="middle" font-size="8" fill="#065f46">当前块</text>
+<!-- Dynamic arrows -->
+<path d="M435,118 C435,140 615,130 615,145" stroke="#10b981" stroke-width="2" fill="none" marker-end="url(#arr-green)" opacity="0.6"/>
+<path d="M495,118 C495,140 615,135 615,145" stroke="#10b981" stroke-width="2" fill="none" marker-end="url(#arr-green)" opacity="0.8"/>
+<path d="M555,118 C555,140 615,138 615,145" stroke="#10b981" stroke-width="2" fill="none" marker-end="url(#arr-green)" opacity="1"/>
+<!-- Text query -->
+<rect x="440" y="155" width="200" height="22" rx="4" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1"/>
+<text x="540" y="170" text-anchor="middle" font-size="9" fill="#065f46">文本提示查询 → 语义检索</text>
+<!-- Check marks -->
+<text x="480" y="210" font-size="16" fill="#10b981">✓</text>
+<text x="540" y="210" font-size="16" fill="#10b981">✓</text>
+<text x="600" y="210" font-size="16" fill="#10b981">✓</text>
+<text x="530" y="235" text-anchor="middle" font-size="10" fill="#065f46">动态检索语义对齐的历史帧</text>
+<text x="530" y="252" text-anchor="middle" font-size="10" fill="#065f46">Top-k稀疏激活保持效率</text>
+<text x="530" y="280" text-anchor="middle" font-size="10" fill="#059669" font-style="italic">根据提示内容智能选择记忆</text>
+
+<!-- Arrow markers -->
+<defs>
+<marker id="arr-red" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#f43f5e"/>
+</marker>
+<marker id="arr-green" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#10b981"/>
+</marker>
+</defs>
+</svg>
+<p class="svg-caption">固定策略 vs 自适应记忆策略：MemFlow根据当前提示语义动态检索历史上下文</p>
+</div>
+</div>
+
+<!-- ==================== CH2: NAM机制 ==================== -->
+<div class="chapter" id="ch2">
+<div class="chapter-num">CHAPTER 02</div>
+<h2>NAM: 叙事自适应记忆</h2>
+
+<p>MemFlow的核心创新是<strong>叙事自适应记忆（Narrative Adaptive Memory, NAM）</strong>——一种能根据当前提示动态检索语义对齐历史内容的记忆机制。NAM由两个协同子策略组成：<strong>语义检索</strong>和<strong>冗余消除</strong>。</p>
+
+<h3>整体框架</h3>
+
+<p>MemFlow构建在混合自回归-扩散框架之上（基于Wan2.1-T2V-1.3B），每次迭代生成T帧的视频片段。在生成新片段之前，模型执行以下流程：</p>
+
+<div class="fig">
+<img src="assets/figure_2.webp" alt="Figure 2 - MemFlow Framework">
+<div class="fig-caption">Figure 2: MemFlow整体框架。在自回归生成中，依次执行记忆检索、更新和选择，然后用于合成即将到来的视频片段。文本Token查询记忆库进行语义检索，原型KV注入最新上下文，SMA过滤最相关的记忆用于注意力计算</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察 3：KV Cache即记忆</div>
+<p>MemFlow巧妙地利用了自回归扩散模型天然产生的<strong>KV Cache作为记忆库的基础结构</strong>。这避免了额外的记忆编码器或压缩网络，将记忆管理无缝集成到已有的Transformer注意力机制中。每个Transformer层$l$在处理第$m$个视频块时产生的Key-Value表示 $\\{K_m^l, V_m^l\\}$ 直接成为记忆的存储单元。</p>
+</div>
+
+<h3>语义检索 (Semantic Retrieval)</h3>
+
+<p>NAM的第一个核心策略是基于<strong>文本-视觉交叉注意力</strong>的语义检索。对于即将生成的新视频片段，其文本提示被编码为查询向量，与记忆库中所有历史帧的Key进行内积匹配：</p>
+
+<div class="math-block">
+<div class="math-label">语义相关性评分</div>
+$$S_{m,i}^l = \text{Aggregate}\left(\text{Softmax}\left(\frac{Q_{\text{text}}^l (K_{m,i}^l)^\top}{\sqrt{d}}\right)\right)$$
+<p style="font-size:13px;color:var(--ink-muted);margin-top:8px">其中 $Q_{\text{text}}^l$ 是当前文本提示在层 $l$ 的查询，$K_{m,i}^l \in \mathbb{R}^{n \times d}$ 是记忆库中第 $i$ 帧的Key表示，Aggregate 为均值池化</p>
+</div>
+
+<p>基于这些相关性分数，模型选择 <strong>Top-k 个最相关的帧</strong>保留到更新后的记忆库中：</p>
+
+<div class="math-block">
+<div class="math-label">Top-k 语义选择</div>
+$$I_k = \arg\max_{\substack{I \subseteq \{1,...,b\}, |I|=k}} \sum_{j \in I} s_j$$
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察 4：文本查询的精妙设计</div>
+<p>为什么用<strong>文本Token作为查询</strong>而非视觉Token？因为当前片段的生成目标是由文本提示定义的，文本查询能最精准地找到与<strong>即将生成内容</strong>语义相关的历史帧。例如，提示"一个穿休闲毛衣的女人"时，文本查询会自动检索出包含该角色的视觉记忆，而非随机历史帧。</p>
+</div>
+
+<h3>冗余消除 (Redundant Removal)</h3>
+
+<p>NAM的第二个策略解决记忆更新时的冗余问题。视频片段内部的帧具有高度时间冗余性——相邻帧的视觉信息高度相似。MemFlow提出一个极其高效的启发式方法：</p>
+
+<div class="compare-grid">
+<div class="compare-card bad">
+<h4>复杂方法（不采用）</h4>
+<p>基于重要性权重的上下文合并技术，计算开销大</p>
+</div>
+<div class="compare-card good">
+<h4>MemFlow的选择</h4>
+<p>直接取前一个片段<strong>首帧</strong>的KV对作为整个片段的紧凑原型，利用时间冗余性</p>
+</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察 5：首帧原型假设的合理性</div>
+<p>"一帧足以概括整个片段的核心视觉内容"这个假设看似激进，但在短视频片段（如5秒）中是成立的。由于片段内部的运动通常是渐进的（如人物行走、物体移动），首帧包含了主体身份、场景布局和视觉风格的关键信息。这种<strong>极致压缩</strong>换来的是记忆库规模的可控——每个片段仅增加1帧的记忆开销。</p>
+</div>
+
+<!-- SVG: NAM Memory Update Process -->
+<div class="svg-wrap">
+<svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg">
+<text x="350" y="20" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#1e1b4b">NAM 记忆更新流程</text>
+
+<!-- Previous Memory Bank -->
+<rect x="20" y="40" width="200" height="80" rx="10" fill="#f3e8ff" stroke="#c084fc" stroke-width="1.5"/>
+<text x="120" y="60" text-anchor="middle" font-size="11" font-weight="600" fill="#7e22ce">历史记忆库</text>
+<rect x="35" y="70" width="40" height="22" rx="4" fill="#e9d5ff" stroke="#a855f7" stroke-width="1"/>
+<text x="55" y="85" text-anchor="middle" font-size="8" fill="#7e22ce">帧1</text>
+<rect x="85" y="70" width="40" height="22" rx="4" fill="#e9d5ff" stroke="#a855f7" stroke-width="1"/>
+<text x="105" y="85" text-anchor="middle" font-size="8" fill="#7e22ce">帧2</text>
+<rect x="135" y="70" width="40" height="22" rx="4" fill="#e9d5ff" stroke="#a855f7" stroke-width="1"/>
+<text x="155" y="85" text-anchor="middle" font-size="8" fill="#7e22ce">帧3</text>
+<rect x="185" y="70" width="25" height="22" rx="4" fill="#e9d5ff" stroke="#a855f7" stroke-width="1" stroke-dasharray="3,2"/>
+<text x="197" y="85" text-anchor="middle" font-size="8" fill="#a855f7">...</text>
+
+<!-- Text Query -->
+<rect x="260" y="50" width="130" height="36" rx="8" fill="#ecfdf5" stroke="#34d399" stroke-width="1.5"/>
+<text x="325" y="65" text-anchor="middle" font-size="10" font-weight="600" fill="#065f46">文本提示查询</text>
+<text x="325" y="78" text-anchor="middle" font-size="8" fill="#059669">"狗跑向球"</text>
+
+<!-- Arrow: query to memory -->
+<path d="M260,68 L220,68" stroke="#34d399" stroke-width="1.5" marker-end="url(#arr-green2)"/>
+<path d="M260,72 L220,85" stroke="#34d399" stroke-width="1" stroke-dasharray="3,2"/>
+
+<!-- Selection result -->
+<rect x="260" y="100" width="130" height="55" rx="8" fill="#d1fae5" stroke="#34d399" stroke-width="1.5"/>
+<text x="325" y="118" text-anchor="middle" font-size="10" font-weight="600" fill="#065f46">Top-k 选择</text>
+<rect x="275" y="125" width="30" height="18" rx="3" fill="#a7f3d0" stroke="#34d399" stroke-width="1"/>
+<text x="290" y="137" text-anchor="middle" font-size="7" fill="#065f46">帧2</text>
+<rect x="315" y="125" width="30" height="18" rx="3" fill="#a7f3d0" stroke="#34d399" stroke-width="1"/>
+<text x="330" y="137" text-anchor="middle" font-size="7" fill="#065f46">帧3</text>
+
+<!-- Previous Chunk Prototype -->
+<rect x="440" y="40" width="120" height="80" rx="10" fill="#fef3c7" stroke="#fbbf24" stroke-width="1.5"/>
+<text x="500" y="60" text-anchor="middle" font-size="11" font-weight="600" fill="#92400e">前一片段</text>
+<rect x="455" y="70" width="90" height="22" rx="4" fill="#fde68a" stroke="#fbbf24" stroke-width="1"/>
+<text x="500" y="85" text-anchor="middle" font-size="8" fill="#92400e">首帧KV(原型)</text>
+<text x="500" y="105" text-anchor="middle" font-size="8" fill="#b45309" font-style="italic">时间冗余压缩</text>
+
+<!-- Arrow: prototype to updated -->
+<path d="M440,80 L420,175" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arr-warm)"/>
+
+<!-- Updated Memory Bank -->
+<rect x="200" y="165" width="280" height="80" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+<text x="340" y="185" text-anchor="middle" font-size="11" font-weight="700" fill="#065f46">更新后的记忆库</text>
+<rect x="215" y="195" width="40" height="22" rx="4" fill="#a7f3d0" stroke="#34d399" stroke-width="1.5"/>
+<text x="235" y="210" text-anchor="middle" font-size="8" fill="#065f46">帧2*</text>
+<rect x="265" y="195" width="40" height="22" rx="4" fill="#a7f3d0" stroke="#34d399" stroke-width="1.5"/>
+<text x="285" y="210" text-anchor="middle" font-size="8" fill="#065f46">帧3*</text>
+<rect x="315" y="195" width="60" height="22" rx="4" fill="#fde68a" stroke="#fbbf24" stroke-width="1.5"/>
+<text x="345" y="210" text-anchor="middle" font-size="8" fill="#92400e">前块原型</text>
+<text x="340" y="232" text-anchor="middle" font-size="9" fill="#059669">语义相关 + 最新上下文</text>
+
+<!-- Arrows -->
+<path d="M260,155 L260,175" stroke="#34d399" stroke-width="1.5" marker-end="url(#arr-green2)"/>
+<path d="M325,155 L340,170" stroke="#34d399" stroke-width="1.5"/>
+
+<defs>
+<marker id="arr-green2" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#10b981"/>
+</marker>
+<marker id="arr-warm" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#fbbf24"/>
+</marker>
+</defs>
+</svg>
+<p class="svg-caption">NAM记忆更新：语义检索选出相关帧 + 前一片段首帧作为原型，共同构成更新后的记忆库</p>
+</div>
+</div>
+
+<!-- ==================== CH3: SMA机制 ==================== -->
+<div class="chapter" id="ch3">
+<div class="chapter-num">CHAPTER 03</div>
+<h2>SMA: 稀疏记忆激活</h2>
+
+<p>NAM解决了"记忆什么"的问题，但引入记忆不可避免地增加了注意力计算的开销——复杂度随上下文大小线性增长。MemFlow的第二个核心创新<strong>稀疏记忆激活（Sparse Memory Activation, SMA）</strong>解决了"如何高效使用记忆"的问题。</p>
+
+<h3>核心思想：选择性注意力</h3>
+
+<p>SMA基于一个简单但有效的原则：<strong>当前视频片段的查询Token只需关注记忆中最相关的子集</strong>。这通过以下步骤实现：</p>
+
+<div class="math-block">
+<div class="math-label">Step 1: 紧凑描述符计算</div>
+$$\bar{q} = \text{MeanPool}(Q_{\text{vis}}^l) \in \mathbb{R}^{1 \times d}, \quad \{\bar{k}_j\}_{j=1}^{b} = \text{MeanPool}(K_{m}^l) \in \mathbb{R}^{1 \times d}$$
+<p style="font-size:13px;color:var(--ink-muted);margin-top:8px">对当前片段的视觉查询和记忆库中每帧的Key分别在Token维度做均值池化，得到帧级紧凑描述符</p>
+</div>
+
+<div class="math-block">
+<div class="math-label">Step 2: 帧级相关性评分</div>
+$$s_j = \bar{q}^\top \bar{k}_j, \quad j = 1,...,b$$
+</div>
+
+<div class="math-block">
+<div class="math-label">Step 3: Top-k 稀疏注意力</div>
+$$\text{Attn}(Q_{\text{vis}}^l, K_m^l, V_m^l) \approx \text{Attn}(Q_{\text{vis}}^l, K_{m,I_k}^l, V_{m,I_k}^l)$$
+<p style="font-size:13px;color:var(--ink-muted);margin-top:8px">仅在Top-k选择的帧子集 $I_k$ 上执行注意力计算，大幅降低计算量</p>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察 6：均值池化的充分性</div>
+<p>为什么均值池化足以表达帧级语义？对于视频生成任务，每帧的KV Cache包含该帧的<strong>空间布局、主体身份和风格信息</strong>。均值池化相当于对这些信息取"主题摘要"，虽然丢失了空间细节，但保留了足以判断"这帧是否与当前提示相关"的语义信号。这在计算效率和表达力之间取得了极佳平衡。</p>
+</div>
+
+<div class="fig">
+<img src="assets/figure_4.webp" alt="Figure 4 - Memory mechanism ablation">
+<div class="fig-caption">Figure 4: 不同记忆机制的定性分析。无记忆导致场景突变，Frame Sink仅维持初始主体一致性，NAM+NAM+SMA（完整模型）在复杂叙事切换中保持最佳连贯性</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察 7：隐式误差抑制</div>
+<p>SMA通过过滤不相关或潜在错误的历史信息，<strong>隐式地缓解了误差累积</strong>。在长序列生成中，早期帧的错误可能通过记忆传播到后续生成。通过仅激活语义最相关的帧，SMA相当于一个"注意力过滤器"，将低质量或不相关的历史信息排除在注意力计算之外。</p>
+</div>
+
+<!-- SVG: SMA Architecture -->
+<div class="svg-wrap">
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg">
+<text x="350" y="20" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#1e1b4b">稀疏记忆激活 (SMA) 工作流程</text>
+
+<!-- Memory Bank -->
+<rect x="20" y="40" width="250" height="100" rx="10" fill="#f3e8ff" stroke="#c084fc" stroke-width="1.5"/>
+<text x="145" y="58" text-anchor="middle" font-size="11" font-weight="600" fill="#7e22ce">更新后的记忆库 (b帧)</text>
+<!-- Memory frames -->
+<rect x="35" y="68" width="35" height="28" rx="4" fill="#e9d5ff" stroke="#a855f7" stroke-width="1"/>
+<text x="52" y="86" text-anchor="middle" font-size="8" fill="#7e22ce">f1</text>
+<rect x="78" y="68" width="35" height="28" rx="4" fill="#e9d5ff" stroke="#a855f7" stroke-width="1"/>
+<text x="95" y="86" text-anchor="middle" font-size="8" fill="#7e22ce">f2</text>
+<rect x="121" y="68" width="35" height="28" rx="4" fill="#e9d5ff" stroke="#a855f7" stroke-width="1"/>
+<text x="138" y="86" text-anchor="middle" font-size="8" fill="#7e22ce">f3</text>
+<rect x="164" y="68" width="35" height="28" rx="4" fill="#e9d5ff" stroke="#a855f7" stroke-width="1"/>
+<text x="181" y="86" text-anchor="middle" font-size="8" fill="#7e22ce">f4</text>
+<rect x="207" y="68" width="35" height="28" rx="4" fill="#e9d5ff" stroke="#a855f7" stroke-width="1"/>
+<text x="224" y="86" text-anchor="middle" font-size="8" fill="#7e22ce">f5</text>
+
+<!-- Relevance scores -->
+<text x="52" y="115" text-anchor="middle" font-size="8" fill="#9333ea">0.3</text>
+<text x="95" y="115" text-anchor="middle" font-size="8" fill="#9333ea">0.8</text>
+<text x="138" y="115" text-anchor="middle" font-size="8" fill="#9333ea">0.9</text>
+<text x="181" y="115" text-anchor="middle" font-size="8" fill="#9333ea">0.4</text>
+<text x="224" y="115" text-anchor="middle" font-size="8" fill="#9333ea">0.2</text>
+
+<!-- Current query -->
+<rect x="310" y="55" width="120" height="30" rx="6" fill="#dbeafe" stroke="#60a5fa" stroke-width="1.5"/>
+<text x="370" y="74" text-anchor="middle" font-size="10" font-weight="600" fill="#1d4ed8">当前视觉查询</text>
+<path d="M310,70 L275,70" stroke="#60a5fa" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+
+<!-- MeanPool -->
+<rect x="310" y="95" width="120" height="25" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1"/>
+<text x="370" y="112" text-anchor="middle" font-size="9" fill="#1e40af">MeanPool → q̄</text>
+
+<!-- Selection -->
+<rect x="480" y="40" width="200" height="100" rx="10" fill="#d1fae5" stroke="#34d399" stroke-width="2"/>
+<text x="580" y="58" text-anchor="middle" font-size="11" font-weight="600" fill="#065f46">Top-k 选择 (k=2)</text>
+<!-- Selected frames -->
+<rect x="510" y="70" width="50" height="30" rx="5" fill="#a7f3d0" stroke="#34d399" stroke-width="2"/>
+<text x="535" y="90" text-anchor="middle" font-size="10" font-weight="600" fill="#065f46">f2</text>
+<rect x="570" y="70" width="50" height="30" rx="5" fill="#a7f3d0" stroke="#34d399" stroke-width="2"/>
+<text x="595" y="90" text-anchor="middle" font-size="10" font-weight="600" fill="#065f46">f3</text>
+<!-- Score labels -->
+<text x="535" y="115" text-anchor="middle" font-size="8" fill="#059669">score=0.8</text>
+<text x="595" y="115" text-anchor="middle" font-size="8" fill="#059669">score=0.9</text>
+
+<!-- X marks for unselected -->
+<text x="50" y="145" font-size="14" fill="#f43f5e" opacity="0.5">✗</text>
+<text x="181" y="145" font-size="14" fill="#f43f5e" opacity="0.5">✗</text>
+<text x="224" y="145" font-size="14" fill="#f43f5e" opacity="0.5">✗</text>
+
+<!-- Arrow to attention -->
+<path d="M580,145 L580,160" stroke="#34d399" stroke-width="2" marker-end="url(#arr-green3)"/>
+
+<!-- Final attention -->
+<rect x="430" y="165" width="300" height="55" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+<text x="580" y="185" text-anchor="middle" font-size="11" font-weight="600" fill="#065f46">稀疏注意力计算</text>
+<text x="580" y="205" text-anchor="middle" font-size="9" fill="#059669">Attn(Q, K_{selected}, V_{selected}) → 高效 + 高质量</text>
+
+<defs>
+<marker id="arr-blue" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#60a5fa"/>
+</marker>
+<marker id="arr-green3" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#10b981"/>
+</marker>
+</defs>
+</svg>
+<p class="svg-caption">SMA工作流程：均值池化 → 帧级相关性评分 → Top-k选择 → 稀疏注意力计算</p>
+</div>
+</div>
+
+<!-- ==================== CH4: 训练策略 ==================== -->
+<div class="chapter" id="ch4">
+<div class="chapter-num">CHAPTER 04</div>
+<h2>训练策略：流式长调优</h2>
+
+<p>MemFlow的训练基于<strong>Self Forcing</strong>的DMD（Distribution Matching Distillation）流水线，结合流式长调优策略，使模型在训练阶段就学会管理记忆。</p>
+
+<h3>基座模型与蒸馏</h3>
+
+<p>MemFlow构建在<strong>Wan2.1-T2V-1.3B</strong>之上，采用自回归-扩散混合框架。训练使用DMD损失函数，最小化学生模型与教师模型输出分布之间的差距，将预训练的双向模型蒸馏为少步因果模型。</p>
+
+<div class="code-block">
+<div class="code-header">
+<span>训练流程伪代码</span>
+<span class="tag">可信度: HIGH</span>
+</div>
+<pre><code># MemFlow Streaming Long-Tuning
+# Based on Self Forcing DMD pipeline
+
+for step in range(total_steps):
+    # 1. 采样文本提示序列 (6个连续10s提示)
+    prompts = sample_prompt_sequence()  # [p1, p2, ..., p6]
+    
+    # 2. 流式生成60s视频
+    memory_bank = None
+    all_clips = []
+    
+    for prompt in prompts:
+        # 2a. NAM: 语义检索 + 冗余消除
+        if memory_bank is not None:
+            scores = semantic_retrieve(prompt, memory_bank)
+            selected = top_k_select(scores, k=3)
+            prototype = get_first_frame_kv(prev_clip)
+            memory_bank = update_memory(selected, prototype)
+        
+        # 2b. SMA: 稀疏记忆激活
+        if memory_bank is not None:
+            sparse_memory = sparse_activate(memory_bank, k=2)
+        else:
+            sparse_memory = None
+        
+        # 2c. 自回归扩散生成 (4步去噪)
+        clip = ar_diffusion_generate(
+            prompt=prompt,
+            local_window=prev_frames,
+            memory=sparse_memory,
+            num_steps=4
+        )
+        all_clips.append(clip)
+    
+    # 3. DMD损失计算
+    teacher_output = teacher_model(prompts)
+    loss = dmd_loss(all_clips, teacher_output)
+    loss.backward()
+    optimizer.step()</code></pre>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察 8：训练-推理对齐的关键</div>
+<p>传统方法在训练时使用Ground Truth历史帧，推理时使用自生成帧，导致<strong>训练-测试分布偏移</strong>。MemFlow的流式长调优策略让模型在训练时就使用<strong>自己生成的帧</strong>构建记忆库，完美对齐了训练和推理场景。这使得NAM学会在自生成（可能有误差的）历史中找到正确的上下文。</p>
+</div>
+
+<h3>训练细节</h3>
+
+<div class="stats-grid">
+<div class="stat-card">
+<div class="stat-val">3000</div>
+<div class="stat-label">训练步数</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">60s</div>
+<div class="stat-label">最长生成序列</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">5s</div>
+<div class="stat-label">每轮生成片段</div>
+</div>
+</div>
+
+<p>训练使用LongLive构建的<strong>switch-prompt数据集</strong>（由Qwen2-72B-Instruct生成），每个序列包含6个连续的10秒提示。训练过程中，模型通过滚动扩展（rolling extension）逐步生成更长的视频序列，全程有DMD监督。</p>
+
+<div class="warn-box">
+<p><strong>关键设计：</strong>NAM和SMA在训练过程中也被激活——NAM让模型学会从自生成帧中检索相关历史，SMA缓解记忆引入的计算开销。这种端到端训练确保了记忆机制与生成模型的深度耦合。</p>
+</div>
+</div>
+
+<!-- ==================== CH5: 实验结果 ==================== -->
+<div class="chapter" id="ch5">
+<div class="chapter-num">CHAPTER 05</div>
+<h2>实验结果：SOTA长视频生成</h2>
+
+<p>MemFlow在多个评估维度上取得了最优结果，验证了自适应记忆机制在长视频生成中的有效性。</p>
+
+<h3>多提示60秒生成</h3>
+
+<p>在最具挑战性的<strong>多提示60秒交互式生成</strong>任务中，MemFlow与SkyReels-V2、Self Forcing、LongLive和FramePack进行了对比：</p>
+
+<div class="fig">
+<img src="assets/table_1.webp" alt="Table 1 - Multi-prompt 60s comparison">
+<div class="fig-caption">Table 1: 多提示60秒设置下的定量比较。MemFlow在质量分数上取得最优（85.02），美学分数最高（61.07），CLIP分数在长时间段保持稳定</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察 9：CLIP分数的时间衰减分析</div>
+<p>观察CLIP分数随时间的变化趋势非常有启发性：所有方法在0-10秒时表现相近（26分左右），但<strong>随着时间推移差距逐渐拉大</strong>。到50-60秒时，MemFlow（24.22）显著优于SkyReels-V2（20.91）和FramePack（21.62）。这说明自适应记忆在<strong>长距离叙事一致性</strong>上的优势是累积性的——越长的视频，优势越明显。</p>
+</div>
+
+<div class="fig">
+<img src="assets/figure_3.webp" alt="Figure 3 - Qualitative comparison">
+<div class="fig-caption">Figure 3: 多提示60秒设置下的定性比较。MemFlow在叙事连贯性和主体一致性上显著优于其他方法，无漂移或重复角色问题</div>
+</div>
+
+<h3>单提示生成：5秒与30秒</h3>
+
+<p>虽然MemFlow专为多提示场景设计，但在单提示生成中也展现了强竞争力：</p>
+
+<div class="fig">
+<img src="assets/table_2.webp" alt="Table 2 - Single-prompt 5s comparison">
+<div class="fig-caption">Table 2: 单提示5秒设置下的定量比较。MemFlow以18.7 FPS的吞吐量实现了85.14的总分和最高的语义分数（81.90）</div>
+</div>
+
+<table class="result-table">
+<thead>
+<tr><th>模型</th><th>总分</th><th>质量分</th><th>语义分</th><th>吞吐量(FPS)</th></tr>
+</thead>
+<tbody>
+<tr><td>SkyReels-V2</td><td>75.29</td><td>80.77</td><td>53.37</td><td>0.49</td></tr>
+<tr><td>FramePack</td><td>81.95</td><td>83.61</td><td>75.32</td><td>0.92</td></tr>
+<tr><td>Self Forcing</td><td>81.59</td><td>83.82</td><td>72.70</td><td>17.0</td></tr>
+<tr><td>LongLive</td><td>83.52</td><td>85.44</td><td>75.82</td><td>20.3</td></tr>
+<tr class="highlight"><td>MemFlow</td><td>84.51</td><td>85.92</td><td>78.87</td><td>18.7</td></tr>
+</tbody>
+</table>
+<p style="font-size:12px;color:var(--ink-muted);text-align:center">Table 4: 单提示30秒设置下的比较，MemFlow在所有指标上均取得最优</p>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察 10：效率-质量的优雅平衡</div>
+<p>MemFlow以<strong>仅7.9%的速度损失</strong>（从20.3 FPS降至18.7 FPS）换来了显著的质量提升。这个代价非常小——在实际应用中，用户几乎感知不到这1.6 FPS的差异，但却能获得大幅改善的长期一致性和叙事连贯性。SMA的Top-k选择是实现这一平衡的关键。</p>
+</div>
+
+<!-- SVG: Performance Radar -->
+<div class="svg-wrap">
+<svg viewBox="0 0 500 350" xmlns="http://www.w3.org/2000/svg">
+<text x="250" y="22" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#1e1b4b">多维度性能对比 (60s多提示)</text>
+
+<!-- Radar chart center at 250, 190, radius 130 -->
+<!-- Axes: Quality, Consistency, Aesthetic, CLIP@10s, CLIP@30s, CLIP@60s -->
+<!-- Background circles -->
+<circle cx="250" cy="190" r="130" fill="none" stroke="#e9d5ff" stroke-width="0.5"/>
+<circle cx="250" cy="190" r="100" fill="none" stroke="#e9d5ff" stroke-width="0.5"/>
+<circle cx="250" cy="190" r="70" fill="none" stroke="#e9d5ff" stroke-width="0.5"/>
+<circle cx="250" cy="190" r="40" fill="none" stroke="#e9d5ff" stroke-width="0.5"/>
+
+<!-- Axis lines -->
+<line x1="250" y1="190" x2="250" y2="60" stroke="#d8b4fe" stroke-width="0.5"/>
+<line x1="250" y1="190" x2="362" y2="125" stroke="#d8b4fe" stroke-width="0.5"/>
+<line x1="250" y1="190" x2="362" y2="255" stroke="#d8b4fe" stroke-width="0.5"/>
+<line x1="250" y1="190" x2="250" y2="320" stroke="#d8b4fe" stroke-width="0.5"/>
+<line x1="250" y1="190" x2="138" y2="255" stroke="#d8b4fe" stroke-width="0.5"/>
+<line x1="250" y1="190" x2="138" y2="125" stroke="#d8b4fe" stroke-width="0.5"/>
+
+<!-- Axis labels -->
+<text x="250" y="48" text-anchor="middle" font-size="10" fill="#7e22ce">质量分</text>
+<text x="375" y="120" text-anchor="middle" font-size="10" fill="#7e22ce">一致性</text>
+<text x="375" y="265" text-anchor="middle" font-size="10" fill="#7e22ce">美学分</text>
+<text x="250" y="338" text-anchor="middle" font-size="10" fill="#7e22ce">CLIP@30s</text>
+<text x="125" y="265" text-anchor="middle" font-size="10" fill="#7e22ce">CLIP@50s</text>
+<text x="125" y="120" text-anchor="middle" font-size="10" fill="#7e22ce">吞吐量</text>
+
+<!-- MemFlow polygon (normalized: higher=better, all ~top) -->
+<polygon points="250,72 348,133 345,245 250,268 162,242 250,190" 
+  fill="rgba(16,185,129,0.15)" stroke="#10b981" stroke-width="2"/>
+<!-- LongLive polygon -->
+<polygon points="250,78 340,140 335,248 240,275 155,248 230,190" 
+  fill="rgba(168,85,247,0.08)" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="5,3"/>
+<!-- Self Forcing polygon -->
+<polygon points="250,82 330,148 325,252 230,282 148,255 250,190" 
+  fill="rgba(244,63,94,0.06)" stroke="#f43f5e" stroke-width="1.5" stroke-dasharray="3,3"/>
+
+<!-- Legend -->
+<rect x="360" y="30" width="10" height="10" fill="rgba(16,185,129,0.3)" stroke="#10b981" stroke-width="1"/>
+<text x="375" y="39" font-size="9" fill="#1e1b4b">MemFlow</text>
+<rect x="360" y="45" width="10" height="10" fill="rgba(168,85,247,0.15)" stroke="#a855f7" stroke-width="1" stroke-dasharray="3,2"/>
+<text x="375" y="54" font-size="9" fill="#1e1b4b">LongLive</text>
+<rect x="360" y="60" width="10" height="10" fill="rgba(244,63,94,0.1)" stroke="#f43f5e" stroke-width="1" stroke-dasharray="2,2"/>
+<text x="375" y="69" font-size="9" fill="#1e1b4b">Self Forcing</text>
+</svg>
+<p class="svg-caption">MemFlow在质量、一致性、美学和长时间段CLIP分数上的综合优势</p>
+</div>
+</div>
+
+<!-- ==================== CH6: 消融分析 ==================== -->
+<div class="chapter" id="ch6">
+<div class="chapter-num">CHAPTER 06</div>
+<h2>消融分析：记忆机制的深度解剖</h2>
+
+<p>论文对NAM和SMA进行了系统性的消融研究，揭示了每个组件的贡献以及记忆容量的影响。</p>
+
+<h3>记忆机制对比</h3>
+
+<div class="fig">
+<img src="assets/table_3.webp" alt="Table 3 - Memory mechanism ablation">
+<div class="fig-caption">Table 3: 不同记忆机制的定量分析。NAM在主体一致性和背景一致性上均优于Frame Sink，SMA在保持质量的同时将吞吐量从17.6提升到18.7 FPS</div>
+</div>
+
+<table class="result-table">
+<thead>
+<tr><th>记忆机制</th><th>主体一致性</th><th>背景一致性</th><th>吞吐量(FPS)</th></tr>
+</thead>
+<tbody>
+<tr><td>w/o Memory</td><td>94.41</td><td>95.15</td><td>23.5</td></tr>
+<tr><td>Frame Sink</td><td>97.66</td><td>96.20</td><td>20.3</td></tr>
+<tr class="highlight"><td>NAM + SMA (完整)</td><td>98.01</td><td>96.70</td><td>18.7</td></tr>
+<tr><td>NAM (无SMA)</td><td>98.05</td><td>96.57</td><td>17.6</td></tr>
+</tbody>
+</table>
+<p style="font-size:12px;color:var(--ink-muted);text-align:center">精简版对比：NAM + SMA 在一致性与效率之间取得最佳平衡</p>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察 11：SMA的价值不仅是速度</div>
+<p>SMA将吞吐量从17.6 FPS提升到18.7 FPS（+6.25%），同时<strong>背景一致性反而从96.57提升到96.70</strong>。这反直觉的结果说明：SMA过滤掉的不仅是不相关的帧，还可能是包含<strong>干扰信息</strong>的帧。稀疏激活起到了一种"注意力正则化"的作用。</p>
+</div>
+
+<h3>记忆容量的影响</h3>
+
+<div class="fig">
+<img src="assets/figure_5.webp" alt="Figure 5 - Memory capacity analysis">
+<div class="fig-caption">Figure 5: 不同记忆容量下的CLIP分数变化。NAM(b=3)提供最稳定的平衡，b=6和b=9反而导致性能波动</div>
+</div>
+
+<div class="compare-grid">
+<div class="compare-card bad">
+<h4>b=6: 过度依赖全局记忆</h4>
+<p>记忆占比过大导致注意力感受野失衡，破坏短期叙事流畅性</p>
+</div>
+<div class="compare-card bad">
+<h4>b=9: 严重不稳定</h4>
+<p>全局上下文远超局部窗口，导致CLIP分数剧烈波动</p>
+</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察 12：局部-全局平衡的黄金法则</div>
+<p>MemFlow选择 <strong>b=3</strong>（记忆容量 = 局部窗口大小的一半）作为最优配置。这揭示了一个深层设计原则：记忆不应"压倒"局部上下文，而应作为<strong>补充信号</strong>。过大的记忆容量会让模型过度依赖全局历史，丧失对当前生成节奏的敏感性——类似于"看得太远而忽略脚下"。</p>
+</div>
+
+<h3>30秒单提示场景</h3>
+
+<div class="fig">
+<img src="assets/table_4_1.webp" alt="Table 4 - 30s single prompt">
+<div class="fig-caption">Table 4: 单提示30秒设置的比较。MemFlow在所有指标上均超越现有方法，验证了自适应记忆在长持续时间单提示场景中的优势</div>
+</div>
+</div>
+
+<!-- ==================== CH7: 代码实现 ==================== -->
+<div class="chapter" id="ch7">
+<div class="chapter-num">CHAPTER 07</div>
+<h2>代码实现：核心模块解析</h2>
+
+<p>以下基于论文描述，提供MemFlow核心模块的参考实现。</p>
+
+<h3>NAM: 叙事自适应记忆</h3>
+
+<div class="code-block">
+<div class="code-header">
+<span>nam_module.py</span>
+<span class="tag">可信度: HIGH (基于论文公式)</span>
+</div>
+<pre><code>import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class NarrativeAdaptiveMemory(nn.Module):
+    """
+    Narrative Adaptive Memory (NAM) for MemFlow.
+    Dynamically retrieves semantically relevant historical context.
+    """
+    def __init__(self, hidden_dim: int = 768, memory_capacity: int = 3, top_k: int = 3):
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.b = memory_capacity  # Memory capacity (b=3 optimal)
+        self.top_k = top_k
+    
+    def semantic_retrieve(
+        self,
+        text_query: torch.Tensor,    # Q_text^l: [1, d]
+        memory_keys: torch.Tensor,   # K_m: [b, n, d] (b frames, n tokens each)
+    ) -> torch.Tensor:
+        """
+        Eq.1: Compute semantic relevance scores between text query
+        and each frame's KV cache in memory bank.
+        """
+        b, n, d = memory_keys.shape
+        
+        # Compute attention scores: text query vs each frame's keys
+        # S_{m,i}^l = Aggregate(Softmax(Q_text * K_{m,i}^T / sqrt(d)))
+        scores = []
+        for i in range(b):
+            attn_weights = F.softmax(
+                text_query @ memory_keys[i].T / (d ** 0.5), dim=-1
+            )  # [1, n]
+            score_i = attn_weights.mean()  # Aggregate = mean pooling
+            scores.append(score_i)
+        
+        return torch.stack(scores)  # [b]
+    
+    def top_k_select(
+        self,
+        scores: torch.Tensor,        # [b] relevance scores
+        memory_kv: tuple,            # (K_m, V_m) each [b, n, d]
+    ) -> tuple:
+        """
+        Eq.3: Select top-k most semantically aligned frames.
+        """
+        K_m, V_m = memory_kv
+        _, topk_indices = torch.topk(scores, self.top_k)
+        
+        K_selected = K_m[topk_indices]  # [k, n, d]
+        V_selected = V_m[topk_indices]  # [k, n, d]
+        
+        return K_selected, V_selected
+    
+    def redundant_removal(
+        self,
+        prev_chunk_kv: tuple,        # (K_prev, V_prev) each [T, n, d]
+    ) -> tuple:
+        """
+        Use first frame's KV as compact prototype for the entire chunk.
+        Leverages temporal redundancy in short video clips.
+        """
+        K_prev, V_prev = prev_chunk_kv
+        # Select first frame as prototype
+        K_proto = K_prev[0:1]  # [1, n, d]
+        V_proto = V_prev[0:1]  # [1, n, d]
+        return K_proto, V_proto
+    
+    def update_memory(
+        self,
+        selected_kv: tuple,          # Top-k selected from history
+        prototype_kv: tuple,         # First frame of previous chunk
+    ) -> tuple:
+        """
+        Update memory bank: selected historical frames + new prototype.
+        """
+        K_sel, V_sel = selected_kv
+        K_proto, V_proto = prototype_kv
+        
+        K_updated = torch.cat([K_sel, K_proto], dim=0)
+        V_updated = torch.cat([V_sel, V_proto], dim=0)
+        
+        return K_updated, V_updated
+    
+    def forward(
+        self,
+        text_query: torch.Tensor,
+        memory_kv: tuple,
+        prev_chunk_kv: tuple = None,
+    ) -> tuple:
+        """Full NAM pipeline: retrieve → remove redundancy → update."""
+        # Step 1: Semantic Retrieval
+        scores = self.semantic_retrieve(text_query, memory_kv[0])
+        
+        # Step 2: Top-k Selection
+        selected_kv = self.top_k_select(scores, memory_kv)
+        
+        # Step 3: Redundant Removal + Update
+        if prev_chunk_kv is not None:
+            prototype_kv = self.redundant_removal(prev_chunk_kv)
+            updated_kv = self.update_memory(selected_kv, prototype_kv)
+        else:
+            updated_kv = selected_kv
+        
+        return updated_kv, scores</code></pre>
+</div>
+
+<h3>SMA: 稀疏记忆激活</h3>
+
+<div class="code-block">
+<div class="code-header">
+<span>sma_module.py</span>
+<span class="tag">可信度: HIGH (基于论文公式)</span>
+</div>
+<pre><code>class SparseMemoryActivation(nn.Module):
+    """
+    Sparse Memory Activation (SMA) for MemFlow.
+    Relevance-gated memory selection before attention computation.
+    """
+    def __init__(self, top_k: int = 2):
+        super().__init__()
+        self.top_k = top_k
+    
+    def forward(
+        self,
+        Q_vis: torch.Tensor,     # [B, T, n, d] visual query from current chunk
+        K_mem: torch.Tensor,     # [B, b, n, d] memory bank keys
+        V_mem: torch.Tensor,     # [B, b, n, d] memory bank values
+    ) -> tuple:
+        """
+        Eq.2-4: Compute compact descriptors, score relevance,
+        and return top-k selected KV for sparse attention.
+        """
+        B, b, n, d = K_mem.shape
+        
+        # Step 1: Compact descriptors via mean pooling (Eq.2)
+        q_bar = Q_vis.mean(dim=2)      # [B, T, d] → aggregate over tokens
+        q_bar = q_bar.mean(dim=1)      # [B, d] → aggregate over time
+        q_bar = q_bar.unsqueeze(1)     # [B, 1, d]
+        
+        k_bar = K_mem.mean(dim=2)      # [B, b, d] → per-frame descriptor
+        
+        # Step 2: Frame-wise relevance scores (Eq.2)
+        scores = (q_bar @ k_bar.transpose(-1, -2)).squeeze(1)  # [B, b]
+        
+        # Step 3: Top-k selection (Eq.3)
+        _, topk_idx = torch.topk(scores, self.top_k, dim=-1)  # [B, k]
+        
+        # Gather selected KV pairs
+        topk_idx_expanded = topk_idx.unsqueeze(-1).unsqueeze(-1)
+        topk_idx_expanded = topk_idx_expanded.expand(-1, -1, n, d)
+        
+        K_selected = torch.gather(K_mem, 1, topk_idx_expanded)  # [B, k, n, d]
+        V_selected = torch.gather(V_mem, 1, topk_idx_expanded)  # [B, k, n, d]
+        
+        return K_selected, V_selected, scores</code></pre>
+</div>
+
+<h3>完整推理流程</h3>
+
+<div class="code-block">
+<div class="code-header">
+<span>memflow_inference.py</span>
+<span class="tag">可信度: MEDIUM (简化推理流程)</span>
+</div>
+<pre><code>class MemFlowInference:
+    """
+    MemFlow inference pipeline with NAM + SMA.
+    """
+    def __init__(self, dit_model, memory_capacity=3, sma_topk=2):
+        self.model = dit_model
+        self.nam = NarrativeAdaptiveMemory(
+            memory_capacity=memory_capacity, top_k=memory_capacity
+        )
+        self.sma = SparseMemoryActivation(top_k=sma_topk)
+        self.memory_bank = None  # Will be initialized after first chunk
+    
+    def generate_chunk(self, prompt: str, local_window, num_steps=4):
+        """Generate one video chunk with memory-augmented attention."""
+        
+        # Tokenize prompt
+        text_tokens = encode_text(prompt)
+        
+        if self.memory_bank is not None:
+            # NAM: Semantic retrieval + update
+            self.memory_bank, _ = self.nam(
+                text_query=text_tokens,
+                memory_kv=self.memory_bank,
+                prev_chunk_kv=self.prev_chunk_kv,
+            )
+            
+            # SMA: Sparse activation
+            K_sparse, V_sparse, _ = self.sma(
+                Q_vis=local_window,
+                K_mem=self.memory_bank[0],
+                V_mem=self.memory_bank[1],
+            )
+        else:
+            K_sparse, V_sparse = None, None
+        
+        # AR-Diffusion generation with sparse memory
+        chunk = self.model.generate(
+            text_tokens=text_tokens,
+            local_kv=local_window,
+            memory_k=K_sparse,
+            memory_v=V_sparse,
+            num_steps=num_steps,
+        )
+        
+        # Update prev_chunk_kv for next iteration
+        self.prev_chunk_kv = self.model.get_kv_cache(chunk)
+        
+        return chunk
+    
+    def generate_long_video(self, prompts: list):
+        """Generate long video from sequence of prompts."""
+        clips = []
+        for prompt in prompts:
+            clip = self.generate_chunk(
+                prompt=prompt,
+                local_window=clips[-1] if clips else None,
+            )
+            clips.append(clip)
+        return clips</code></pre>
+</div>
+</div>
+
+<!-- ==================== CH8: 科研问题 ==================== -->
+<div class="chapter" id="ch8">
+<div class="chapter-num">CHAPTER 08</div>
+<h2>开放科研问题</h2>
+
+<div class="rq-card">
+<div class="rq-tag">RQ-1</div>
+<h4>NAM能否扩展到更精细的Token级检索？</h4>
+<p>当前NAM在帧级进行语义检索，但一帧内可能包含多个语义区域（如前景人物、背景建筑）。是否可以设计<strong>Token级的细粒度记忆检索</strong>，使模型能精确选择帧内最相关的空间区域？这可能需要更高效的Token聚类或空间哈希策略。</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RQ-2</div>
+<h4>记忆容量能否随内容复杂度自适应调整？</h4>
+<p>论文发现固定容量b=3是最优的，但这忽略了不同叙事阶段的复杂度差异。简单的连续场景可能只需1帧记忆，而复杂的人物交互场景可能需要更多。设计一个<strong>动态容量调度器</strong>，根据当前提示的语义复杂度自适应调整记忆大小，可能是进一步优化的方向。</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RQ-3</div>
+<h4>SMA的均值池化能否替换为学习型描述符？</h4>
+<p>当前SMA使用均值池化作为帧级描述符，这是一种"免费"但可能次优的压缩。训练一个轻量级的<strong>可学习描述符网络</strong>（如小型MLP），可能在不显著增加计算的情况下提升相关性评分的准确性。关键挑战是如何在端到端训练中保持梯度稳定。</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RQ-4</div>
+<h4>自适应记忆能否与多模态条件融合？</h4>
+<p>当前NAM仅使用文本提示进行语义检索。在实际交互场景中，用户可能同时提供文本、图像参考、甚至语音指令。如何将<strong>多模态条件融合到记忆检索</strong>中——例如，当用户提供参考图片时，记忆检索应同时考虑视觉和文本相似性——是一个有前景的研究方向。</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RQ-5</div>
+<h4>记忆压缩与检索的联合优化目标是什么？</h4>
+<p>NAM的"首帧原型"压缩和语义检索是独立设计的。能否设计一个<strong>联合优化目标</strong>，使得压缩后的记忆表示天然地适合下游检索任务？例如，通过对比学习让原型KV编码更多可检索的语义信息，而非仅仅保留视觉外观。</p>
+</div>
+
+<div class="divider">&hellip; &hellip; &hellip;</div>
+
+<h3>核心贡献总结</h3>
+
+<div class="stats-grid">
+<div class="stat-card">
+<div class="stat-val">NAM</div>
+<div class="stat-label">叙事自适应记忆<br>语义对齐的动态检索</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">SMA</div>
+<div class="stat-label">稀疏记忆激活<br>Top-k相关性门控</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">18.7 FPS</div>
+<div class="stat-label">仅7.9%速度损失<br>实时交互式生成</div>
+</div>
+</div>
+
+</div>
+
+<!-- Footer -->
+<div class="footer">
+<p>MemFlow: Flowing Adaptive Memory for Consistent and Efficient Long Video Narratives</p>
+<p>Sihui Ji, Xi Chen, Shuai Yang, Xin Tao, Pengfei Wan, Hengshuang Zhao</p>
+<p>HKU &middot; Kling Team, Kuaishou Technology &middot; HKUST(GZ)</p>
+<p style="margin-top:12px;font-size:11px;color:var(--lav-400)">arXiv: 2509.22622 &middot; <a href="https://github.com/KlingTeam/MemFlow" style="color:var(--lav-500);text-decoration:none">GitHub</a></p>
+</div>
+
+</div>
+</body>
+</html>

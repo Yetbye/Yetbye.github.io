@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>从双向扩散到快速自回归视频扩散模型 | CausVid 论文精读</title>
+<meta name="description" content="CausVid (CVPR 2025 ORAL) 论文精读：非对称蒸馏 × DMD视频扩展 × KV缓存流式生成">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@400;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+window.MathJax={
+  tex:{
+    inlineMath:[['\\(','\\)'],['$','$']],
+    displayMath:[['$$','$$']],
+    processEscapes:true
+  },
+  options:{
+    skipHtmlTags:['script','noscript','style','textarea','pre','code']
+  },
+  chtml:{scale:1.05},
+  startup:{
+    typeset:true
+  }
+};
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+<script>
+// CDN 回退：unpkg 加载失败时自动切换到 jsdelivr
+window.addEventListener('error', function(e) {
+  if (e.target && e.target.id === 'MathJax-script') {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+    s.async = true;
+    s.id = 'MathJax-script-fallback';
+    document.head.appendChild(s);
+  }
+}, true);
+// 超时检测：5 秒后若 MathJax 未渲染则加载备用 CDN
+setTimeout(function() {
+  if (!window.MathJax || !window.MathJax.startup || !window.MathJax.startup.promise) {
+    var existing = document.getElementById('MathJax-script-fallback');
+    if (!existing) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+      s.async = true;
+      s.id = 'MathJax-script-fallback';
+      document.head.appendChild(s);
+    }
+  }
+}, 5000);
+</script>
+<style>
+:root{--lavender:#a855f7;--lavender-light:#c084fc;--lavender-dark:#7c3aed;--coral:#fb7185;--coral-light:#fda4af;--mint:#34d399;--mint-light:#6ee7b7;--mint-dark:#059669;--amber:#fbbf24;--amber-light:#fcd34d;--amber-dark:#d97706;--cream:#faf8f5;--cream-dark:#f5f0e8;--text-primary:#1f2937;--text-secondary:#4b5563;--text-muted:#6b7280;--border:#e5e7eb;--code-bg:#1e1e2e;--code-text:#cdd6f4;--shadow-sm:0 1px 3px rgba(0,0,0,.06);--shadow-md:0 4px 16px rgba(0,0,0,.08);--shadow-lg:0 12px 40px rgba(0,0,0,.12);--maxw:820px;--radius:12px}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:80px}
+body{font-family:'Noto Sans SC',sans-serif;background:var(--cream);color:var(--text-primary);line-height:1.8;font-size:16px;overflow-x:hidden}
+h1,h2,h3,h4,h5{font-family:'Noto Serif SC',serif;font-weight:700;line-height:1.4}
+a{color:var(--lavender-dark);text-decoration:none;transition:color .2s}
+a:hover{color:var(--coral)}
+img{max-width:100%;display:block;border-radius:var(--radius)}
+code{font-family:'JetBrains Mono',monospace}
+.progress-bar{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--lavender),var(--coral),var(--amber));width:0;z-index:1001;transition:width .1s}
+.nav{position:fixed;top:0;left:0;right:0;z-index:1000;background:rgba(250,248,245,.7);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-bottom:1px solid rgba(168,85,247,.12);transition:all .3s}
+.nav.scrolled{background:rgba(250,248,245,.85);box-shadow:var(--shadow-sm)}
+.nav-inner{max-width:var(--maxw);margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.nav-logo{font-family:'Noto Serif SC',serif;font-weight:700;font-size:17px;color:var(--lavender-dark);white-space:nowrap}
+.nav-links{display:flex;gap:4px;list-style:none;flex-wrap:wrap}
+.nav-links a{font-size:13px;color:var(--text-secondary);padding:6px 10px;border-radius:8px;transition:all .2s;white-space:nowrap}
+.nav-links a:hover{background:rgba(168,85,247,.1);color:var(--lavender-dark)}
+.nav-toggle{display:none;background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-secondary)}
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:100px 24px 60px;position:relative;background:linear-gradient(180deg,#faf8f5 0%,#f5f0ff 40%,#fdf2f8 70%,#faf8f5 100%);overflow:hidden}
+.hero::before{content:'';position:absolute;top:10%;left:50%;transform:translateX(-50%);width:600px;height:600px;background:radial-gradient(circle,rgba(168,85,247,.08) 0%,transparent 70%);border-radius:50%;pointer-events:none}
+.hero::after{content:'';position:absolute;bottom:0;left:0;right:0;height:200px;background:linear-gradient(180deg,transparent,var(--cream));pointer-events:none}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,rgba(168,85,247,.12),rgba(251,113,133,.12));border:1px solid rgba(168,85,247,.25);color:var(--lavender-dark);padding:8px 20px;border-radius:30px;font-size:13px;font-weight:500;margin-bottom:28px;backdrop-filter:blur(10px);position:relative;z-index:1}
+.hero-badge .dot{width:8px;height:8px;background:var(--coral);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.3)}}
+.hero-title{font-size:clamp(28px,5vw,46px);font-weight:900;color:var(--text-primary);margin-bottom:20px;max-width:720px;position:relative;z-index:1;letter-spacing:-.02em}
+.hero-title .accent{background:linear-gradient(135deg,var(--lavender),var(--coral));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.hero-tagline{font-size:clamp(14px,2.5vw,18px);color:var(--text-secondary);margin-bottom:16px;font-weight:500;position:relative;z-index:1}
+.hero-tagline .sep{margin:0 10px;color:var(--lavender-light)}
+.hero-desc{font-size:15px;color:var(--text-muted);max-width:580px;line-height:1.9;margin-bottom:40px;position:relative;z-index:1}
+.hero-image-card{width:100%;max-width:680px;border-radius:20px;overflow:hidden;box-shadow:var(--shadow-lg);position:relative;z-index:1;border:1px solid rgba(168,85,247,.15);background:linear-gradient(135deg,#f5f0ff,#fdf2f8)}
+.hero-image-card img{width:100%;height:auto;display:block}
+.img-placeholder{width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--lavender-light),var(--coral-light));color:#fff;font-family:'Noto Serif SC',serif;font-size:18px;font-weight:600;text-align:center;padding:40px}
+.scroll-indicator{margin-top:40px;display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--text-muted);font-size:12px;position:relative;z-index:1}
+.scroll-indicator .arrow{width:20px;height:20px;border-right:2px solid var(--lavender);border-bottom:2px solid var(--lavender);transform:rotate(45deg);animation:bounce 2s infinite}
+@keyframes bounce{0%,100%{transform:rotate(45deg) translate(0,0)}50%{transform:rotate(45deg) translate(4px,4px)}}
+.main{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+.chapter{padding:60px 0;position:relative}
+.chapter-header{margin-bottom:36px}
+.chapter-num{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--lavender);background:rgba(168,85,247,.08);padding:4px 12px;border-radius:20px;margin-bottom:12px;font-weight:500}
+.chapter-title{font-size:clamp(22px,4vw,30px);color:var(--text-primary);margin-bottom:8px}
+.chapter-subtitle{font-size:14px;color:var(--text-muted);font-weight:400}
+p{margin-bottom:18px;color:var(--text-secondary)}
+strong{color:var(--text-primary);font-weight:600}
+.highlight-l{color:var(--lavender-dark);font-weight:600}
+.highlight-c{color:var(--coral);font-weight:600}
+.highlight-m{color:var(--mint-dark);font-weight:600}
+.highlight-a{color:var(--amber-dark);font-weight:600}
+.figure{margin:36px 0;text-align:center}
+.figure svg{max-width:100%;height:auto;display:block;margin:0 auto}
+.figure img{margin:0 auto;box-shadow:var(--shadow-md);border:1px solid var(--border)}
+.figure-caption{margin-top:14px;font-size:13px;color:var(--text-muted);font-style:italic;line-height:1.6}
+.figure-caption strong{font-style:normal;color:var(--text-secondary)}
+.insight-box{background:linear-gradient(135deg,rgba(52,211,153,.08),rgba(52,211,153,.03));border-left:4px solid var(--mint);border-radius:0 12px 12px 0;padding:24px 28px;margin:32px 0;position:relative}
+.insight-box::before{content:'深层洞察';position:absolute;top:-10px;left:20px;background:var(--mint-dark);color:#fff;font-size:11px;padding:3px 12px;border-radius:10px;font-weight:500;letter-spacing:1px}
+.insight-box p{margin-bottom:0;color:var(--text-secondary)}
+.insight-box p:last-child{margin-bottom:0}
+.rq-card{background:linear-gradient(135deg,rgba(251,191,36,.06),rgba(251,191,36,.02));border:1px solid rgba(251,191,36,.2);border-radius:12px;padding:28px;margin:28px 0;position:relative}
+.rq-card::before{content:attr(data-tag);position:absolute;top:-10px;left:24px;background:linear-gradient(135deg,var(--amber),var(--amber-dark));color:#fff;font-size:11px;padding:3px 14px;border-radius:10px;font-weight:600;letter-spacing:1px}
+.rq-card h4{font-size:17px;color:var(--text-primary);margin-bottom:14px;margin-top:4px}
+.rq-card p{margin-bottom:12px;font-size:14px}
+.rq-card .rq-label{display:inline-block;font-size:12px;color:var(--amber-dark);font-weight:600;margin-right:6px}
+.math-card{background:var(--cream-dark);border:1px solid var(--border);border-radius:12px;padding:24px 28px;margin:28px 0}
+.math-card h4{font-size:15px;color:var(--lavender-dark);margin-bottom:16px}
+.math-card .step{margin-bottom:14px;padding-left:24px;position:relative;font-size:14px;color:var(--text-secondary)}
+.math-card .step::before{content:attr(data-n);position:absolute;left:0;top:0;width:18px;height:18px;background:var(--lavender);color:#fff;border-radius:50%;font-size:11px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace}
+.math-card .step:last-child{margin-bottom:0}
+.table-wrap{overflow-x:auto;margin:28px 0;border-radius:12px;box-shadow:var(--shadow-sm)}
+table{width:100%;border-collapse:collapse;font-size:14px;background:#fff}
+th{background:linear-gradient(135deg,var(--lavender),var(--lavender-dark));color:#fff;padding:14px 16px;text-align:left;font-weight:500;font-size:13px}
+td{padding:12px 16px;border-bottom:1px solid var(--border);color:var(--text-secondary)}
+tr:hover td{background:rgba(168,85,247,.03)}
+.best{color:var(--mint-dark);font-weight:700}
+.code-block{background:var(--code-bg);border-radius:12px;margin:28px 0;overflow:hidden;box-shadow:var(--shadow-md)}
+.code-header{background:rgba(0,0,0,.2);padding:12px 20px;display:flex;align-items:center;justify-content:space-between}
+.code-header .dots{display:flex;gap:6px}
+.code-header .dot{width:12px;height:12px;border-radius:50%}
+.code-header .dot:nth-child(1){background:#f38ba8}
+.code-header .dot:nth-child(2){background:#f9e2af}
+.code-header .dot:nth-child(3){background:#a6e3a1}
+.code-header .title{color:#a6adc8;font-size:13px;font-family:'JetBrains Mono',monospace}
+.code-block pre{padding:20px 24px;overflow-x:auto}
+.code-block code{color:var(--code-text);font-size:13px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.divider{text-align:center;padding:40px 0;color:var(--lavender-light);font-size:24px}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px;margin:28px 0}
+.stat-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center;box-shadow:var(--shadow-sm);transition:transform .2s}
+.stat-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-md)}
+.stat-card .num{font-size:28px;font-weight:900;font-family:'Noto Serif SC',serif;background:linear-gradient(135deg,var(--lavender),var(--coral));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.stat-card .label{font-size:12px;color:var(--text-muted);margin-top:6px}
+footer{text-align:center;padding:40px 24px;color:var(--text-muted);font-size:13px;border-top:1px solid var(--border);margin-top:40px}
+@media(max-width:768px){
+.nav-links{display:none;position:absolute;top:100%;left:0;right:0;background:rgba(250,248,245,.98);backdrop-filter:blur(20px);flex-direction:column;padding:12px;gap:2px;border-bottom:1px solid var(--border)}
+.nav-links.open{display:flex}
+.nav-toggle{display:block}
+.hero{padding:90px 16px 40px}
+.main{padding:0 16px}
+.chapter{padding:40px 0}
+.insight-box,.rq-card,.math-card{padding:20px;margin-left:-8px;margin-right:-8px}
+}
+</style>
+</head>
+<body>
+<div class="progress-bar" id="progressBar"></div>
+<nav class="nav" id="nav"><div class="nav-inner"><a href="#hero" class="nav-logo">CausVid 论文精读</a><button class="nav-toggle" id="navToggle" aria-label="菜单">&#9776;</button><ul class="nav-links" id="navLinks"><li><a href="../index.html">« 合辑</a></li><li><a href="#ch1">延迟困境</a></li><li><a href="#ch2">非对称蒸馏</a></li><li><a href="#ch3">因果架构</a></li><li><a href="#ch4">DMD原理</a></li><li><a href="#ch5">训练流程</a></li><li><a href="#ch6">KV缓存推理</a></li><li><a href="#ch7">实验结果</a></li><li><a href="#ch8">零样本应用</a></li><li><a href="#ch9">科研问题</a></li><li><a href="#code">代码附录</a></li></ul></div></nav>
+
+<section class="hero" id="hero">
+<div class="hero-badge"><span class="dot"></span>CVPR 2025 &middot; ORAL</div>
+<h1 class="hero-title">从双向扩散到快速<span class="accent">自回归视频扩散模型</span></h1>
+<p class="hero-tagline">非对称蒸馏<span class="sep">&times;</span>DMD视频扩展<span class="sep">&times;</span>KV缓存流式生成</p>
+<p class="hero-desc">CausVid 通过将双向视频扩散教师模型蒸馏为因果自回归学生模型，实现了 1.3 秒初始延迟与 9.4 FPS 流式生成，在 VBench-Long 榜单以 84.27 分登顶。</p>
+<div class="hero-image-card"><img src="assets/hero_causvid.webp" alt="CausVid 封面图" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="img-placeholder" style="display:none">CausVid &mdash; 从双向到因果的视频扩散蒸馏</div></div>
+<div class="scroll-indicator"><span>向下滚动阅读</span><div class="arrow"></div></div>
+</section>
+
+<main class="main">
+
+<!-- ==================== Chapter 1 ==================== -->
+<section class="chapter" id="ch1">
+<div class="chapter-header">
+<span class="chapter-num">CHAPTER 01</span>
+<h2 class="chapter-title">双向扩散的延迟困境</h2>
+<p class="chapter-subtitle">为什么当前视频扩散模型无法实现流式生成？</p>
+</div>
+
+<p>当前主流的视频扩散模型（如基于 DiT 架构的 CogVideoX、OpenSora 等）在生成每一帧时，都需要对<strong>整个视频序列</strong>进行双向注意力计算。这意味着，即便是生成第一帧，模型也必须"看到"所有未来帧的信息——这种全局依赖直接导致了严重的延迟问题。</p>
+
+<p>具体而言，生成一段 128 帧的视频需要 <span class="highlight-c">219 秒</span>，且计算与内存开销随帧数呈<span class="highlight-l">二次增长</span>。这种延迟特性使得视频扩散模型完全无法应用于交互式生成、流式推理等实时场景。</p>
+
+<div class="stat-grid">
+<div class="stat-card"><div class="num">219s</div><div class="label">128帧视频生成延迟</div></div>
+<div class="stat-card"><div class="num">O(n²)</div><div class="label">注意力计算复杂度</div></div>
+<div class="stat-card"><div class="num">0.6 FPS</div><div class="label">传统方法吞吐量</div></div>
+<div class="stat-card"><div class="num">50步</div><div class="label">传统去噪迭代次数</div></div>
+</div>
+
+<p>自回归模型（如 LLM 风格的逐帧生成）提供了一条自然的解决路径：每个帧块仅依赖历史帧，可以流式输出。然而，朴素的自回归视频生成面临<strong>误差累积</strong>问题——早期帧的微小偏差会在后续帧中被不断放大，导致视频质量迅速退化。</p>
+
+<p>CausVid 的核心思想是：<span class="highlight-l">将双向扩散模型蒸馏为因果自回归模型</span>，同时利用分布匹配蒸馏（DMD）将去噪步数从 50 步压缩至 4 步。这一"架构转换 + 步数压缩"的双重优化，最终实现了：</p>
+
+<div class="stat-grid">
+<div class="stat-card"><div class="num">84.27</div><div class="label">VBench-Long 总分（第一）</div></div>
+<div class="stat-card"><div class="num">9.4 FPS</div><div class="label">流式生成吞吐量</div></div>
+<div class="stat-card"><div class="num">1.3s</div><div class="label">首帧初始延迟</div></div>
+<div class="stat-card"><div class="num">4步</div><div class="label">去噪迭代次数</div></div>
+</div>
+
+<div class="figure">
+<svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="biGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#a855f7" stop-opacity="0.15"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0.05"/></linearGradient>
+<linearGradient id="caGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fb7185" stop-opacity="0.15"/><stop offset="100%" stop-color="#fb7185" stop-opacity="0.05"/></linearGradient>
+<marker id="arrL" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#a855f7" opacity="0.6"/></marker>
+<marker id="arrC" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#fb7185" opacity="0.6"/></marker>
+</defs>
+<text x="180" y="30" text-anchor="middle" font-family="Noto Serif SC" font-size="15" font-weight="700" fill="#7c3aed">双向注意力（传统）</text>
+<text x="540" y="30" text-anchor="middle" font-family="Noto Serif SC" font-size="15" font-weight="700" fill="#e11d48">因果注意力（CausVid）</text>
+<line x1="360" y1="15" x2="360" y2="345" stroke="#e5e7eb" stroke-width="2" stroke-dasharray="6,4"/>
+<rect x="20" y="45" width="320" height="290" rx="10" fill="url(#biGrad)" stroke="#a855f7" stroke-width="1.5" stroke-opacity="0.3"/>
+<rect x="380" y="45" width="320" height="290" rx="10" fill="url(#caGrad)" stroke="#fb7185" stroke-width="1.5" stroke-opacity="0.3"/>
+<line x1="180.0" y1="100.0" x2="245.0" y2="137.5" stroke="#a855f7" stroke-width="1" opacity="0.3" marker-end="url(#arrL)"/><line x1="180.0" y1="100.0" x2="245.0" y2="212.5" stroke="#a855f7" stroke-width="1" opacity="0.3" marker-end="url(#arrL)"/><line x1="180.0" y1="100.0" x2="180.0" y2="250.0" stroke="#a855f7" stroke-width="1" opacity="0.3" marker-end="url(#arrL)"/><line x1="180.0" y1="100.0" x2="115.0" y2="212.5" stroke="#a855f7" stroke-width="1" opacity="0.3" marker-end="url(#arrL)"/><line x1="180.0" y1="100.0" x2="115.0" y2="137.5" stroke="#a855f7" stroke-width="1" opacity="0.3" marker-end="url(#arrL)"/><line x1="245.0" y1="137.5" x2="245.0" y2="212.5" stroke="#a855f7" stroke-width="1" opacity="0.3" marker-end="url(#arrL)"/><line x1="245.0" y1="137.5" x2="180.0" y2="250.0" stroke="#a855f7" stroke-width="1" opacity="0.3" marker-end="url(#arrL)"/><line x1="245.0" y1="137.5" x2="115.0" y2="212.5" stroke="#a855f7" stroke-width="1" opacity="0.3" marker-end="url(#arrL)"/><line x1="245.0" y1="137.5" x2="115.0" y2="137.5" stroke="#a855f7" stroke-width="1" opacity="0.3" marker-end="url(#arrL)"/><line x1="245.0" y1="212.5" x2="180.0" y2="250.0" stroke="#a855f7" stroke-width="1" opacity="0.3" marker-end="url(#arrL)"/><line x1="245.0" y1="212.5" x2="115.0" y2="212.5" stroke="#a855f7" stroke-width="1" opacity="0.3" marker-end="url(#arrL)"/><line x1="245.0" y1="212.5" x2="115.0" y2="137.5" stroke="#a855f7" stroke-width="1" opacity="0.3" marker-end="url(#arrL)"/><line x1="180.0" y1="250.0" x2="115.0" y2="212.5" stroke="#a855f7" stroke-width="1" opacity="0.3" marker-end="url(#arrL)"/><line x1="180.0" y1="250.0" x2="115.0" y2="137.5" stroke="#a855f7" stroke-width="1" opacity="0.3" marker-end="url(#arrL)"/><line x1="115.0" y1="212.5" x2="115.0" y2="137.5" stroke="#a855f7" stroke-width="1" opacity="0.3" marker-end="url(#arrL)"/><circle cx="180.0" cy="100.0" r="22" fill="#fff" stroke="#a855f7" stroke-width="2"/><text x="180.0" y="104.0" text-anchor="middle" font-size="12" font-weight="600" fill="#7c3aed">1</text><circle cx="245.0" cy="137.5" r="22" fill="#fff" stroke="#a855f7" stroke-width="2"/><text x="245.0" y="141.5" text-anchor="middle" font-size="12" font-weight="600" fill="#7c3aed">2</text><circle cx="245.0" cy="212.5" r="22" fill="#fff" stroke="#a855f7" stroke-width="2"/><text x="245.0" y="216.5" text-anchor="middle" font-size="12" font-weight="600" fill="#7c3aed">3</text><circle cx="180.0" cy="250.0" r="22" fill="#fff" stroke="#a855f7" stroke-width="2"/><text x="180.0" y="254.0" text-anchor="middle" font-size="12" font-weight="600" fill="#7c3aed">4</text><circle cx="115.0" cy="212.5" r="22" fill="#fff" stroke="#a855f7" stroke-width="2"/><text x="115.0" y="216.5" text-anchor="middle" font-size="12" font-weight="600" fill="#7c3aed">5</text><circle cx="115.0" cy="137.5" r="22" fill="#fff" stroke="#a855f7" stroke-width="2"/><text x="115.0" y="141.5" text-anchor="middle" font-size="12" font-weight="600" fill="#7c3aed">6</text><text x="180" y="280" text-anchor="middle" font-size="11" fill="#6b7280">所有帧互相可见</text><text x="180" y="300" text-anchor="middle" font-size="11" fill="#6b7280">生成第1帧需处理全部帧</text><rect x="100" y="310" width="160" height="20" rx="4" fill="#fb7185" opacity="0.15"/><text x="180" y="324" text-anchor="middle" font-size="11" font-weight="600" fill="#e11d48">延迟：219秒 / 128帧</text><line x1="420.0" y1="175" x2="465.0" y2="175" stroke="#fb7185" stroke-width="1.5" opacity="0.4" marker-end="url(#arrC)" stroke-dasharray="3,2"/><line x1="420.0" y1="175" x2="510.0" y2="175" stroke="#fb7185" stroke-width="1.5" opacity="0.4" marker-end="url(#arrC)" stroke-dasharray="3,2"/><line x1="420.0" y1="175" x2="555.0" y2="175" stroke="#fb7185" stroke-width="1.5" opacity="0.4" marker-end="url(#arrC)" stroke-dasharray="3,2"/><line x1="420.0" y1="175" x2="600.0" y2="175" stroke="#fb7185" stroke-width="1.5" opacity="0.4" marker-end="url(#arrC)" stroke-dasharray="3,2"/><line x1="420.0" y1="175" x2="645.0" y2="175" stroke="#fb7185" stroke-width="1.5" opacity="0.4" marker-end="url(#arrC)" stroke-dasharray="3,2"/><line x1="465.0" y1="175" x2="510.0" y2="175" stroke="#fb7185" stroke-width="1.5" opacity="0.4" marker-end="url(#arrC)" stroke-dasharray="3,2"/><line x1="465.0" y1="175" x2="555.0" y2="175" stroke="#fb7185" stroke-width="1.5" opacity="0.4" marker-end="url(#arrC)" stroke-dasharray="3,2"/><line x1="465.0" y1="175" x2="600.0" y2="175" stroke="#fb7185" stroke-width="1.5" opacity="0.4" marker-end="url(#arrC)" stroke-dasharray="3,2"/><line x1="465.0" y1="175" x2="645.0" y2="175" stroke="#fb7185" stroke-width="1.5" opacity="0.4" marker-end="url(#arrC)" stroke-dasharray="3,2"/><line x1="510.0" y1="175" x2="555.0" y2="175" stroke="#fb7185" stroke-width="1.5" opacity="0.4" marker-end="url(#arrC)" stroke-dasharray="3,2"/><line x1="510.0" y1="175" x2="600.0" y2="175" stroke="#fb7185" stroke-width="1.5" opacity="0.4" marker-end="url(#arrC)" stroke-dasharray="3,2"/><line x1="510.0" y1="175" x2="645.0" y2="175" stroke="#fb7185" stroke-width="1.5" opacity="0.4" marker-end="url(#arrC)" stroke-dasharray="3,2"/><line x1="555.0" y1="175" x2="600.0" y2="175" stroke="#fb7185" stroke-width="1.5" opacity="0.4" marker-end="url(#arrC)" stroke-dasharray="3,2"/><line x1="555.0" y1="175" x2="645.0" y2="175" stroke="#fb7185" stroke-width="1.5" opacity="0.4" marker-end="url(#arrC)" stroke-dasharray="3,2"/><line x1="600.0" y1="175" x2="645.0" y2="175" stroke="#fb7185" stroke-width="1.5" opacity="0.4" marker-end="url(#arrC)" stroke-dasharray="3,2"/><circle cx="420.0" cy="175" r="22" fill="#34d399" opacity="0.2" stroke="#059669" stroke-width="2"/><text x="420.0" y="179.0" text-anchor="middle" font-size="12" font-weight="600" fill="#e11d48">1</text><circle cx="465.0" cy="175" r="20" fill="#fff" stroke="#fb7185" stroke-width="2"/><text x="465.0" y="179.0" text-anchor="middle" font-size="12" font-weight="600" fill="#e11d48">2</text><circle cx="510.0" cy="175" r="20" fill="#fff" stroke="#fb7185" stroke-width="2"/><text x="510.0" y="179.0" text-anchor="middle" font-size="12" font-weight="600" fill="#e11d48">3</text><circle cx="555.0" cy="175" r="20" fill="#fff" stroke="#fb7185" stroke-width="2"/><text x="555.0" y="179.0" text-anchor="middle" font-size="12" font-weight="600" fill="#e11d48">4</text><circle cx="600.0" cy="175" r="20" fill="#fff" stroke="#fb7185" stroke-width="2"/><text x="600.0" y="179.0" text-anchor="middle" font-size="12" font-weight="600" fill="#e11d48">5</text><circle cx="645.0" cy="175" r="20" fill="#fff" stroke="#fb7185" stroke-width="2"/><text x="645.0" y="179.0" text-anchor="middle" font-size="12" font-weight="600" fill="#e11d48">6</text><text x="540" y="280" text-anchor="middle" font-size="11" fill="#6b7280">当前帧仅依赖历史帧</text><text x="540" y="300" text-anchor="middle" font-size="11" fill="#6b7280">可流式输出，支持KV缓存</text><rect x="460" y="310" width="160" height="20" rx="4" fill="#34d399" opacity="0.15"/><text x="540" y="324" text-anchor="middle" font-size="11" font-weight="600" fill="#059669">延迟：1.3秒首帧 / 9.4 FPS</text><text x="180" y="75" text-anchor="middle" font-size="10" fill="#a855f7" font-weight="600">全连接</text><text x="540" y="75" text-anchor="middle" font-size="10" fill="#fb7185" font-weight="600">因果序</text></svg><p class="figure-caption"><strong>图 1：</strong>双向 vs 因果注意力范式对比。左：传统双向扩散中所有帧互相 attend，生成任意帧都需处理完整序列；右：CausVid 因果注意力中帧按序生成，当前帧仅可见历史帧，支持流式推理。</p></div>
+<div class="figure">
+<img src="assets/fig1_latency.webp" alt="延迟对比图" onerror="this.style.display='none'">
+<p class="figure-caption"><strong>图 2（论文 Figure 1）：</strong>CausVid 与传统双向扩散模型的延迟对比。传统方法需要等待全部帧生成完毕才能输出，而 CausVid 可以在 1.3 秒内输出首帧并持续以 9.4 FPS 流式生成。</p>
+</div>
+</section>
+
+<div class="divider"><span class="icon">&#10047;</span></div>
+
+<!-- ==================== Chapter 2 ==================== -->
+<section class="chapter" id="ch2">
+<div class="chapter-header">
+<span class="chapter-num">CHAPTER 02</span>
+<h2 class="chapter-title">核心洞察——非对称蒸馏策略</h2>
+<p class="chapter-subtitle">为什么用双向教师蒸馏因果学生，而非因果教师蒸馏因果学生？</p>
+</div>
+
+<p>将双向模型转换为因果模型，最直觉的方法是<strong>因果教师蒸馏因果学生</strong>：先用因果掩码微调一个因果教师，再用它指导因果学生。然而这条路径存在根本缺陷——因果教师本身就受误差累积困扰，其监督信号质量随帧数增加而下降，最终学生模型也继承了这一问题。</p>
+
+<p>CausVid 提出了<span class="highlight-l">非对称蒸馏</span>（Asymmetric Distillation）策略：<strong>保留双向模型作为教师，仅将学生改造为因果架构</strong>。双向教师"看得见未来"，能提供更高质量的去噪监督信号；因果学生虽然只能看到历史帧，但在强教师的指导下可以学到逼近全局最优的生成能力。</p>
+
+<div class="figure">
+<svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="tGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#a855f7" stop-opacity="0.12"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0.03"/></linearGradient>
+<linearGradient id="sGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fb7185" stop-opacity="0.12"/><stop offset="100%" stop-color="#fb7185" stop-opacity="0.03"/></linearGradient>
+<linearGradient id="dmdGrad" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#34d399" stop-opacity="0.2"/><stop offset="100%" stop-color="#34d399" stop-opacity="0.05"/></linearGradient>
+</defs>
+<!-- Teacher box -->
+<rect x="40" y="30" width="280" height="200" rx="14" fill="url(#tGrad)" stroke="#a855f7" stroke-width="2"/>
+<text x="180" y="60" text-anchor="middle" font-family="Noto Serif SC" font-size="16" font-weight="700" fill="#7c3aed">双向教师模型</text>
+<text x="180" y="82" text-anchor="middle" font-size="12" fill="#6b7280">Bidirectional Teacher</text>
+<!-- Teacher: all frames visible -->
+<g transform="translate(100,100)">
+<circle cx="0" cy="30" r="14" fill="#fff" stroke="#a855f7" stroke-width="2"/><text x="0" y="34" text-anchor="middle" font-size="10" fill="#7c3aed">1</text>
+<circle cx="40" cy="30" r="14" fill="#fff" stroke="#a855f7" stroke-width="2"/><text x="40" y="34" text-anchor="middle" font-size="10" fill="#7c3aed">2</text>
+<circle cx="80" cy="30" r="14" fill="#fff" stroke="#a855f7" stroke-width="2"/><text x="80" y="34" text-anchor="middle" font-size="10" fill="#7c3aed">3</text>
+<circle cx="120" cy="30" r="14" fill="#fff" stroke="#a855f7" stroke-width="2"/><text x="120" y="34" text-anchor="middle" font-size="10" fill="#7c3aed">4</text>
+<line x1="0" y1="30" x2="40" y2="30" stroke="#a855f7" stroke-width="1" opacity="0.4"/>
+<line x1="0" y1="30" x2="80" y2="30" stroke="#a855f7" stroke-width="1" opacity="0.4"/>
+<line x1="0" y1="30" x2="120" y2="30" stroke="#a855f7" stroke-width="1" opacity="0.4"/>
+<line x1="40" y1="30" x2="80" y2="30" stroke="#a855f7" stroke-width="1" opacity="0.4"/>
+<line x1="40" y1="30" x2="120" y2="30" stroke="#a855f7" stroke-width="1" opacity="0.4"/>
+<line x1="80" y1="30" x2="120" y2="30" stroke="#a855f7" stroke-width="1" opacity="0.4"/>
+</g>
+<text x="180" y="170" text-anchor="middle" font-size="11" fill="#6b7280">可见全部帧（含未来）</text>
+<text x="180" y="190" text-anchor="middle" font-size="11" fill="#a855f7" font-weight="600">无误差累积 · 监督质量高</text>
+<text x="180" y="210" text-anchor="middle" font-size="10" fill="#9ca3af">提供真实分布分数 s_data</text>
+
+<!-- DMD loss arrow -->
+<rect x="290" y="110" width="140" height="60" rx="10" fill="url(#dmdGrad)" stroke="#34d399" stroke-width="1.5"/>
+<text x="360" y="135" text-anchor="middle" font-size="13" font-weight="700" fill="#059669">DMD 损失</text>
+<text x="360" y="153" text-anchor="middle" font-size="10" fill="#6b7280">分布匹配蒸馏</text>
+<line x1="280" y1="140" x2="290" y2="140" stroke="#34d399" stroke-width="2" marker-end="url(#aM)"/>
+<line x1="430" y1="140" x2="440" y2="140" stroke="#34d399" stroke-width="2" marker-end="url(#aM)"/>
+<defs><marker id="aM" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#34d399"/></marker></defs>
+
+<!-- Student box -->
+<rect x="440" y="30" width="260" height="200" rx="14" fill="url(#sGrad)" stroke="#fb7185" stroke-width="2"/>
+<text x="570" y="60" text-anchor="middle" font-family="Noto Serif SC" font-size="16" font-weight="700" fill="#e11d48">因果学生模型</text>
+<text x="570" y="82" text-anchor="middle" font-size="12" fill="#6b7280">Causal Student</text>
+<!-- Student: causal arrows -->
+<g transform="translate(490,100)">
+<circle cx="0" cy="30" r="14" fill="#fff" stroke="#fb7185" stroke-width="2"/><text x="0" y="34" text-anchor="middle" font-size="10" fill="#e11d48">1</text>
+<circle cx="40" cy="30" r="14" fill="#fff" stroke="#fb7185" stroke-width="2"/><text x="40" y="34" text-anchor="middle" font-size="10" fill="#e11d48">2</text>
+<circle cx="80" cy="30" r="14" fill="#fff" stroke="#fb7185" stroke-width="2"/><text x="80" y="34" text-anchor="middle" font-size="10" fill="#e11d48">3</text>
+<circle cx="120" cy="30" r="14" fill="#fff" stroke="#fb7185" stroke-width="2"/><text x="120" y="34" text-anchor="middle" font-size="10" fill="#e11d48">4</text>
+<path d="M14,30 Q27,20 26,30" fill="none" stroke="#fb7185" stroke-width="1" opacity="0.5" marker-end="url(#aM2)"/>
+<line x1="14" y1="30" x2="26" y2="30" stroke="#fb7185" stroke-width="1" opacity="0.5" marker-end="url(#aM2)"/>
+<line x1="14" y1="30" x2="66" y2="30" stroke="#fb7185" stroke-width="1" opacity="0.3" marker-end="url(#aM2)" stroke-dasharray="2,2"/>
+<line x1="54" y1="30" x2="66" y2="30" stroke="#fb7185" stroke-width="1" opacity="0.5" marker-end="url(#aM2)"/>
+<line x1="54" y1="30" x2="106" y2="30" stroke="#fb7185" stroke-width="1" opacity="0.3" marker-end="url(#aM2)" stroke-dasharray="2,2"/>
+<line x1="94" y1="30" x2="106" y2="30" stroke="#fb7185" stroke-width="1" opacity="0.5" marker-end="url(#aM2)"/>
+<defs><marker id="aM2" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#fb7185" opacity="0.6"/></marker></defs>
+</g>
+<text x="570" y="170" text-anchor="middle" font-size="11" fill="#6b7280">仅可见历史帧</text>
+<text x="570" y="190" text-anchor="middle" font-size="11" fill="#fb7185" font-weight="600">可流式推理 · 低延迟</text>
+<text x="570" y="210" text-anchor="middle" font-size="10" fill="#9ca3af">学习生成分布 → 逼近真实分布</text>
+
+<!-- Naive approach (crossed out) -->
+<rect x="100" y="270" width="520" height="80" rx="10" fill="#f5f0e8" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="5,3"/>
+<text x="360" y="298" text-anchor="middle" font-size="13" fill="#9ca3af" text-decoration="line-through">朴素方案：因果教师 → 因果学生</text>
+<text x="360" y="322" text-anchor="middle" font-size="11" fill="#9ca3af">因果教师自身存在误差累积，监督信号质量随帧数下降</text>
+<line x1="100" y1="270" x2="620" y2="350" stroke="#fb7185" stroke-width="2" opacity="0.3"/>
+</svg>
+<p class="figure-caption"><strong>图 3：</strong>非对称蒸馏信息流。双向教师（左）可见全部帧提供高质量监督，通过 DMD 损失（中）指导因果学生（右）学习。底部虚线框为被否弃的朴素方案——因果教师蒸馏因果学生。</p>
+</div>
+
+<div class="insight-box">
+<p>这一策略体现了一个重要的哲学转变：传统蒸馏假设教师与学生<span class="highlight-m">架构相同</span>（如渐进蒸馏、一致性蒸馏），仅减少采样步数；而 CausVid 利用 DMD 的<span class="highlight-m">跨架构蒸馏</span>能力，在减少步数的同时完成<strong>架构层面的转换</strong>（双向 → 因果）。这是 DMD 相比其他蒸馏方法的独特优势——它在分布层面而非轨迹层面进行匹配，因此不要求教师和学生在相同的状态空间中逐步对齐。</p>
+</div>
+</section>
+
+<div class="divider"><span class="icon">&#10047;</span></div>
+
+<!-- ==================== Chapter 3 ==================== -->
+<section class="chapter" id="ch3">
+<div class="chapter-header">
+<span class="chapter-num">CHAPTER 03</span>
+<h2 class="chapter-title">因果架构设计——块状因果注意力</h2>
+<p class="chapter-subtitle">在局部双向与全局因果之间取得平衡</p>
+</div>
+
+<p>CausVid 首先使用 3D VAE 将视频压缩到隐空间：每 <strong>16 个像素帧</strong>被压缩为 <strong>5 个隐帧</strong>。随后在隐空间中执行块状因果注意力（Block-wise Causal Attention）。</p>
+
+<p>块状因果注意力的核心思想是<strong>分块处理</strong>：</p>
+<p><strong>块内（Within Chunk）</strong>：同一个块内的隐帧之间使用<span class="highlight-l">双向自注意力</span>，保证局部时序一致性。这一设计使得 VAE 解码器能够获得完整的块级隐帧组，生成高质量像素帧。</p>
+<p><strong>块间（Across Chunks）</strong>：当前块只能看到<span class="highlight-c">历史块</span>，不能看到未来块，实现因果性。这使得模型可以流式生成——每完成一个块即可输出对应像素帧。</p>
+
+<div class="math-card">
+<h4>块状因果注意力掩码（论文 Eq. 5）</h4>
+<p style="text-align:center;font-size:16px;margin:16px 0;">$$ M_{i,j} = \begin{cases} 1 & \text{if } \lfloor j/k \rfloor \leq \lfloor i/k \rfloor \\ 0 & \text{otherwise} \end{cases} $$</p>
+<p style="font-size:13px;color:var(--text-muted);text-align:center;">其中 $i, j$ 为帧索引，$k$ 为块大小。当 $j$ 所在块编号 $\leq$ $i$ 所在块编号时，允许注意力。</p>
+</div>
+
+<p>这一设计的巧妙之处在于：<strong>延迟与全因果模型完全相同</strong>，但块内双向注意力可以利用预训练的双向权重，显著加速收敛。若使用完全因果注意力（每帧独立），则无法直接复用双向预训练权重。</p>
+
+<div class="figure">
+<svg viewBox="0 0 420 380" xmlns="http://www.w3.org/2000/svg">
+<text x="210" y="25" text-anchor="middle" font-family="Noto Serif SC" font-size="15" font-weight="700" fill="#7c3aed">块状因果注意力掩码（k=2，20帧）</text>
+<rect x="30" y="45" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="45" y="45" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="60" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="75" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="90" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="105" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="120" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="135" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="150" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="165" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="180" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="195" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="210" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="225" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="240" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="255" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="270" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="285" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="300" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="45" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="60" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="45" y="60" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="60" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="75" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="90" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="105" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="120" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="135" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="150" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="165" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="180" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="195" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="210" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="225" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="240" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="255" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="270" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="285" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="300" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="60" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="75" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="75" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="75" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="75" y="75" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="90" y="75" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="105" y="75" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="120" y="75" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="135" y="75" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="150" y="75" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="165" y="75" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="180" y="75" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="195" y="75" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="210" y="75" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="225" y="75" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="240" y="75" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="255" y="75" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="270" y="75" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="285" y="75" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="300" y="75" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="75" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="90" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="90" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="90" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="75" y="90" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="90" y="90" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="105" y="90" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="120" y="90" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="135" y="90" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="150" y="90" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="165" y="90" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="180" y="90" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="195" y="90" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="210" y="90" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="225" y="90" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="240" y="90" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="255" y="90" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="270" y="90" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="285" y="90" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="300" y="90" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="90" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="105" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="105" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="105" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="75" y="105" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="90" y="105" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="105" y="105" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="120" y="105" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="135" y="105" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="150" y="105" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="165" y="105" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="180" y="105" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="195" y="105" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="210" y="105" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="225" y="105" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="240" y="105" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="255" y="105" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="270" y="105" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="285" y="105" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="300" y="105" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="105" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="120" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="120" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="120" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="75" y="120" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="90" y="120" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="105" y="120" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="120" y="120" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="135" y="120" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="150" y="120" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="165" y="120" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="180" y="120" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="195" y="120" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="210" y="120" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="225" y="120" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="240" y="120" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="255" y="120" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="270" y="120" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="285" y="120" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="300" y="120" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="120" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="135" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="135" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="135" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="75" y="135" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="90" y="135" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="105" y="135" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="120" y="135" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="135" y="135" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="150" y="135" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="165" y="135" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="180" y="135" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="195" y="135" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="210" y="135" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="225" y="135" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="240" y="135" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="255" y="135" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="270" y="135" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="285" y="135" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="300" y="135" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="135" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="150" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="150" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="150" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="75" y="150" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="90" y="150" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="105" y="150" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="120" y="150" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="135" y="150" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="150" y="150" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="165" y="150" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="180" y="150" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="195" y="150" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="210" y="150" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="225" y="150" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="240" y="150" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="255" y="150" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="270" y="150" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="285" y="150" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="300" y="150" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="150" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="165" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="165" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="165" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="75" y="165" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="90" y="165" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="105" y="165" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="120" y="165" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="135" y="165" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="150" y="165" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="165" y="165" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="180" y="165" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="195" y="165" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="210" y="165" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="225" y="165" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="240" y="165" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="255" y="165" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="270" y="165" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="285" y="165" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="300" y="165" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="165" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="180" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="180" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="180" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="75" y="180" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="90" y="180" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="105" y="180" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="120" y="180" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="135" y="180" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="150" y="180" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="165" y="180" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="180" y="180" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="195" y="180" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="210" y="180" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="225" y="180" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="240" y="180" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="255" y="180" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="270" y="180" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="285" y="180" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="300" y="180" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="180" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="195" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="195" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="195" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="75" y="195" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="90" y="195" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="105" y="195" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="120" y="195" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="135" y="195" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="150" y="195" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="165" y="195" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="180" y="195" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="195" y="195" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="210" y="195" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="225" y="195" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="240" y="195" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="255" y="195" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="270" y="195" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="285" y="195" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="300" y="195" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="195" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="210" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="210" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="210" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="75" y="210" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="90" y="210" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="105" y="210" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="120" y="210" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="135" y="210" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="150" y="210" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="165" y="210" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="180" y="210" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="195" y="210" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="210" y="210" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="225" y="210" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="240" y="210" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="255" y="210" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="270" y="210" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="285" y="210" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="300" y="210" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="210" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="225" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="225" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="225" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="75" y="225" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="90" y="225" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="105" y="225" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="120" y="225" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="135" y="225" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="150" y="225" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="165" y="225" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="180" y="225" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="195" y="225" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="210" y="225" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="225" y="225" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="240" y="225" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="255" y="225" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="270" y="225" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="285" y="225" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="300" y="225" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="225" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="240" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="240" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="240" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="75" y="240" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="90" y="240" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="105" y="240" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="120" y="240" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="135" y="240" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="150" y="240" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="165" y="240" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="180" y="240" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="195" y="240" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="210" y="240" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="225" y="240" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="240" y="240" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="255" y="240" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="270" y="240" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="285" y="240" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="300" y="240" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="240" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="255" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="255" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="255" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="75" y="255" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="90" y="255" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="105" y="255" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="120" y="255" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="135" y="255" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="150" y="255" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="165" y="255" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="180" y="255" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="195" y="255" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="210" y="255" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="225" y="255" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="240" y="255" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="255" y="255" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="270" y="255" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="285" y="255" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="300" y="255" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="255" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="270" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="270" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="270" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="75" y="270" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="90" y="270" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="105" y="270" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="120" y="270" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="135" y="270" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="150" y="270" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="165" y="270" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="180" y="270" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="195" y="270" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="210" y="270" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="225" y="270" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="240" y="270" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="255" y="270" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="270" y="270" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="285" y="270" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="300" y="270" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="270" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="285" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="285" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="285" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="75" y="285" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="90" y="285" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="105" y="285" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="120" y="285" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="135" y="285" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="150" y="285" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="165" y="285" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="180" y="285" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="195" y="285" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="210" y="285" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="225" y="285" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="240" y="285" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="255" y="285" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="270" y="285" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="285" y="285" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="300" y="285" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="285" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="300" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="300" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="300" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="75" y="300" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="90" y="300" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="105" y="300" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="120" y="300" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="135" y="300" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="150" y="300" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="165" y="300" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="180" y="300" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="195" y="300" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="210" y="300" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="225" y="300" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="240" y="300" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="255" y="300" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="270" y="300" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="285" y="300" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="300" y="300" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="315" y="300" width="15" height="15" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.3"/><rect x="30" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="75" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="90" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="105" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="120" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="135" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="150" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="165" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="180" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="195" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="210" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="225" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="240" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="255" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="270" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="285" y="315" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="300" y="315" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="315" y="315" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="30" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="45" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="60" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="75" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="90" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="105" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="120" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="135" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="150" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="165" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="180" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="195" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="210" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="225" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="240" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="255" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="270" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="285" y="330" width="15" height="15" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.3"/><rect x="300" y="330" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><rect x="315" y="330" width="15" height="15" fill="#ffffff" fill-opacity="1.0" stroke="#a855f7" stroke-width="0.5"/><text x="340" y="55" font-size="10" fill="#a855f7" font-weight="600">块内双向</text><text x="340" y="85" font-size="10" fill="#3b82f6">↓ 因果可见</text><text x="340" y="145" font-size="10" fill="#9ca3af">（历史块）</text><rect x="30" y="365" width="14" height="14" fill="#ffffff" stroke="#a855f7" stroke-width="1"/><text x="50" y="376" font-size="11" fill="#4b5563">块内双向</text><rect x="130" y="365" width="14" height="14" fill="#bfdbfe" fill-opacity="0.6" stroke="#93c5fd" stroke-width="0.5"/><text x="150" y="376" font-size="11" fill="#4b5563">因果可见</text><rect x="230" y="365" width="14" height="14" fill="#e5e7eb" fill-opacity="0.5" stroke="#d1d5db" stroke-width="0.5"/><text x="250" y="376" font-size="11" fill="#4b5563">掩码（不可见）</text></svg><p class="figure-caption"><strong>图 4：</strong>块状因果注意力掩码可视化（块大小 k=2，20 帧）。对角线上的块为双向注意力（白），对角线以下为因果可见（浅蓝），对角线以上为掩码区域（灰）。</p></div>
+<div class="figure">
+<img src="assets/fig5_architecture.webp" alt="架构总览" onerror="this.style.display='none'">
+<p class="figure-caption"><strong>图 5（论文 Figure 5）：</strong>CausVid 架构总览。3D VAE 将视频压缩为隐帧序列，块状因果注意力在隐空间中执行，块内双向保证局部一致性，块间因果保证流式生成能力。</p>
+</div>
+</section>
+
+<div class="divider"><span class="icon">&#10047;</span></div>
+
+<!-- ==================== Chapter 4 ==================== -->
+<section class="chapter" id="ch4">
+<div class="chapter-header">
+<span class="chapter-num">CHAPTER 04</span>
+<h2 class="chapter-title">DMD原理——分布匹配蒸馏深度解析</h2>
+<p class="chapter-subtitle">为什么分布级匹配优于轨迹级匹配？</p>
+</div>
+
+<p>分布匹配蒸馏（Distribution Matching Distillation, DMD）最初由 Yin et al. 在 CVPR 2024 提出，后扩展为 DMD2（NeurIPS 2024）。其核心目标是将多步教师模型蒸馏为少步学生模型，但与传统蒸馏方法（渐进蒸馏、一致性蒸馏）不同，DMD 在<strong>分布层面</strong>而非轨迹层面进行匹配。</p>
+
+<p>DMD 的核心思想是最小化学生生成分布与真实数据分布之间的<span class="highlight-l">反向 KL 散度</span>（Reverse KL Divergence）。关键在于，反向 KL 散度的梯度可以近似为<span class="highlight-c">两个分数函数之差</span>：</p>
+
+<div class="math-card">
+<h4>DMD 核心公式（论文 Eq. 4）</h4>
+<p style="text-align:center;font-size:16px;margin:16px 0;">$$ \nabla_\phi D_{\mathrm{KL}}\big(p_\phi \| p_{\mathrm{data}}\big) \approx s_{\mathrm{data}}(x_t, t) - s_{\mathrm{gen}}(x_t, t) $$</p>
+<div class="step" data-n="1"><strong>$s_{\mathrm{data}}$（真实分数函数）</strong>：在真实数据分布上训练的分数函数。在 CausVid 中，这个角色由<span class="highlight-l">双向教师模型</span>承担——它经过充分训练，能提供高质量的去噪方向。训练后冻结。</div>
+<div class="step" data-n="2"><strong>$s_{\mathrm{gen}}$（生成分数函数）</strong>：在学生生成器输出分布上训练的分数函数。它随学生模型更新而<span class="highlight-c">在线训练</span>，追踪学生当前的生成分布。</div>
+<div class="step" data-n="3"><strong>梯度方向</strong>：$s_{\mathrm{data}} - s_{\mathrm{gen}}$ 指向真实数据分布方向。将此梯度施加于学生生成器，使其输出分布逐渐逼近真实数据分布。</div>
+</div>
+
+<p>DMD2 在此基础上引入了三个关键扩展：<strong>多步生成</strong>（允许学生执行多步去噪）、<strong>双时间尺度更新规则</strong>（评论家更新频率高于生成器，比率 5:1）、以及<strong>GAN 损失集成</strong>（进一步提升感知质量）。</p>
+
+<div class="figure">
+<svg viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<radialGradient id="dataCloud" cx="50%" cy="50%"><stop offset="0%" stop-color="#a855f7" stop-opacity="0.3"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0"/></radialGradient>
+<radialGradient id="genCloud" cx="50%" cy="50%"><stop offset="0%" stop-color="#fb7185" stop-opacity="0.3"/><stop offset="100%" stop-color="#fb7185" stop-opacity="0"/></radialGradient>
+<marker id="gArrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10" fill="#34d399"/></marker>
+<marker id="rArrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#a855f7" opacity="0.7"/></marker>
+<marker id="fArrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#fb7185" opacity="0.7"/></marker>
+</defs>
+
+<!-- Data distribution cloud -->
+<ellipse cx="180" cy="170" rx="100" ry="75" fill="url(#dataCloud)"/>
+<text x="180" y="120" text-anchor="middle" font-family="Noto Serif SC" font-size="14" font-weight="700" fill="#7c3aed">真实数据分布</text>
+<text x="180" y="138" text-anchor="middle" font-size="11" fill="#6b7280">p_data</text>
+<circle cx="155" cy="165" r="5" fill="#a855f7" opacity="0.6"/>
+<circle cx="195" cy="155" r="5" fill="#a855f7" opacity="0.6"/>
+<circle cx="170" cy="185" r="5" fill="#a855f7" opacity="0.6"/>
+<circle cx="210" cy="175" r="5" fill="#a855f7" opacity="0.6"/>
+<circle cx="145" cy="180" r="5" fill="#a855f7" opacity="0.6"/>
+
+<!-- Gen distribution cloud -->
+<ellipse cx="540" cy="170" rx="100" ry="75" fill="url(#genCloud)"/>
+<text x="540" y="120" text-anchor="middle" font-family="Noto Serif SC" font-size="14" font-weight="700" fill="#e11d48">生成分布</text>
+<text x="540" y="138" text-anchor="middle" font-size="11" fill="#6b7280">p_phi（学生输出）</text>
+<circle cx="515" cy="160" r="5" fill="#fb7185" opacity="0.6"/>
+<circle cx="560" cy="150" r="5" fill="#fb7185" opacity="0.6"/>
+<circle cx="530" cy="180" r="5" fill="#fb7185" opacity="0.6"/>
+<circle cx="570" cy="170" r="5" fill="#fb7185" opacity="0.6"/>
+<circle cx="500" cy="175" r="5" fill="#fb7185" opacity="0.6"/>
+
+<!-- Score function arrows -->
+<text x="180" y="260" text-anchor="middle" font-size="12" fill="#7c3aed" font-weight="600">s_data（真实分数）</text>
+<text x="180" y="278" text-anchor="middle" font-size="10" fill="#9ca3af">指向数据密集区域</text>
+<line x1="220" y1="200" x2="260" y2="220" stroke="#a855f7" stroke-width="2" opacity="0.7" marker-end="url(#rArrow)"/>
+
+<text x="540" y="260" text-anchor="middle" font-size="12" fill="#e11d48" font-weight="600">s_gen（生成分数）</text>
+<text x="540" y="278" text-anchor="middle" font-size="10" fill="#9ca3af">指向生成密集区域</text>
+<line x1="500" y1="200" x2="460" y2="220" stroke="#fb7185" stroke-width="2" opacity="0.7" marker-end="url(#fArrow)"/>
+
+<!-- Gradient = difference -->
+<rect x="290" y="140" width="140" height="60" rx="10" fill="rgba(52,211,153,0.1)" stroke="#34d399" stroke-width="1.5"/>
+<text x="360" y="165" text-anchor="middle" font-size="14" font-weight="700" fill="#059669">梯度 = s_data - s_gen</text>
+<text x="360" y="185" text-anchor="middle" font-size="10" fill="#6b7280">推动 p_phi → p_data</text>
+<line x1="280" y1="170" x2="290" y2="170" stroke="#34d399" stroke-width="2" marker-end="url(#gArrow)"/>
+<line x1="430" y1="170" x2="440" y2="170" stroke="#34d399" stroke-width="2" marker-end="url(#gArrow)"/>
+
+<!-- Bottom note -->
+<rect x="120" y="300" width="480" height="30" rx="6" fill="rgba(52,211,153,0.08)"/>
+<text x="360" y="319" text-anchor="middle" font-size="11" fill="#059669" font-weight="500">分布级匹配：不要求逐步对齐，允许教师与学生架构不同</text>
+</svg>
+<p class="figure-caption"><strong>图 6：</strong>DMD 双分数函数梯度示意。真实分数 $s_{\mathrm{data}}$ 拉向数据分布，生成分数 $s_{\mathrm{gen}}$ 指向当前生成分布，二者之差构成 KL 梯度，驱动学生生成器逼近真实数据分布。</p>
+</div>
+
+<div class="insight-box">
+<p>理解 DMD 优势的关键在于区分<span class="highlight-m">分布级匹配</span>与<span class="highlight-m">轨迹级匹配</span>。渐进蒸馏和一致性蒸馏要求学生在<strong>每一步去噪轨迹</strong>上与教师对齐——这意味着学生和教师必须在相同的状态空间中执行相同数量的去噪步，因此<span class="highlight-c">无法跨架构蒸馏</span>。而 DMD 仅要求学生的<strong>最终输出分布</strong>与数据分布匹配，不约束中间过程。这使得教师可以是双向架构（50 步），学生可以是因果架构（4 步），两者在完全不同的计算图中工作，却仍能通过分数函数之差建立有效的监督信号。</p>
+</div>
+</section>
+
+<div class="divider"><span class="icon">&#10047;</span></div>
+
+<!-- ==================== Chapter 5 ==================== -->
+<section class="chapter" id="ch5">
+<div class="chapter-header">
+<span class="chapter-num">CHAPTER 05</span>
+<h2 class="chapter-title">两阶段训练流程</h2>
+<p class="chapter-subtitle">ODE 回归初始化 + 非对称 DMD 蒸馏</p>
+</div>
+
+<h3 style="font-size:19px;color:var(--lavender-dark);margin-bottom:16px;">阶段一：学生初始化（ODE 回归）</h3>
+
+<p>在直接进行 DMD 训练之前，CausVid 首先通过<strong>ODE 回归</strong>（ODE Regression）对学生进行初始化。具体做法是：从双向教师模型生成 ODE 解对（solution pairs），即 $(x_t, x_0)$ 对，其中 $x_t$ 是加噪后的隐变量，$x_0$ 是教师模型预测的干净帧。然后在学生模型上执行回归训练：</p>
+
+<div class="math-card">
+<h4>ODE 回归损失（论文 Eq. 6）</h4>
+<p style="text-align:center;font-size:16px;margin:16px 0;">$$ \mathcal{L}_{\mathrm{init}} = \mathbb{E}\big[\| G_\phi(x_t, t) - x_0 \|^2\big] $$</p>
+<p style="font-size:13px;color:var(--text-muted);text-align:center;">$G_\phi$ 为学生生成器，$x_0$ 为教师预测的干净帧。仅使用 <strong>1000 个 ODE 对</strong>，训练 <strong>3000 次迭代</strong>。</p>
+</div>
+
+<p>这一阶段的目的并非训练出高质量生成器，而是为学生提供一个<strong>合理的初始化点</strong>，使其输出分布不至于与真实数据分布差距过大，从而稳定后续的 DMD 训练。没有这一步，DMD 训练初期生成分布与数据分布差异巨大，分数函数之差可能不稳定。</p>
+
+<h3 style="font-size:19px;color:var(--lavender-dark);margin:32px 0 16px;">阶段二：非对称 DMD 蒸馏</h3>
+
+<p>初始化完成后，进入核心的 DMD 蒸馏阶段。以下是 <strong>Algorithm 1</strong> 的完整流程：</p>
+
+<div class="math-card">
+<h4>Algorithm 1：非对称 DMD 蒸馏</h4>
+<div class="step" data-n="1"><strong>初始化</strong>：学生生成器 $G_\phi$ 从 ODE 预训练加载；假分布分数函数 $s_{\mathrm{gen}}$ 从真实分数（教师）$s_{\mathrm{data}}$ 拷贝初始化。</div>
+<div class="step" data-n="2"><strong>采样</strong>：从训练集采样视频，划分为块（chunks），为每个块独立采样时间步 $t$。</div>
+<div class="step" data-n="3"><strong>加噪与预测</strong>：对学生输出加噪得到 $x_t$，用因果学生 $G_\phi$ 在因果掩码下预测干净帧。</div>
+<div class="step" data-n="4"><strong>计算 DMD 损失</strong>：使用双向教师 $s_{\mathrm{data}}$（CFG 引导，scale=3.5）和在线训练的 $s_{\mathrm{gen}}$ 计算分数差，得到 KL 梯度。</div>
+<div class="step" data-n="5"><strong>更新生成器</strong>：用 DMD 梯度更新学生 $G_\phi$。</div>
+<div class="step" data-n="6"><strong>更新假分数</strong>：在学生生成器输出上训练 $s_{\mathrm{gen}}$，追踪当前生成分布。</div>
+<div class="step" data-n="7"><strong>双时间尺度</strong>：评论家（$s_{\mathrm{gen}}$）与生成器（$G_\phi$）更新比率为 <strong>5:1</strong>，确保评论家始终领先。</div>
+</div>
+
+<p>整个训练在 <strong>64 块 H100 GPU</strong> 上进行，耗时约 <strong>2 天</strong>，共 <strong>6000 次迭代</strong>。CFG 引导尺度设为 <strong>3.5</strong>，在文本对齐质量与生成多样性之间取得平衡。</p>
+
+<div class="figure">
+<svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="s1Grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fbbf24" stop-opacity="0.1"/><stop offset="100%" stop-color="#fbbf24" stop-opacity="0.03"/></linearGradient>
+<linearGradient id="s2Grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#a855f7" stop-opacity="0.1"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0.03"/></linearGradient>
+<marker id="flowArrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10" fill="#7c3aed"/></marker>
+</defs>
+
+<!-- Stage 1 box -->
+<rect x="20" y="30" width="310" height="310" rx="14" fill="url(#s1Grad)" stroke="#fbbf24" stroke-width="2"/>
+<rect x="20" y="30" width="310" height="36" rx="14" fill="#fbbf24" fill-opacity="0.15"/>
+<text x="175" y="54" text-anchor="middle" font-family="Noto Serif SC" font-size="15" font-weight="700" fill="#d97706">阶段一：ODE 回归初始化</text>
+
+<rect x="40" y="80" width="270" height="40" rx="8" fill="#fff" stroke="#fbbf24" stroke-width="1" stroke-opacity="0.5"/>
+<text x="175" y="105" text-anchor="middle" font-size="12" fill="#4b5563">双向教师生成 ODE 解对 (x_t, x_0)</text>
+
+<line x1="175" y1="125" x2="175" y2="140" stroke="#fbbf24" stroke-width="2" marker-end="url(#flowArrow)"/>
+
+<rect x="40" y="145" width="270" height="40" rx="8" fill="#fff" stroke="#fbbf24" stroke-width="1" stroke-opacity="0.5"/>
+<text x="175" y="170" text-anchor="middle" font-size="12" fill="#4b5563">学生回归训练：L_init = ||G(x_t,t) - x_0||²</text>
+
+<line x1="175" y1="190" x2="175" y2="205" stroke="#fbbf24" stroke-width="2" marker-end="url(#flowArrow)"/>
+
+<rect x="40" y="210" width="270" height="50" rx="8" fill="#fff" stroke="#fbbf24" stroke-width="1" stroke-opacity="0.5"/>
+<text x="175" y="230" text-anchor="middle" font-size="12" fill="#4b5563">1000 个 ODE 对 · 3000 次迭代</text>
+<text x="175" y="248" text-anchor="middle" font-size="11" fill="#9ca3af">提供稳定初始化点</text>
+
+<rect x="40" y="275" width="270" height="45" rx="8" fill="rgba(52,211,153,0.1)" stroke="#34d399" stroke-width="1"/>
+<text x="175" y="295" text-anchor="middle" font-size="12" font-weight="600" fill="#059669">输出：初始化的学生 G_phi</text>
+<text x="175" y="312" text-anchor="middle" font-size="10" fill="#6b7280">分布接近数据，可进入 DMD 训练</text>
+
+<!-- Arrow between stages -->
+<line x1="340" y1="185" x2="370" y2="185" stroke="#7c3aed" stroke-width="3" marker-end="url(#flowArrow)"/>
+
+<!-- Stage 2 box -->
+<rect x="380" y="30" width="320" height="310" rx="14" fill="url(#s2Grad)" stroke="#a855f7" stroke-width="2"/>
+<rect x="380" y="30" width="320" height="36" rx="14" fill="#a855f7" fill-opacity="0.15"/>
+<text x="540" y="54" text-anchor="middle" font-family="Noto Serif SC" font-size="15" font-weight="700" fill="#7c3aed">阶段二：非对称 DMD 蒸馏</text>
+
+<rect x="400" y="78" width="280" height="32" rx="6" fill="#fff" stroke="#a855f7" stroke-width="1" stroke-opacity="0.4"/>
+<text x="540" y="98" text-anchor="middle" font-size="11" fill="#4b5563">加载 ODE 预训练学生 + 从教师拷贝 s_gen</text>
+
+<rect x="400" y="118" width="130" height="32" rx="6" fill="#fff" stroke="#fb7185" stroke-width="1" stroke-opacity="0.4"/>
+<text x="465" y="138" text-anchor="middle" font-size="11" fill="#4b5563">因果学生 G_phi</text>
+
+<rect x="550" y="118" width="130" height="32" rx="6" fill="#fff" stroke="#a855f7" stroke-width="1" stroke-opacity="0.4"/>
+<text x="615" y="138" text-anchor="middle" font-size="11" fill="#4b5563">双向教师 s_data</text>
+
+<line x1="540" y1="155" x2="540" y2="168" stroke="#a855f7" stroke-width="1.5" marker-end="url(#flowArrow)"/>
+
+<rect x="400" y="172" width="280" height="40" rx="8" fill="rgba(52,211,153,0.1)" stroke="#34d399" stroke-width="1"/>
+<text x="540" y="190" text-anchor="middle" font-size="11" font-weight="600" fill="#059669">DMD 损失 = s_data - s_gen</text>
+<text x="540" y="205" text-anchor="middle" font-size="10" fill="#6b7280">CFG=3.5 · 双时间尺度 5:1</text>
+
+<line x1="540" y1="217" x2="540" y2="230" stroke="#a855f7" stroke-width="1.5" marker-end="url(#flowArrow)"/>
+
+<rect x="400" y="235" width="130" height="32" rx="6" fill="#fff" stroke="#fb7185" stroke-width="1" stroke-opacity="0.4"/>
+<text x="465" y="255" text-anchor="middle" font-size="11" fill="#4b5563">更新 G_phi</text>
+
+<rect x="550" y="235" width="130" height="32" rx="6" fill="#fff" stroke="#a855f7" stroke-width="1" stroke-opacity="0.4"/>
+<text x="615" y="255" text-anchor="middle" font-size="11" fill="#4b5563">在线训练 s_gen</text>
+
+<rect x="400" y="280" width="280" height="45" rx="8" fill="rgba(52,211,153,0.1)" stroke="#34d399" stroke-width="1"/>
+<text x="540" y="300" text-anchor="middle" font-size="12" font-weight="600" fill="#059669">输出：4 步因果生成器</text>
+<text x="540" y="317" text-anchor="middle" font-size="10" fill="#6b7280">64×H100 · 2天 · 6000次迭代</text>
+</svg>
+<p class="figure-caption"><strong>图 7：</strong>两阶段训练流程。阶段一通过 ODE 回归提供稳定初始化，阶段二执行非对称 DMD 蒸馏，双向教师通过分布级监督指导因果学生收敛。</p>
+</div>
+
+<div class="figure">
+<img src="assets/fig6_distillation.webp" alt="蒸馏流程图" onerror="this.style.display='none'">
+<p class="figure-caption"><strong>图 8（论文 Figure 6）：</strong>蒸馏流程详图。展示了从双向教师到因果学生的完整信息流，包括 ODE 解对生成、DMD 梯度计算和双时间尺度更新。</p>
+</div>
+</section>
+
+<div class="divider"><span class="icon">&#10047;</span></div>
+
+<!-- ==================== Chapter 6 ==================== -->
+<section class="chapter" id="ch6">
+<div class="chapter-header">
+<span class="chapter-num">CHAPTER 06</span>
+<h2 class="chapter-title">KV缓存与流式推理</h2>
+<p class="chapter-subtitle">借鉴 LLM 的 KV 缓存机制实现高效自回归推理</p>
+</div>
+
+<p>CausVid 的因果架构使得<strong> KV 缓存</strong>（Key-Value Cache）成为可能——这与大语言模型（LLM）中的自回归推理机制完全类似。在生成每个新块时，模型无需重新计算历史块的 Key 和 Value，而是直接复用缓存中存储的历史 KV 对，仅计算当前块的新 KV。</p>
+
+<div class="math-card">
+<h4>Algorithm 2：KV 缓存自回归推理</h4>
+<div class="step" data-n="1"><strong>分块</strong>：将目标视频帧数划分为多个块（chunks），每块对应 5 个隐帧（16 个像素帧）。</div>
+<div class="step" data-n="2"><strong>初始化缓存</strong>：创建空的 KV 缓存，准备存储历史块的 Key-Value 对。</div>
+<div class="step" data-n="3"><strong>逐块生成</strong>：对每个块，从纯噪声开始，执行 4 步去噪迭代（时间步 [999, 748, 502, 247]）。每步使用因果学生生成器前向传播，传入历史 KV 缓存。</div>
+<div class="step" data-n="4"><strong>更新缓存</strong>：当前块去噪完成后，将其 KV 对追加到缓存中，供后续块使用。</div>
+<div class="step" data-n="5"><strong>返回结果</strong>：收集所有块的干净隐帧，通过 VAE 解码为像素帧。</div>
+</div>
+
+<p>一个关键的实现细节是：<strong>推理时不需要显式使用块状因果掩码</strong>。因为 KV 缓存机制天然实现了因果性——历史块的 KV 已被缓存，当前块只需对自身执行双向注意力即可。这意味着块内可以使用高效的<strong>双向注意力实现</strong>（如 Flash Attention 的双向模式），进一步加速推理。</p>
+
+<p>此外，KV 缓存的滑动窗口机制支持<strong>无限长度视频生成</strong>：当缓存超过一定大小时，可以丢弃最早的 KV 对，仅保留最近 N 个块的缓存。这使得模型可以在固定内存下持续生成任意长度的视频。</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>指标</th><th>传统双向扩散</th><th>CausVid（因果 + KV缓存）</th><th>提升</th></tr></thead>
+<tbody>
+<tr><td>初始延迟（首帧）</td><td>219 秒</td><td class="best">1.3 秒</td><td class="best">168×</td></tr>
+<tr><td>吞吐量</td><td>0.6 FPS</td><td class="best">9.4 FPS</td><td class="best">15.7×</td></tr>
+<tr><td>去噪步数</td><td>50 步</td><td class="best">4 步</td><td class="best">12.5×</td></tr>
+<tr><td>流式生成</td><td>不支持</td><td class="best">支持</td><td>&mdash;</td></tr>
+<tr><td>无限长度</td><td>不支持</td><td class="best">支持（滑动窗口）</td><td>&mdash;</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>推理时每个块执行 4 步去噪（时间步 $[999, 748, 502, 247]$），生成 5 个隐帧，经 VAE 解码为 16 个像素帧。以 9.4 FPS 的吞吐量计算，生成 128 帧视频仅需约 13.6 秒，而传统方法需要 219 秒。</p>
+</section>
+
+<div class="divider"><span class="icon">&#10047;</span></div>
+
+<!-- ==================== Chapter 7 ==================== -->
+<section class="chapter" id="ch7">
+<div class="chapter-header">
+<span class="chapter-num">CHAPTER 07</span>
+<h2 class="chapter-title">实验结果</h2>
+<p class="chapter-subtitle">VBench 全面评测、用户研究与消融分析</p>
+</div>
+
+<p>CausVid 使用 <strong>VBench</strong> 进行系统评估，该基准包含 16 个细粒度指标，覆盖三个核心维度：<strong>时序质量</strong>（Temporal Quality）、<strong>帧质量</strong>（Frame Quality）和<strong>文本对齐</strong>（Text Alignment）。</p>
+
+<h3 style="font-size:19px;color:var(--lavender-dark);margin-bottom:16px;">短视频评测（Table 1）</h3>
+
+<p>在 5 秒短视频生成任务上，CausVid 在三个维度均取得最佳成绩：</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>方法</th><th>时序质量 ↑</th><th>帧质量 ↑</th><th>文本对齐 ↑</th></tr></thead>
+<tbody>
+<tr><td>CogVideoX-5B</td><td>91.4</td><td>63.3</td><td>29.5</td></tr>
+<tr><td>Pyramid Flow</td><td>89.8</td><td>62.1</td><td>28.7</td></tr>
+<tr><td>MovieGen</td><td>92.3</td><td>63.8</td><td>29.8</td></tr>
+<tr><td>双向教师（50步）</td><td>93.5</td><td>63.9</td><td>30.0</td></tr>
+<tr><td><strong>CausVid（4步）</strong></td><td class="best">94.7</td><td class="best">64.4</td><td class="best">30.1</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="figure">
+<img src="assets/table1_short_video.webp" alt="短视频评测表" onerror="this.style.display='none'">
+<p class="figure-caption"><strong>表 1（论文 Table 1）：</strong>短视频生成 VBench 评测。CausVid 以仅 4 步去噪超越了 50 步的双向教师模型，证明了非对称蒸馏的有效性。</p>
+</div>
+
+<h3 style="font-size:19px;color:var(--lavender-dark);margin:32px 0 16px;">长视频评测（Table 2，30秒）</h3>
+
+<p>在 30 秒长视频生成任务上，CausVid 同样表现优异，尤其在时序质量上优势明显：</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>方法</th><th>时序质量 ↑</th><th>帧质量 ↑</th><th>文本对齐 ↑</th></tr></thead>
+<tbody>
+<tr><td>CogVideoX-5B</td><td>88.2</td><td>62.5</td><td>28.4</td></tr>
+<tr><td>Pyramid Flow</td><td>86.5</td><td>61.3</td><td>27.9</td></tr>
+<tr><td>双向教师（50步）</td><td>90.1</td><td>62.8</td><td>29.2</td></tr>
+<tr><td><strong>CausVid（4步）</strong></td><td class="best">94.9</td><td class="best">63.4</td><td>28.9</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>值得注意的是，在长视频场景下 CausVid 的时序质量优势（94.9 vs 90.1）比短视频更为显著，这正是因为因果架构避免了双向模型在长序列上的注意力退化问题。</p>
+
+<h3 style="font-size:19px;color:var(--lavender-dark);margin:32px 0 16px;">效率对比（Table 3）</h3>
+
+<div class="figure">
+<img src="assets/table3_latency.webp" alt="效率对比表" onerror="this.style.display='none'">
+<p class="figure-caption"><strong>表 3（论文 Table 3）：</strong>效率对比。CausVid 实现了 160 倍延迟降低和 16 倍吞吐量提升。</p>
+</div>
+
+<div class="stat-grid">
+<div class="stat-card"><div class="num">84.27</div><div class="label">VBench-Long 总分（第一）</div></div>
+<div class="stat-card"><div class="num">160×</div><div class="label">延迟降低</div></div>
+<div class="stat-card"><div class="num">16×</div><div class="label">吞吐量提升</div></div>
+</div>
+
+<h3 style="font-size:19px;color:var(--lavender-dark);margin:32px 0 16px;">用户研究</h3>
+
+<p>在用户偏好研究中，CausVid 被一致认为优于 MovieGen、CogVideoX、Pyramid Flow 以及双向教师模型本身。这意味着蒸馏后的 4 步因果模型在人类感知质量上<strong>超越了其 50 步双向教师</strong>。</p>
+
+<div class="figure">
+<img src="assets/fig7_user_study.webp" alt="用户研究结果" onerror="this.style.display='none'">
+<p class="figure-caption"><strong>图 9（论文 Figure 7）：</strong>用户研究柱状图。CausVid 在所有对比中均获得 majority preference。</p>
+</div>
+
+<h3 style="font-size:19px;color:var(--lavender-dark);margin:32px 0 16px;">长时间质量保持</h3>
+
+<p>图 8 展示了各方法在 30 秒视频生成过程中的成像质量变化。传统双向模型的质量随时间推移显著下降（注意力退化 + 误差累积），而 CausVid 通过因果架构 + DMD 蒸馏，在整段视频中<strong>保持稳定的高质量输出</strong>。</p>
+
+<div class="figure">
+<img src="assets/fig8_quality_time.webp" alt="质量随时间变化" onerror="this.style.display='none'">
+<p class="figure-caption"><strong>图 10（论文 Figure 8）：</strong>成像质量随时间变化。CausVid（绿色）在 30 秒内保持稳定，其他方法（虚线）逐渐退化。</p>
+</div>
+
+<h3 style="font-size:19px;color:var(--lavender-dark);margin:32px 0 16px;">消融实验（Table 4）</h3>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>配置</th><th>可流式</th><th>时序质量</th><th>稳定性</th></tr></thead>
+<tbody>
+<tr><td>双向 DMD（无因果）</td><td>否</td><td class="best">最高</td><td>稳定</td></tr>
+<tr><td>因果（无 ODE 初始化）</td><td>是</td><td>低</td><td style="color:#fb7185">不稳定</td></tr>
+<tr><td>因果 + ODE 初始化 + 非对称 DMD</td><td>是</td><td>高</td><td class="best">稳定</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>消融结果揭示了三个关键发现：（1）双向 DMD 性能最好但无法流式生成，验证了因果架构的必要性；（2）没有 ODE 初始化的因果模型训练不稳定，验证了两阶段策略的必要性；（3）ODE 初始化 + 非对称 DMD 的组合在因果模型中取得最优结果。</p>
+
+<div class="insight-box">
+<p>非对称蒸馏减少误差累积的深层原因在于：双向教师"看见未来"的能力使其去噪预测更准确，提供了比因果教师更强的监督信号。在分布级匹配框架下，这种更准确的信号被直接编码为分数函数之差，驱动学生生成器向更高 data-fidelity 的方向收敛。相比之下，因果教师的预测本身已包含误差累积，其提供的监督信号会将学生引向退化的分布。</p>
+</div>
+</section>
+
+<div class="divider"><span class="icon">&#10047;</span></div>
+
+<!-- ==================== Chapter 8 ==================== -->
+<section class="chapter" id="ch8">
+<div class="chapter-header">
+<span class="chapter-num">CHAPTER 08</span>
+<h2 class="chapter-title">零样本应用能力</h2>
+<p class="chapter-subtitle">自回归设计天然支持多种下游任务</p>
+</div>
+
+<p>CausVid 的因果自回归架构使其具备多种<strong>零样本</strong>（Zero-shot）应用能力——无需任何额外训练，仅通过推理时的输入调整即可实现：</p>
+
+<div class="figure">
+<svg viewBox="0 0 720 420" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="t2vGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#a855f7" stop-opacity="0.12"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0.03"/></linearGradient>
+<linearGradient id="i2vGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fb7185" stop-opacity="0.12"/><stop offset="100%" stop-color="#fb7185" stop-opacity="0.03"/></linearGradient>
+<linearGradient id="v2vGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#34d399" stop-opacity="0.12"/><stop offset="100%" stop-color="#34d399" stop-opacity="0.03"/></linearGradient>
+<linearGradient id="dpGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fbbf24" stop-opacity="0.12"/><stop offset="100%" stop-color="#fbbf24" stop-opacity="0.03"/></linearGradient>
+</defs>
+
+<!-- T2V -->
+<rect x="20" y="20" width="330" height="170" rx="14" fill="url(#t2vGrad)" stroke="#a855f7" stroke-width="1.5"/>
+<text x="185" y="48" text-anchor="middle" font-family="Noto Serif SC" font-size="16" font-weight="700" fill="#7c3aed">文本生成视频（T2V）</text>
+<g transform="translate(60,70)">
+<rect x="0" y="0" width="50" height="40" rx="6" fill="#fff" stroke="#a855f7" stroke-width="1.5"/>
+<text x="25" y="18" text-anchor="middle" font-size="10" fill="#7c3aed">文本</text>
+<text x="25" y="32" text-anchor="middle" font-size="9" fill="#9ca3af">Prompt</text>
+</g>
+<text x="135" y="92" text-anchor="middle" font-size="20" fill="#a855f7">&#8594;</text>
+<g transform="translate(170,65)">
+<rect x="0" y="0" width="20" height="40" rx="3" fill="#a855f7" opacity="0.6"/>
+<rect x="25" y="0" width="20" height="40" rx="3" fill="#a855f7" opacity="0.5"/>
+<rect x="50" y="0" width="20" height="40" rx="3" fill="#a855f7" opacity="0.4"/>
+<rect x="75" y="0" width="20" height="40" rx="3" fill="#a855f7" opacity="0.3"/>
+</g>
+<text x="185" y="135" text-anchor="middle" font-size="11" fill="#6b7280">标准文本条件视频生成</text>
+<text x="185" y="155" text-anchor="middle" font-size="10" fill="#9ca3af">逐块自回归流式输出</text>
+
+<!-- I2V -->
+<rect x="370" y="20" width="330" height="170" rx="14" fill="url(#i2vGrad)" stroke="#fb7185" stroke-width="1.5"/>
+<text x="535" y="48" text-anchor="middle" font-family="Noto Serif SC" font-size="16" font-weight="700" fill="#e11d48">图像生成视频（I2V）</text>
+<g transform="translate(410,70)">
+<rect x="0" y="0" width="50" height="40" rx="6" fill="#fff" stroke="#fb7185" stroke-width="1.5"/>
+<text x="25" y="18" text-anchor="middle" font-size="10" fill="#e11d48">首帧</text>
+<text x="25" y="32" text-anchor="middle" font-size="9" fill="#9ca3af">Image</text>
+</g>
+<text x="485" y="92" text-anchor="middle" font-size="20" fill="#fb7185">&#8594;</text>
+<g transform="translate(520,65)">
+<rect x="0" y="0" width="20" height="40" rx="3" fill="#fb7185" opacity="0.8"/>
+<rect x="25" y="0" width="20" height="40" rx="3" fill="#fb7185" opacity="0.5"/>
+<rect x="50" y="0" width="20" height="40" rx="3" fill="#fb7185" opacity="0.4"/>
+<rect x="75" y="0" width="20" height="40" rx="3" fill="#fb7185" opacity="0.3"/>
+</g>
+<text x="535" y="135" text-anchor="middle" font-size="11" fill="#6b7280">首帧 = 输入图像，后续帧自回归</text>
+<text x="535" y="155" text-anchor="middle" font-size="10" fill="#9ca3af">零样本，无需训练</text>
+
+<!-- V2V -->
+<rect x="20" y="210" width="330" height="170" rx="14" fill="url(#v2vGrad)" stroke="#34d399" stroke-width="1.5"/>
+<text x="185" y="238" text-anchor="middle" font-family="Noto Serif SC" font-size="16" font-weight="700" fill="#059669">视频转视频（V2V）</text>
+<g transform="translate(45,260)">
+<rect x="0" y="0" width="30" height="40" rx="4" fill="#d1d5db" stroke="#9ca3af" stroke-width="1"/>
+<text x="15" y="22" text-anchor="middle" font-size="9" fill="#6b7280">引擎</text>
+</g>
+<text x="95" y="282" text-anchor="middle" font-size="18" fill="#34d399">&#8594;</text>
+<g transform="translate(120,255)">
+<rect x="0" y="0" width="50" height="50" rx="6" fill="#fff" stroke="#34d399" stroke-width="1.5"/>
+<text x="25" y="30" text-anchor="middle" font-size="20" fill="#059669">&#8634;</text>
+</g>
+<text x="180" y="282" text-anchor="middle" font-size="18" fill="#34d399">&#8594;</text>
+<g transform="translate(210,260)">
+<rect x="0" y="0" width="30" height="40" rx="4" fill="#34d399" opacity="0.6" stroke="#059669" stroke-width="1"/>
+<rect x="35" y="0" width="30" height="40" rx="4" fill="#34d399" opacity="0.5" stroke="#059669" stroke-width="1"/>
+<rect x="70" y="0" width="30" height="40" rx="4" fill="#34d399" opacity="0.4" stroke="#059669" stroke-width="1"/>
+</g>
+<text x="185" y="325" text-anchor="middle" font-size="11" fill="#6b7280">游戏引擎渲染 → 真实纹理/光照</text>
+<text x="185" y="345" text-anchor="middle" font-size="10" fill="#9ca3af">流式实时转换</text>
+
+<!-- Dynamic Prompt -->
+<rect x="370" y="210" width="330" height="170" rx="14" fill="url(#dpGrad)" stroke="#fbbf24" stroke-width="1.5"/>
+<text x="535" y="238" text-anchor="middle" font-family="Noto Serif SC" font-size="16" font-weight="700" fill="#d97706">动态提示词（Dynamic Prompt）</text>
+<g transform="translate(410,265)">
+<rect x="0" y="0" width="60" height="22" rx="4" fill="#fff" stroke="#fbbf24" stroke-width="1"/>
+<text x="30" y="15" text-anchor="middle" font-size="9" fill="#d97706">"晴天"</text>
+</g>
+<g transform="translate(410,295)">
+<rect x="0" y="0" width="60" height="22" rx="4" fill="#fff" stroke="#fbbf24" stroke-width="1"/>
+<text x="30" y="15" text-anchor="middle" font-size="9" fill="#d97706">"下雨"</text>
+</g>
+<g transform="translate(410,325)">
+<rect x="0" y="0" width="60" height="22" rx="4" fill="#fff" stroke="#fbbf24" stroke-width="1"/>
+<text x="30" y="15" text-anchor="middle" font-size="9" fill="#d97706">"雪天"</text>
+</g>
+<g transform="translate(500,270)">
+<rect x="0" y="0" width="16" height="30" rx="3" fill="#fbbf24" opacity="0.8"/>
+<rect x="20" y="0" width="16" height="30" rx="3" fill="#fbbf24" opacity="0.6"/>
+<rect x="40" y="0" width="16" height="30" rx="3" fill="#fbbf24" opacity="0.4"/>
+</g>
+<text x="535" y="325" text-anchor="middle" font-size="11" fill="#6b7280">生成中途切换文本提示</text>
+<text x="535" y="345" text-anchor="middle" font-size="10" fill="#9ca3af">叙事动态演化</text>
+
+<!-- Center label -->
+<text x="360" y="408" text-anchor="middle" font-size="11" fill="#9ca3af">四种零样本应用 · 均由因果自回归设计天然支持</text>
+</svg>
+<p class="figure-caption"><strong>图 11：</strong>零样本应用矩阵。T2V（标准生成）、I2V（首帧条件）、V2V（渲染增强）、动态提示词（叙事演化）四种应用，均无需额外训练。</p>
+</div>
+
+<p><strong>图像生成视频（I2V）</strong>：将输入图像作为第一帧的初始条件，后续帧通过自回归生成。由于因果架构天然支持"以历史帧为条件"，这一能力完全零样本——无需任何 I2V 专项训练。</p>
+
+<p><strong>视频转视频（V2V）</strong>：将游戏引擎的低质量渲染帧作为条件输入，CausVid 将其转换为具有真实纹理和光照的视频。得益于低延迟特性，这一转换可以<strong>实时流式</strong>完成。</p>
+
+<p><strong>动态提示词</strong>：在生成过程中切换文本提示词，使视频叙事动态演化。例如，前半段生成"晴天"场景，中途切换为"下雨"，模型自然过渡到雨景。这是双向模型无法实现的——双向模型必须一次性处理所有帧，无法在生成过程中引入新的条件。</p>
+
+<div class="insight-box">
+<p>自回归设计天然支持这些零样本应用的根本原因在于：每个块仅依赖历史帧而非未来帧。这使得模型可以在生成任意块时引入新的条件信息（图像、视频、提示词），而不会影响已生成的内容。双向模型由于需要全局注意力，必须一次性处理所有帧，无法在生成过程中插入新的条件或切换提示。因果设计的这种"逐块条件化"能力，是零样本应用的基础。</p>
+</div>
+</section>
+
+<div class="divider"><span class="icon">&#10047;</span></div>
+
+<!-- ==================== Chapter 9 ==================== -->
+<section class="chapter" id="ch9">
+<div class="chapter-header">
+<span class="chapter-num">CHAPTER 09</span>
+<h2 class="chapter-title">自主科研问题</h2>
+<p class="chapter-subtitle">从 CausVid 延伸的四个开放研究方向</p>
+</div>
+
+<div class="rq-card" data-tag="RQ 1">
+<h4>非对称蒸馏的理论上界</h4>
+<p><span class="rq-label">问题：</span>双向教师与因果学生之间的 KL 散度是否存在可证明的上界？非对称蒸馏的收敛性在什么条件下成立？</p>
+<p><span class="rq-label">理论分析：</span>双向教师 $s_{\mathrm{data}}$ 在完整序列上定义了数据分布的分数函数，而因果学生 $G_\phi$ 仅在因果子序列上建模条件分布。两者之间的 KL 散度可以被分解为<strong>条件分布匹配误差</strong>和<strong>边际分布匹配误差</strong>之和。若块大小 $k$ 足够大使得块内双向注意力能捕获局部时序依赖，则条件误差可被控制在 $O(1/k)$ 量级。</p>
+<p><span class="rq-label">相关工作：</span>Score-based generative models 的理论基础（Song &amp; Ermon, 2019）、变分推断中的 ELBO 上界推导（Kingma &amp; Welling, 2013）、以及 DMD 原始论文中的收敛性分析（Yin et al., 2024）。</p>
+<p><span class="rq-label">研究方向：</span>建立非对称蒸馏的 PAC 学习框架，推导块大小 $k$、训练迭代数 $T$ 与最终生成质量之间的定量关系，为实际部署提供理论指导。</p>
+</div>
+
+<div class="rq-card" data-tag="RQ 2">
+<h4>误差累积的定量分析</h4>
+<p><span class="rq-label">问题：</span>DMD 的分布级监督如何从数学上减缓误差累积？与传统轨迹级蒸馏相比，误差累积速率有何本质差异？</p>
+<p><span class="rq-label">理论分析：</span>在轨迹级蒸馏中，第 $n$ 块的误差可以建模为 $\epsilon_n = \epsilon_{n-1} \cdot \alpha + \delta$，其中 $\alpha$ 为误差传播系数（$\alpha &lt; 1$ 时收敛），$\delta$ 为单步误差。误差呈指数增长 $\epsilon_n \sim O(\alpha^n)$。而 DMD 的分布级匹配在每一步都使用<strong>全局教师</strong>作为参考，其监督信号不依赖于学生之前的输出，因此 $\delta$ 不随 $n$ 增长，误差累积被限制在 $O(\alpha^n \cdot \delta_{\mathrm{init}})$ 而非 $O(n \cdot \delta)$。</p>
+<p><span class="rq-label">相关工作：</span>自回归模型的误差累积分析（Bengio et al., 2015, Scheduled Sampling）、扩散模型的误差传播（Song et al., 2021）、以及序列模型的暴露偏差研究（Ranzato et al., 2016）。</p>
+<p><span class="rq-label">研究方向：</span>设计实验定量测量 DMD 蒸馏后因果模型的误差累积速率，与传统蒸馏方法进行对照，并探索自适应块大小策略以在长视频生成中进一步抑制累积。</p>
+</div>
+
+<div class="rq-card" data-tag="RQ 3">
+<h4>最优块大小的理论推导</h4>
+<p><span class="rq-label">问题：</span>块大小 $k$ 的选择是否存在信息论意义上的最优解？$k$ 与视频内容的时序复杂度之间存在什么关系？</p>
+<p><span class="rq-label">理论分析：</span>块大小 $k$ 控制了局部双向注意力范围与全局因果约束之间的权衡。从信息论角度，$k$ 应至少覆盖视频内容的<strong>时序相干长度</strong>（temporal coherence length）$\tau$——即相邻 $\tau$ 帧之间存在显著统计依赖的最大距离。当 $k &lt; \tau$ 时，块内双向注意力无法捕获完整的局部依赖，导致质量下降；当 $k \gg \tau$ 时，因果性约束减弱，延迟增加但收益递减。最优 $k^* \approx \tau$。</p>
+<p><span class="rq-label">相关工作：</span>视频时序相干性分析（Srivastava et al., 2015）、信息瓶颈理论在序列建模中的应用（Tishby &amp; Zaslavsky, 2015）、以及 Transformer 中的局部注意力模式研究（Beltagy et al., 2020, Longformer）。</p>
+<p><span class="rq-label">研究方向：</span>开发自适应块大小机制，根据视频内容的时序复杂度动态调整 $k$；探索内容感知的变长分块策略，在保证质量的前提下最大化流式生成效率。</p>
+</div>
+
+<div class="rq-card" data-tag="RQ 4">
+<h4>多模态扩展路径</h4>
+<p><span class="rq-label">问题：</span>因果视频生成能否统一文本、音频、视频的多模态流式生成？非对称蒸馏框架如何扩展到跨模态场景？</p>
+<p><span class="rq-label">理论分析：</span>CausVid 的因果块状注意力天然适配多模态序列：将文本 token、音频帧和视频帧统一为序列元素，使用<strong>跨模态因果掩码</strong>控制模态间的信息流向。例如，音频帧可以条件于当前及历史视频块（音画同步），但不能条件于未来视频块（因果性）。非对称蒸馏框架中，多模态双向教师可以提供跨模态联合分布的分数函数，指导因果多模态学生学习。</p>
+<p><span class="rq-label">相关工作：</span>多模态扩散模型（Frozen, AudioLDM, Imagen Video）、统一序列建模（Omnivore, Unified-IO）、以及多模态自回归模型（CM3leon, Any-to-Any）。</p>
+<p><span class="rq-label">研究方向：</span>构建音视频联合扩散教师模型，设计跨模态因果注意力掩码，探索非对称蒸馏在音画同步生成中的应用，最终实现统一的实时多模态流式生成系统。</p>
+</div>
+</section>
+
+<div class="divider"><span class="icon">&#10047;</span></div>
+
+<!-- ==================== Code Appendix ==================== -->
+<section class="chapter" id="code">
+<div class="chapter-header">
+<span class="chapter-num">APPENDIX</span>
+<h2 class="chapter-title">代码附录</h2>
+<p class="chapter-subtitle">核心模块的示意性实现</p>
+</div>
+
+<p>以下代码为基于论文和官方开源仓库的<span class="highlight-l">示意性实现</span>，旨在帮助理解核心算法逻辑，非完整可运行版本。</p>
+
+<div class="code-block">
+<div class="code-header"><div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div><span class="title">block_causal_mask.py — 块状因果注意力掩码</span></div>
+<pre><code>import torch
+import torch.nn.functional as F
+
+def create_block_causal_mask(seq_len, chunk_size, num_heads):
+    &quot;&quot;&quot;创建块状因果注意力掩码
+    
+    参数:
+        seq_len: 序列总长度 (帧数)
+        chunk_size: 每个块的帧数 k
+        num_heads: 注意力头数
+    
+    返回:
+        mask: [num_heads, seq_len, seq_len] 的注意力掩码
+    &quot;&quot;&quot;
+    # 创建帧索引矩阵
+    idx_i = torch.arange(seq_len).unsqueeze(1)  # [seq_len, 1]
+    idx_j = torch.arange(seq_len).unsqueeze(0)  # [1, seq_len]
+    
+    # 块状因果条件: floor(j/k) &lt;= floor(i/k)
+    block_i = idx_i // chunk_size  # [seq_len, 1]
+    block_j = idx_j // chunk_size  # [1, seq_len]
+    
+    # 当 j 所在块 &lt;= i 所在块时，允许注意力
+    mask = (block_j &lt;= block_i).float()  # [seq_len, seq_len]
+    
+    # 扩展到多头
+    mask = mask.unsqueeze(0).expand(num_heads, -1, -1)  # [num_heads, seq_len, seq_len]
+    
+    return mask
+
+# 示例: 20帧序列, 块大小=5, 8头注意力
+mask = create_block_causal_mask(seq_len=20, chunk_size=5, num_heads=8)
+print(f&quot;掩码形状: {mask.shape}&quot;)  # [8, 20, 20]
+print(f&quot;允许注意力比例: {mask[0].mean():.2f}&quot;)  # ~0.55 (下三角+块内双向)</code></pre>
+</div>
+
+<div class="code-block">
+<div class="code-header"><div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div><span class="title">dmd_loss.py — DMD 损失计算（基于官方代码）</span></div>
+<pre><code>import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class DMDLoss(nn.Module):
+    &quot;&quot;&quot;分布匹配蒸馏损失 (Distribution Matching Distillation Loss)
+    
+    基于 CausVid 官方代码 dmd.py 的简化实现。
+    核心思想: 通过两个分数函数的差值作为梯度，指导学生生成器。
+    &quot;&quot;&quot;
+    def __init__(self, guidance_scale=3.5):
+        super().__init__()
+        self.guidance_scale = guidance_scale
+    
+    def compute_kl_gradient(self, noisy_latent, estimated_clean,
+                            timestep, conditional_dict, unconditional_dict,
+                            real_score_model, fake_score_model):
+        &quot;&quot;&quot;计算 KL 梯度 (对应论文 Eq. 4 和 DMD 论文 Eq. 7)
+        
+        参数:
+            noisy_latent: [B, F, C, H, W] 加噪后的隐变量
+            estimated_clean: [B, F, C, H, W] 学生预测的干净帧
+            timestep: [B, F] 时间步
+            conditional_dict: 条件信息 (文本嵌入等)
+            unconditional_dict: 无条件信息 (负提示)
+            real_score_model: 教师模型 (双向注意力, 冻结)
+            fake_score_model: 假分布分数函数 (在线训练)
+        
+        返回:
+            grad: KL 梯度, 指向真实数据分布方向
+        &quot;&quot;&quot;
+        # Step 1: 计算假分布分数 (学生输出分布的分数函数)
+        pred_fake = fake_score_model(
+            noisy_latent, conditional_dict, timestep
+        )
+        
+        # Step 2: 计算真分布分数 (教师模型, 使用 CFG)
+        pred_real_cond = real_score_model(
+            noisy_latent, conditional_dict, timestep
+        )
+        pred_real_uncond = real_score_model(
+            noisy_latent, unconditional_dict, timestep
+        )
+        # Classifier-Free Guidance
+        pred_real = pred_real_cond + (
+            pred_real_cond - pred_real_uncond
+        ) * self.guidance_scale
+        
+        # Step 3: DMD 梯度 = 假分数 - 真分数 (负梯度方向)
+        grad = pred_fake - pred_real
+        
+        # Step 4: 梯度归一化 (DMD 论文 Eq. 8)
+        p_real = estimated_clean - pred_real
+        normalizer = torch.abs(p_real).mean(
+            dim=[1, 2, 3, 4], keepdim=True
+        )
+        grad = grad / (normalizer + 1e-8)
+        grad = torch.nan_to_num(grad)
+        
+        return grad
+    
+    def forward(self, generator_output, conditional_dict,
+                unconditional_dict, real_score, fake_score):
+        &quot;&quot;&quot;计算 DMD 损失
+        
+        参数:
+            generator_output: [B, F, C, H, W] 学生生成器的输出
+            其余参数同上
+        
+        返回:
+            dmd_loss: 标量损失
+        &quot;&quot;&quot;
+        B, F = generator_output.shape[:2]
+        
+        # 随机采样时间步
+        timestep = torch.randint(0, 1000, [B, F], 
+                                 device=generator_output.device)
+        # 添加噪声
+        noise = torch.randn_like(generator_output)
+        noisy_latent = self.add_noise(generator_output, noise, timestep)
+        
+        # 计算 KL 梯度 (不计算梯度)
+        with torch.no_grad():
+            grad, log_dict = self.compute_kl_gradient(
+                noisy_latent, generator_output, timestep,
+                conditional_dict, unconditional_dict,
+                real_score, fake_score
+            )
+        
+        # DMD 损失: 0.5 * ||x - (x - grad)||^2 = 0.5 * ||grad||^2
+        dmd_loss = 0.5 * F.mse_loss(
+            generator_output.double(),
+            (generator_output.double() - grad.double()).detach(),
+            reduction=&quot;mean&quot;
+        )
+        return dmd_loss, log_dict
+    
+    def add_noise(self, x, noise, timestep):
+        &quot;&quot;&quot;前向扩散过程: x_t = alpha_t * x_0 + sigma_t * noise&quot;&quot;&quot;
+        # 简化的噪声调度
+        alpha_t = torch.cos(timestep / 1000 * 3.14159 / 2).view(-1, 1, 1, 1, 1)
+        sigma_t = torch.sin(timestep / 1000 * 3.14159 / 2).view(-1, 1, 1, 1, 1)
+        return alpha_t * x + sigma_t * noise</code></pre>
+</div>
+
+<div class="code-block">
+<div class="code-header"><div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div><span class="title">kv_cache_inference.py — KV 缓存自回归推理</span></div>
+<pre><code>import torch
+import torch.nn as nn
+from typing import List, Optional
+
+class KVCache:
+    &quot;&quot;&quot;KV 缓存管理器, 用于自回归视频生成的高效推理&quot;&quot;&quot;
+    
+    def __init__(self):
+        self.keys: List[torch.Tensor] = []
+        self.values: List[torch.Tensor] = []
+    
+    def update(self, key: torch.Tensor, value: torch.Tensor):
+        &quot;&quot;&quot;追加新的 KV 对到缓存&quot;&quot;&quot;
+        self.keys.append(key)
+        self.values.append(value)
+    
+    def get_cached(self) -&gt; Optional[tuple]:
+        &quot;&quot;&quot;获取拼接后的缓存 KV&quot;&quot;&quot;
+        if not self.keys:
+            return None
+        return (
+            torch.cat(self.keys, dim=2),  # 沿序列维度拼接
+            torch.cat(self.values, dim=2)
+        )
+    
+    def clear(self):
+        self.keys.clear()
+        self.values.clear()
+
+
+def autoregressive_inference(
+    generator: nn.Module,
+    text_embedding: torch.Tensor,
+    num_chunks: int,
+    chunk_size: int = 5,  # 每块的隐帧数
+    denoising_steps: list = [999, 748, 502, 247],
+    latent_shape: tuple = (1, 5, 16, 44, 80),  # [B, F, C, H, W]
+    device: str = &quot;cuda&quot;
+):
+    &quot;&quot;&quot;自回归视频生成推理 (对应论文 Algorithm 2)
+    
+    参数:
+        generator: 因果学生生成器
+        text_embedding: 文本条件嵌入
+        num_chunks: 要生成的块数 (总帧数 = num_chunks * chunk_size * 16/5)
+        chunk_size: 每块的隐帧数
+        denoising_steps: 去噪时间步列表
+        latent_shape: 单块隐变量形状
+    
+    返回:
+        all_latents: 所有生成的隐变量列表
+    &quot;&quot;&quot;
+    kv_cache = KVCache()
+    all_latents = []
+    
+    for chunk_idx in range(num_chunks):
+        # Step 1: 初始化当前块为纯噪声
+        x_t = torch.randn(latent_shape, device=device)
+        
+        # Step 2: 迭代去噪
+        for step_idx in range(len(denoising_steps) - 1):
+            t = denoising_steps[step_idx]
+            timestep = torch.full(
+                (latent_shape[0], latent_shape[1]), 
+                t, device=device, dtype=torch.long
+            )
+            
+            # 生成器前向传播 (使用 KV 缓存)
+            with torch.no_grad():
+                cached = kv_cache.get_cached()
+                pred_x0 = generator(
+                    x_t, timestep, text_embedding,
+                    past_kv=cached  # 传入历史 KV 缓存
+                )
+            
+            # 更新到下一个时间步
+            t_next = denoising_steps[step_idx + 1]
+            x_t = interpolate_noise(pred_x0, t, t_next)
+        
+        # Step 3: 最终去噪步
+        timestep = torch.full(
+            (latent_shape[0], latent_shape[1]),
+            denoising_steps[-1], device=device, dtype=torch.long
+        )
+        with torch.no_grad():
+            cached = kv_cache.get_cached()
+            x_0 = generator(x_t, timestep, text_embedding, past_kv=cached)
+        
+        all_latents.append(x_0)
+        
+        # Step 4: 更新 KV 缓存 (用干净帧做前向传播)
+        with torch.no_grad():
+            new_kv = generator.compute_kv(x_0, text_embedding)
+            kv_cache.update(*new_kv)
+        
+        print(f&quot;块 {chunk_idx+1}/{num_chunks} 完成, &quot;
+              f&quot;已生成 {(chunk_idx+1) * chunk_size} 隐帧 &quot;
+              f&quot;({(chunk_idx+1) * chunk_size * 16 // 5} 像素帧)&quot;)
+    
+    return all_latents
+
+
+def interpolate_noise(x_0, t_from, t_to):
+    &quot;&quot;&quot;在两个时间步之间插值: x_{t_to} = alpha_{t_to} * x_0 + sigma_{t_to} * noise&quot;&quot;&quot;
+    alpha_to = torch.cos(torch.tensor(t_to / 1000 * 3.14159 / 2))
+    sigma_to = torch.sin(torch.tensor(t_to / 1000 * 3.14159 / 2))
+    noise = torch.randn_like(x_0)
+    return alpha_to * x_0 + sigma_to * noise</code></pre>
+</div>
+
+</section>
+
+<footer>
+<p>CausVid 论文精读 &middot; CVPR 2025 ORAL</p>
+<p style="margin-top:8px;">从双向扩散到快速自回归视频扩散模型 &middot; 非对称蒸馏 &times; DMD &times; KV缓存</p>
+</footer>
+
+</main>
+
+<script>
+// Progress bar
+window.addEventListener('scroll', function() {
+    var h = document.documentElement;
+    var scrolled = (h.scrollTop / (h.scrollHeight - h.clientHeight)) * 100;
+    document.getElementById('progressBar').style.width = scrolled + '%';
+});
+
+// Nav scrolled state
+window.addEventListener('scroll', function() {
+    var nav = document.getElementById('nav');
+    if (window.scrollY > 50) {
+        nav.classList.add('scrolled');
+    } else {
+        nav.classList.remove('scrolled');
+    }
+});
+
+// Mobile nav toggle
+document.getElementById('navToggle').addEventListener('click', function() {
+    document.getElementById('navLinks').classList.toggle('open');
+});
+
+// Close mobile nav on link click
+document.querySelectorAll('.nav-links a').forEach(function(link) {
+    link.addEventListener('click', function() {
+        document.getElementById('navLinks').classList.remove('open');
+    });
+});
+</script>
+
+</body>
+</html>

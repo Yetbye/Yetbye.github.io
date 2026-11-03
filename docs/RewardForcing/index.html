@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reward Forcing: 奖励驱动的流式视频生成 | 论文精读</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- MathJax 3.x with 3-layer CDN fallback -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true,
+    skipHtmlTags: ['script','noscript','style','textarea','pre','code']
+  },
+  chtml: { scale: 1.05 },
+  startup: { typeset: true }
+};
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"
+  onerror="document.getElementById('mathjax-fallback').src='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'">
+</script>
+<script id="mathjax-fallback" onerror="
+  var s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+  document.head.appendChild(s);
+"></script>
+<script>
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    if (typeof MathJax === 'undefined' || !MathJax.startup || !MathJax.startup.promise) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+      document.head.appendChild(s);
+    }
+  }, 5000);
+});
+</script>
+
+<style>
+:root {
+  --lav-50:#faf5ff; --lav-100:#f3e8ff; --lav-200:#e9d5ff; --lav-300:#d8b4fe;
+  --lav-400:#c084fc; --lav-500:#a855f7; --lav-600:#9333ea; --lav-700:#7e22ce;
+  --coral-100:#ffe4e6; --coral-200:#fecdd3; --coral-300:#fda4af; --coral-400:#fb7185;
+  --coral-500:#f43f5e;
+  --mint-100:#d1fae5; --mint-200:#a7f3d0; --mint-300:#6ee7b7; --mint-400:#34d399;
+  --mint-500:#10b981;
+  --amber-100:#fef3c7; --amber-200:#fde68a; --amber-400:#fbbf24; --amber-500:#f59e0b;
+  --ink:#1e1b4b; --ink-soft:#4c4b5e; --ink-muted:#787887;
+  --paper:#ffffff; --paper-warm:#faf8f5;
+  --code-bg:#1e1b3a; --code-text:#e2e8f0;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  font-family:'Noto Sans SC',sans-serif; color:var(--ink); background:var(--paper-warm);
+  line-height:1.8; font-size:16px; overflow-x:hidden;
+}
+h1,h2,h3,h4,h5 { font-family:'Noto Serif SC',serif; font-weight:700; }
+
+/* Nav */
+.nav {
+  position:fixed; top:0; left:0; right:0; z-index:100;
+  background:rgba(250,248,245,0.82); backdrop-filter:blur(20px) saturate(1.5);
+  border-bottom:1px solid rgba(192,132,252,0.12);
+  padding:14px 32px; display:flex; align-items:center; justify-content:space-between;
+}
+.nav-logo { font-family:'Noto Serif SC',serif; font-weight:900; font-size:18px; color:var(--lav-600); }
+.nav-links { display:flex; gap:24px; }
+.nav-links a {
+  font-size:13px; color:var(--ink-soft); text-decoration:none; font-weight:500;
+  transition:color .2s;
+}
+.nav-links a:hover { color:var(--lav-600); }
+
+/* Hero */
+.hero {
+  position:relative; min-height:96vh; display:flex; align-items:center; justify-content:center;
+  overflow:hidden; padding:120px 24px 80px;
+  background:linear-gradient(135deg,#faf5ff 0%,#f3e8ff 18%,#fdf4e3 50%,#fffbeb 100%);
+}
+.hero::before {
+  content:''; position:absolute; inset:0;
+  background:
+    radial-gradient(ellipse 520px 320px at 12% 22%,rgba(192,132,252,0.16),transparent 60%),
+    radial-gradient(ellipse 520px 320px at 88% 78%,rgba(251,191,36,0.13),transparent 60%);
+}
+.hero-wrap { position:relative; z-index:2; width:100%; max-width:780px; text-align:center; }
+.hero-badge {
+  display:inline-flex; align-items:center; gap:8px;
+  background:rgba(255,255,255,0.6); backdrop-filter:blur(12px) saturate(1.5);
+  border:1px solid rgba(192,132,252,0.3); color:var(--lav-600);
+  padding:7px 20px; border-radius:100px;
+  font-family:'Noto Sans SC',sans-serif; font-size:11px; font-weight:600; letter-spacing:3px;
+  margin-bottom:20px; box-shadow:0 4px 20px rgba(192,132,252,0.12);
+}
+.hero h1 {
+  font-size:clamp(2.8rem,8vw,5rem); font-weight:900; letter-spacing:-0.03em; line-height:1.1;
+  margin:12px 0 10px;
+  background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 38%,var(--coral-500) 62%,#f59e0b 100%);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+}
+.hero-sub {
+  font-size:clamp(1rem,2.5vw,1.35rem); color:var(--ink-soft); font-weight:400;
+  max-width:580px; margin:0 auto 8px; line-height:1.6;
+}
+.hero-art { margin:28px auto 8px; max-width:680px; width:100%; }
+.hero-img {
+  width:100%; height:auto; border-radius:20px;
+  box-shadow:0 24px 70px -24px rgba(30,27,75,0.18);
+  border:1px solid rgba(192,132,252,0.12);
+}
+.hero-tags { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin:20px 0; }
+.hero-tag {
+  background:rgba(255,255,255,0.5); border:1px solid rgba(192,132,252,0.2);
+  padding:5px 14px; border-radius:100px; font-size:12px; color:var(--ink-soft); font-weight:500;
+}
+.hero-scroll {
+  position:absolute; bottom:30px; left:50%; transform:translateX(-50%);
+  font-size:11px; color:var(--ink-muted); letter-spacing:2px; text-transform:uppercase;
+  animation:bounce 2s infinite;
+}
+@keyframes bounce { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(8px)} }
+
+/* Content */
+.content { max-width:820px; margin:0 auto; padding:60px 24px; }
+.chapter { margin-bottom:80px; scroll-margin-top:80px; }
+.chapter-id {
+  font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--lav-500);
+  font-weight:600; letter-spacing:2px; margin-bottom:8px;
+}
+.chapter-title {
+  font-size:clamp(1.6rem,4vw,2.2rem); font-weight:900; color:var(--ink);
+  margin-bottom:24px; line-height:1.3; letter-spacing:-0.02em;
+}
+.chapter-title .accent { color:var(--lav-600); }
+p { margin-bottom:16px; color:var(--ink-soft); }
+strong { color:var(--ink); font-weight:600; }
+a { color:var(--lav-600); text-decoration:none; }
+
+/* Insight Box */
+.insight {
+  background:linear-gradient(135deg,var(--mint-100) 0%,rgba(209,250,229,0.4) 100%);
+  border-left:4px solid var(--mint-400); border-radius:12px;
+  padding:20px 24px; margin:24px 0; position:relative;
+}
+.insight::before {
+  content:'深度洞察'; position:absolute; top:-10px; left:20px;
+  background:var(--mint-400); color:white; font-size:10px; font-weight:700;
+  padding:3px 12px; border-radius:100px; letter-spacing:2px;
+}
+.insight-title { font-weight:700; color:var(--ink); margin-bottom:8px; font-size:15px; }
+.insight p { font-size:14px; color:var(--ink-soft); margin:0; }
+
+/* Formula */
+.formula {
+  background:var(--paper); border:1px solid var(--lav-100); border-radius:12px;
+  padding:24px 20px; margin:24px 0; text-align:center; overflow-x:auto;
+  box-shadow:0 2px 12px rgba(192,132,252,0.06);
+}
+.formula-label {
+  font-size:11px; color:var(--lav-500); font-weight:600; letter-spacing:1px;
+  text-transform:uppercase; margin-bottom:8px; text-align:left;
+}
+
+/* Code Block */
+.code-block {
+  background:var(--code-bg); border-radius:12px; padding:0; margin:24px 0;
+  overflow:hidden; position:relative;
+}
+.code-header {
+  background:rgba(255,255,255,0.05); padding:10px 20px;
+  display:flex; align-items:center; justify-content:space-between;
+  border-bottom:1px solid rgba(255,255,255,0.08);
+}
+.code-lang { color:var(--mint-400); font-size:12px; font-weight:600; font-family:'JetBrains Mono',monospace; }
+.code-note { color:rgba(255,255,255,0.4); font-size:11px; }
+.code-block pre {
+  padding:20px; overflow-x:auto; margin:0;
+}
+.code-block code {
+  font-family:'JetBrains Mono',monospace; font-size:13px; line-height:1.7;
+  color:var(--code-text);
+}
+.code-block .kw { color:#c084fc; }
+.code-block .str { color:#34d399; }
+.code-block .com { color:#64748b; font-style:italic; }
+.code-block .fn { color:#fbbf24; }
+.code-block .num { color:#fb7185; }
+
+/* Figure */
+.figure { margin:32px 0; text-align:center; }
+.figure img { max-width:100%; border-radius:12px; box-shadow:0 8px 30px -8px rgba(30,27,75,0.12); }
+.figure-caption {
+  font-size:13px; color:var(--ink-muted); margin-top:10px; line-height:1.5;
+  text-align:center; padding:0 20px;
+}
+
+/* Table */
+.data-table { width:100%; border-collapse:collapse; margin:24px 0; font-size:13px; }
+.data-table th {
+  background:var(--lav-100); color:var(--ink); font-weight:600;
+  padding:10px 12px; text-align:left; border-bottom:2px solid var(--lav-200);
+}
+.data-table td { padding:8px 12px; border-bottom:1px solid var(--lav-50); color:var(--ink-soft); }
+.data-table tr:hover { background:var(--lav-50); }
+.data-table .best { color:var(--mint-500); font-weight:700; }
+.data-table .ours { background:rgba(167,243,208,0.15); }
+
+/* SVG Container */
+.svg-container { margin:32px 0; text-align:center; overflow-x:auto; }
+.svg-container svg { max-width:100%; height:auto; }
+.svg-caption { font-size:13px; color:var(--ink-muted); margin-top:10px; }
+
+/* Research Question */
+.rq-card {
+  background:linear-gradient(135deg,rgba(254,243,199,0.6) 0%,rgba(253,230,138,0.3) 100%);
+  border:1px solid var(--amber-200); border-radius:16px;
+  padding:24px; margin:20px 0; position:relative;
+}
+.rq-card::before {
+  content:attr(data-num); position:absolute; top:-12px; left:20px;
+  background:var(--amber-400); color:white; width:28px; height:28px;
+  border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:700; font-family:'JetBrains Mono',monospace;
+}
+.rq-title { font-weight:700; color:var(--ink); margin-bottom:10px; font-size:15px; margin-top:4px; }
+.rq-card p { font-size:14px; color:var(--ink-soft); }
+
+/* Section Divider */
+.divider {
+  width:60px; height:3px; background:linear-gradient(90deg,var(--lav-400),var(--coral-400));
+  border-radius:100px; margin:40px auto;
+}
+
+/* Stats Grid */
+.stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin:24px 0; }
+.stat-card {
+  background:var(--paper); border:1px solid var(--lav-100); border-radius:12px;
+  padding:20px; text-align:center;
+}
+.stat-value { font-size:28px; font-weight:900; font-family:'Noto Serif SC',serif; }
+.stat-value.lav { color:var(--lav-600); }
+.stat-value.coral { color:var(--coral-500); }
+.stat-value.mint { color:var(--mint-500); }
+.stat-value.amber { color:var(--amber-500); }
+.stat-label { font-size:12px; color:var(--ink-muted); margin-top:4px; }
+
+/* Footer */
+.footer {
+  background:var(--ink); color:rgba(255,255,255,0.6); padding:40px 24px; text-align:center;
+}
+.footer p { font-size:13px; color:rgba(255,255,255,0.5); }
+
+@media (max-width:768px) {
+  .nav-links { display:none; }
+  .content { padding:40px 16px; }
+  .stats-grid { grid-template-columns:repeat(2,1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="nav">
+  <div class="nav-logo">Reward Forcing</div>
+  <div class="nav-links"><a href="../index.html">« 合辑</a>
+    <a href="#ch1">困境</a>
+    <a href="#ch2">EMA-Sink</a>
+    <a href="#ch3">Re-DMD</a>
+    <a href="#ch4">架构</a>
+    <a href="#ch5">代码</a>
+    <a href="#ch6">实验</a>
+    <a href="#ch7">科研问题</a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-wrap">
+    <div class="hero-badge">arXiv preprint &middot; 2025.12</div>
+    <h1>Reward Forcing</h1>
+    <p class="hero-sub">EMA-Sink &times; Re-DMD &times; 23.1 FPS 实时流式视频生成</p>
+    <div class="hero-tags">
+      <span class="hero-tag">EMA-Sink</span>
+      <span class="hero-tag">Re-DMD</span>
+      <span class="hero-tag">23.1 FPS</span>
+      <span class="hero-tag">VBench 84.13</span>
+      <span class="hero-tag">Dynamic +88.38%</span>
+    </div>
+    <div class="hero-art">
+      <img src="assets/cover.webp" alt="Reward Forcing Cover" class="hero-img">
+    </div>
+  </div>
+  <div class="hero-scroll">Scroll to Read</div>
+</section>
+
+<!-- Content -->
+<div class="content">
+
+<!-- ===== CH1 ===== -->
+<section class="chapter" id="ch1">
+  <div class="chapter-id">CHAPTER 01</div>
+  <h2 class="chapter-title">流式视频生成的<span class="accent">核心困境</span></h2>
+
+  <p>视频扩散Transformer（DiT）的scaling带来了令人惊叹的短视频生成质量，但其<strong>双向注意力机制</strong>要求同时去噪所有帧，无法满足交互式应用的流式生成需求。实现低延迟与高保真度的并存，是流式视频生成的核心挑战。</p>
+
+  <p>近期工作将慢速双向扩散模型蒸馏为高效的自回归学生模型——每帧仅通过滑动窗口注意力关注前序帧，借助KV缓存实现实时流式推理。然而，这类方法面临一个两难困境：<strong>误差累积</strong>。每帧依赖可能已损坏的前序输出，错误沿时间轴逐步传播。</p>
+
+  <div class="insight">
+    <div class="insight-title">Attention Sink 的"双刃剑"效应</div>
+    <p>为缓解误差累积，研究者引入 Attention Sink 机制：在KV缓存中保留初始帧的token。这一设计恢复了滑动窗口注意力的性能并缓解了长程漂移，但带来了新的问题——模型对初始帧产生<strong>过度注意力</strong>。后续帧无法自然演化，频繁出现"视觉闪回"（visual flashback），即画面回退到首帧外观。这本质上是模型将静态初始token作为"锚点"而产生的路径依赖。</p>
+  </div>
+
+  <p>更关键的是，经典的分布匹配蒸馏（DMD）虽能最小化师生分布间的KL散度来迁移知识，但<strong>无法解决过度注意力问题</strong>。退化的样本虽然缺乏运动动态，但视觉质量尚可，已接近教师分布，使得DMD难以区分和优化这些样本。</p>
+
+  <!-- SVG: Three-way comparison of attention mechanisms -->
+  <div class="svg-container">
+    <svg viewBox="0 0 760 280" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#e9d5ff;stop-opacity:1"/>
+          <stop offset="100%" style="stop-color:#d8b4fe;stop-opacity:0.6"/>
+        </linearGradient>
+        <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#fecdd3;stop-opacity:1"/>
+          <stop offset="100%" style="stop-color:#fda4af;stop-opacity:0.6"/>
+        </linearGradient>
+        <linearGradient id="g3" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#a7f3d0;stop-opacity:1"/>
+          <stop offset="100%" style="stop-color:#6ee7b7;stop-opacity:0.6"/>
+        </linearGradient>
+      </defs>
+      <!-- Background -->
+      <rect x="0" y="0" width="760" height="280" fill="#faf8f5" rx="12"/>
+
+      <!-- Method A: Window Attention -->
+      <text x="120" y="25" text-anchor="middle" font-family="Noto Sans SC" font-size="12" font-weight="600" fill="#7e22ce">Window Attention</text>
+      <rect x="30" y="40" width="180" height="220" fill="url(#g1)" rx="8" opacity="0.5"/>
+      <!-- frames -->
+      <rect x="45" y="60" width="20" height="20" fill="#c084fc" rx="3"/>
+      <rect x="70" y="60" width="20" height="20" fill="#c084fc" rx="3" opacity="0.5"/>
+      <text x="65" y="95" text-anchor="middle" font-size="9" fill="#787887">discarded</text>
+      <rect x="100" y="60" width="20" height="20" fill="#c084fc" rx="3" opacity="0.3"/>
+      <rect x="130" y="60" width="20" height="20" fill="#c084fc" rx="3" opacity="0.2"/>
+      <!-- window -->
+      <rect x="155" y="55" width="50" height="30" fill="none" stroke="#9333ea" stroke-width="2" stroke-dasharray="4,3" rx="4"/>
+      <rect x="160" y="60" width="20" height="20" fill="#a855f7" rx="3"/>
+      <rect x="185" y="60" width="20" height="20" fill="#a855f7" rx="3"/>
+      <text x="120" y="120" text-anchor="middle" font-size="10" fill="#4c4b5e">仅缓存近期帧</text>
+      <text x="120" y="140" text-anchor="middle" font-size="10" fill="#f43f5e">性能退化</text>
+      <text x="120" y="165" text-anchor="middle" font-size="9" fill="#787887">O(w) memory</text>
+      <text x="120" y="185" text-anchor="middle" font-size="9" fill="#787887">无历史信息</text>
+
+      <!-- Arrow -->
+      <path d="M225 130 L255 130" stroke="#a855f7" stroke-width="2" marker-end="url(#arrow)"/>
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#a855f7"/>
+        </marker>
+      </defs>
+
+      <!-- Method B: Sliding Window + Sink -->
+      <text x="380" y="25" text-anchor="middle" font-family="Noto Sans SC" font-size="12" font-weight="600" fill="#f43f5e">Sink + Sliding Window</text>
+      <rect x="270" y="40" width="180" height="220" fill="url(#g2)" rx="8" opacity="0.5"/>
+      <!-- sink -->
+      <rect x="285" y="60" width="20" height="20" fill="#f43f5e" rx="3"/>
+      <rect x="310" y="60" width="20" height="20" fill="#fb7185" rx="3"/>
+      <text x="308" y="95" text-anchor="middle" font-size="9" fill="#787887">static sink</text>
+      <rect x="340" y="60" width="20" height="20" fill="#fda4af" rx="3" opacity="0.4"/>
+      <text x="350" y="95" text-anchor="middle" font-size="9" fill="#787887">evicted</text>
+      <rect x="370" y="60" width="20" height="20" fill="#fda4af" rx="3" opacity="0.3"/>
+      <!-- window -->
+      <rect x="395" y="55" width="50" height="30" fill="none" stroke="#f43f5e" stroke-width="2" stroke-dasharray="4,3" rx="4"/>
+      <rect x="400" y="60" width="20" height="20" fill="#fb7185" rx="3"/>
+      <rect x="425" y="60" width="20" height="20" fill="#fb7185" rx="3"/>
+      <text x="380" y="120" text-anchor="middle" font-size="10" fill="#4c4b5e">保留初始帧 + 近期帧</text>
+      <text x="380" y="140" text-anchor="middle" font-size="10" fill="#f43f5e">帧复制问题</text>
+      <text x="380" y="165" text-anchor="middle" font-size="9" fill="#787887">O(s+w) memory</text>
+      <text x="380" y="185" text-anchor="middle" font-size="9" fill="#787887">过度依赖首帧</text>
+
+      <!-- Arrow -->
+      <path d="M465 130 L495 130" stroke="#10b981" stroke-width="2" marker-end="url(#arrow2)"/>
+      <defs>
+        <marker id="arrow2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#10b981"/>
+        </marker>
+      </defs>
+
+      <!-- Method C: EMA-Sink -->
+      <text x="640" y="25" text-anchor="middle" font-family="Noto Sans SC" font-size="12" font-weight="600" fill="#10b981">EMA-Sink (Ours)</text>
+      <rect x="530" y="40" width="180" height="220" fill="url(#g3)" rx="8" opacity="0.5"/>
+      <!-- EMA sink -->
+      <rect x="545" y="60" width="20" height="20" fill="#10b981" rx="3"/>
+      <rect x="570" y="60" width="20" height="20" fill="#34d399" rx="3"/>
+      <text x="575" y="95" text-anchor="middle" font-size="9" fill="#787887">EMA updated</text>
+      <path d="M590 70 Q605 55 620 70" stroke="#10b981" stroke-width="1.5" fill="none" marker-end="url(#arrow3)"/>
+      <defs>
+        <marker id="arrow3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#10b981"/>
+        </marker>
+      </defs>
+      <rect x="625" y="60" width="20" height="20" fill="#6ee7b7" rx="3" opacity="0.5"/>
+      <!-- window -->
+      <rect x="655" y="55" width="50" height="30" fill="none" stroke="#10b981" stroke-width="2" stroke-dasharray="4,3" rx="4"/>
+      <rect x="660" y="60" width="20" height="20" fill="#34d399" rx="3"/>
+      <rect x="685" y="60" width="20" height="20" fill="#34d399" rx="3"/>
+      <text x="640" y="120" text-anchor="middle" font-size="10" fill="#4c4b5e">动态压缩历史 + 近期帧</text>
+      <text x="640" y="140" text-anchor="middle" font-size="10" fill="#10b981">高动态 + 高一致性</text>
+      <text x="640" y="165" text-anchor="middle" font-size="9" fill="#787887">O(s+w) memory</text>
+      <text x="640" y="185" text-anchor="middle" font-size="9" fill="#787887">全局上下文压缩</text>
+    </svg>
+    <div class="svg-caption">图1. 三种注意力机制对比：Window Attention（丢弃历史）→ Sink+Sliding Window（静态首帧依赖）→ EMA-Sink（动态压缩历史）</div>
+  </div>
+
+  <div class="insight">
+    <div class="insight-title">设计哲学：从"静态锚点"到"动态记忆"</div>
+    <p>Reward Forcing 的核心洞察在于：问题不在于是否保留历史信息，而在于<strong>如何保留</strong>。静态的初始帧token如同"刻舟求剑"——随着视频推进，首帧内容与当前场景的相关性递减。EMA-Sink 的设计哲学是将"记忆"从静态快照转变为动态压缩的全局摘要，使模型既能回溯历史脉络，又不会被某个特定时间点"锁定"。</p>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ===== CH2 ===== -->
+<section class="chapter" id="ch2">
+  <div class="chapter-id">CHAPTER 02</div>
+  <h2 class="chapter-title">EMA-Sink：<span class="accent">动态状态压缩机制</span></h2>
+
+  <p>EMA-Sink 的核心思想是：不丢弃被逐出滑动窗口的帧，而是通过指数移动平均（EMA）将其信息持续融合到固定大小的压缩状态中，以极低的计算开销维持全局上下文。</p>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">问题形式化</h3>
+  <p>给定噪声调度 $\mathcal{T} = \{t_j\}_{j=0}^T$，模型在每个去噪步骤 $t_j$ 处理帧 $i$ 的中间噪声状态 $x_{t_j}^i$，同时融入前序干净帧 $X_i^w = (x_{i-w+1:i-1})$，其中 $w$ 为外推时使用的窗口大小。模型首先估计去噪版本，然后通过前向扩散算子 $\Psi$ 重新引入较低水平的噪声：</p>
+
+  <div class="formula">
+    <div class="formula-label">Forward Process</div>
+    $$\Psi\left(G_\theta\left(x_{t_j}^i, t_j, X_i^w\right), t_{j-1}\right), \quad x_{t_T}^i \sim \mathcal{N}(0, I)$$
+  </div>
+
+  <p>当窗口推进到帧 $i+1$ 时，最旧的帧 $x_{i-w+1}$ 从即时访问中被永久移除，造成<strong>信息瓶颈</strong>。</p>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">EMA 更新方程</h3>
+  <p>EMA-Sink 不丢弃被逐出的帧，而是维护压缩的全局状态 $S_i^*$。当帧 $x_{i-w}$ 被逐出滑动窗口时，其键值对 $(K_{i-w}, V_{i-w})$ 通过指数移动平均持续融合到压缩 sink 状态中：</p>
+
+  <div class="formula">
+    <div class="formula-label">Eq (4): EMA Key Update</div>
+    $$S_i^K = \alpha \cdot S_{i-1}^K + (1 - \alpha) \cdot K_{i-w}$$
+  </div>
+
+  <div class="formula">
+    <div class="formula-label">Eq (5): EMA Value Update</div>
+    $$S_i^V = \alpha \cdot S_{i-1}^V + (1 - \alpha) \cdot V_{i-w}$$
+  </div>
+
+  <p>其中 $\alpha \in (0,1)$ 是动量衰减因子，控制压缩速率。$\alpha$ 越大，历史信息衰减越慢，sink状态保留更长的"记忆"；$\alpha$ 越小，近期信息占比更高，sink状态对最新动态更敏感。</p>
+
+  <div class="insight">
+    <div class="insight-title">EMA 的数学直觉：递归低通滤波</div>
+    <p>展开EMA递归式 $S_i = \alpha S_{i-1} + (1-\alpha) K_{i-w}$，可得 $S_i = (1-\alpha)\sum_{k=0}^{i-w} \alpha^k K_{i-w-k}$。这本质上是一个<strong>指数加权低通滤波器</strong>：每个历史帧的贡献以 $\alpha^k$ 的速率指数衰减。这意味着近期被逐出的帧贡献更大，而远古帧的信息以渐近方式保留——既不会完全遗忘，也不会被特定帧"锁定"。</p>
+  </div>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">全局上下文构建</h3>
+  <p>在注意力计算时，将压缩的 sink 状态前置到局部窗口上下文：</p>
+
+  <div class="formula">
+    <div class="formula-label">Eq (6-7): Global Context</div>
+    $$K_i^{\text{global}} = \left[S_i^K;\, K_{i-w+1:i}\right], \quad V_i^{\text{global}} = \left[S_i^V;\, V_{i-w+1:i}\right]$$
+  </div>
+
+  <p>其中 $K_{i-w+1:i}$ 和 $V_{i-w+1:i}$ 表示当前滑动窗口的键值状态。这一构造使每个query既能关注细粒度的局部上下文，又能访问粗粒度的全局历史。</p>
+
+  <!-- SVG: EMA-Sink mechanism -->
+  <div class="svg-container">
+    <svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="760" height="320" fill="#faf8f5" rx="12"/>
+
+      <!-- Sink tokens -->
+      <text x="60" y="30" font-family="Noto Sans SC" font-size="11" font-weight="600" fill="#9333ea">Sink Tokens (EMA)</text>
+      <rect x="40" y="45" width="40" height="40" fill="#a855f7" rx="6"/>
+      <rect x="85" y="45" width="40" height="40" fill="#c084fc" rx="6"/>
+      <text x="82" y="105" text-anchor="middle" font-size="10" fill="#787887">S_i (compressed)</text>
+
+      <!-- Arrow to attention -->
+      <line x1="135" y1="65" x2="220" y2="65" stroke="#a855f7" stroke-width="2" marker-end="url(#a1)"/>
+      <defs><marker id="a1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#a855f7"/></marker></defs>
+
+      <!-- Attention block -->
+      <rect x="225" y="35" width="120" height="60" fill="none" stroke="#9333ea" stroke-width="2" rx="8"/>
+      <text x="285" y="60" text-anchor="middle" font-size="12" fill="#9333ea" font-weight="600">Attention</text>
+      <text x="285" y="78" text-anchor="middle" font-size="10" fill="#787887">Q * K^T / sqrt(d)</text>
+
+      <!-- Window tokens -->
+      <text x="450" y="30" font-family="Noto Sans SC" font-size="11" font-weight="600" fill="#34d399">Local Window (size=w)</text>
+      <rect x="400" y="45" width="35" height="40" fill="#34d399" rx="6"/>
+      <rect x="440" y="45" width="35" height="40" fill="#6ee7b7" rx="6"/>
+      <rect x="480" y="45" width="35" height="40" fill="#a7f3d0" rx="6"/>
+      <text x="457" y="105" text-anchor="middle" font-size="10" fill="#787887">K_{i-w+1:i}</text>
+
+      <line x1="395" y1="65" x2="350" y2="65" stroke="#34d399" stroke-width="2" marker-end="url(#a2)"/>
+      <defs><marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#34d399"/></marker></defs>
+
+      <!-- Eviction flow -->
+      <text x="285" y="145" text-anchor="middle" font-size="11" fill="#4c4b5e" font-weight="600">当窗口推进时</text>
+
+      <!-- Evicted token -->
+      <rect x="200" y="170" width="40" height="40" fill="#fda4af" rx="6" opacity="0.6"/>
+      <text x="220" y="195" text-anchor="middle" font-size="10" fill="#f43f5e">x_{i-w}</text>
+      <text x="220" y="230" text-anchor="middle" font-size="9" fill="#787887">evicted</text>
+
+      <!-- EMA update arrow -->
+      <path d="M250 190 Q300 190 300 150 Q300 110 250 90" stroke="#f59e0b" stroke-width="2" fill="none" stroke-dasharray="5,3" marker-end="url(#a3)"/>
+      <defs><marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker></defs>
+
+      <!-- EMA formula box -->
+      <rect x="320" y="160" width="200" height="55" fill="#fef3c7" stroke="#fbbf24" stroke-width="1.5" rx="8"/>
+      <text x="420" y="185" text-anchor="middle" font-size="12" fill="#92400e" font-weight="600">EMA Update</text>
+      <text x="420" y="205" text-anchor="middle" font-size="11" fill="#92400e">S = α·S_old + (1-α)·K_evicted</text>
+
+      <!-- Alpha slider -->
+      <text x="600" y="185" font-size="12" fill="#4c4b5e">α = 0.99</text>
+      <rect x="560" y="195" width="120" height="8" fill="#e9d5ff" rx="4"/>
+      <rect x="560" y="195" width="119" height="8" fill="#a855f7" rx="4"/>
+      <circle cx="679" cy="199" r="8" fill="#9333ea"/>
+      <text x="620" y="220" text-anchor="middle" font-size="9" fill="#787887">高α = 长记忆保留</text>
+
+      <!-- ROPE -->
+      <rect x="180" y="260" width="400" height="40" fill="#f3e8ff" stroke="#c084fc" stroke-width="1" rx="8"/>
+      <text x="380" y="280" text-anchor="middle" font-size="11" fill="#7e22ce" font-weight="600">ROPE 因果位置编码</text>
+      <text x="380" y="295" text-anchor="middle" font-size="10" fill="#787887">每个位置仅能关注前序位置，维持因果约束</text>
+    </svg>
+    <div class="svg-caption">图2. EMA-Sink 机制数据流：被逐出帧通过EMA融合到sink状态，sink+局部窗口共同构成全局上下文</div>
+  </div>
+
+  <div class="insight">
+    <div class="insight-title">替代方案分析：为何选择EMA而非其他压缩策略？</div>
+    <p>历史信息压缩有多种可选方案：(1) <strong>均值池化</strong>——对所有历史帧取平均，但丢失时序信息；(2) <strong>学习型压缩</strong>——用可训练模块（如cross-attention）压缩历史，但引入额外参数和计算开销；(3) <strong>EMA</strong>——无参数、O(1)时间复杂度、保留指数衰减的时序权重。EMA的选择体现了<strong>"最小充分复杂度"</strong>原则：在不增加模型参数的前提下，用最简单的递归更新实现信息压缩，且其指数衰减特性天然匹配"近期更重要、远期渐遗忘"的时序先验。</p>
+  </div>
+
+  <p>为处理视频的时空特性同时维持因果关系，模型在计算注意力时采用旋转位置编码（ROPE）。位置编码以因果方式应用，确保每个位置只能关注序列中的前序位置。</p>
+
+  <div class="insight">
+    <div class="insight-title">效率分析：O(1)驱逐 + O(w²)注意力</div>
+    <p>EMA-Sink 的核心优势在于<strong>常数时间驱逐</strong>：帧被逐出时仅需一次加权平均（O(1)），而非重新计算注意力。注意力复杂度保持 $O(w^2)$（$w$为窗口大小），与序列长度无关。通过将历史压缩为固定大小的sink，方法实现了相对于序列长度的常数内存使用，同时保留全局上下文。可微的EMA使梯度能够通过压缩操作传播，支持端到端学习。</p>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ===== CH3 ===== -->
+<section class="chapter" id="ch3">
+  <div class="chapter-id">CHAPTER 03</div>
+  <h2 class="chapter-title">Re-DMD：<span class="accent">奖励加权分布匹配蒸馏</span></h2>
+
+  <p>分布匹配蒸馏（DMD）通过最小化师生分布间的反向KL散度，将多步扩散模型蒸馏为少步生成器。然而，DMD有一个根本局限：<strong>均匀对待目标分布的所有区域</strong>，缺乏根据任务特定指标优先处理高质量输出的机制。</p>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">DMD 的梯度公式</h3>
+
+  <div class="formula">
+    <div class="formula-label">Eq (1): DMD Gradient (KL Divergence Minimization)</div>
+    $$\nabla_\theta \mathcal{L}_{\text{DMD}} \triangleq \mathbb{E}_t\left(\nabla_\theta D_{\text{KL}}\left(p_{\text{fake},t}(x_t) \| p_{\text{real},t}(x_t)\right)\right)$$
+    $$\approx -\mathbb{E}_t \left[ \int \left(s_{\text{real}}\left(\Psi(G_\theta(\epsilon), t), t\right) - s_{\text{fake}}\left(\Psi(G_\theta(\epsilon), t), t\right)\right) \frac{dG_\theta(\epsilon)}{d\theta} d\epsilon \right]$$
+  </div>
+
+  <p>其中 $\epsilon \sim \mathcal{N}(0, I)$，$\Psi$ 表示在时间步 $t$ 的前向扩散。分数函数定义为：</p>
+
+  <div class="formula">
+    <div class="formula-label">Eq (2): Score Function</div>
+    $$s_{\text{real}}(x_t, t) = \nabla_{x_t} \log p_{\text{real},t}(x_t) = -\frac{x_t - \alpha_t \mu_{\text{real}}(x_t, t)}{\sigma_t^2}$$
+  </div>
+
+  <p>其中 $\mu_{\text{real}}$ 是去噪估计，$\alpha_t, \sigma_t$ 是噪声调度参数。DMD冻结预训练的 $\mu_{\text{real}}$（教师）并在生成器输出上更新 $\mu_{\text{fake}}$。</p>
+
+  <div class="insight">
+    <div class="insight-title">DMD 的核心局限：为什么"好质量"的静态帧难以优化？</div>
+    <p>在视频生成训练过程中，模型会逐渐产生越来越静态的帧。这些退化样本虽然缺乏运动动态，但<strong>视觉质量尚可</strong>，已经接近教师分布。由于DMD最小化的是分布间的KL散度，这些"好看但不动"的样本在分布层面距离教师很近，梯度极小——DMD无法有效区分和优化它们。这就形成了一个"局部最优陷阱"：模型卡在"静态但美观"的状态中无法逃脱。</p>
+  </div>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">从RL到Re-DMD：EM框架推导</h3>
+  <p>Re-DMD 的关键洞察是将强化学习原理融入分布匹配。统一RL微调目标通过最大化最优视频生成的证据下界，建立了奖励最大化与原始模型保真度之间的显式权衡：</p>
+
+  <div class="formula">
+    <div class="formula-label">Eq (3): RL Objective</div>
+    $$\mathcal{J}_{\text{RL}}(p, q) = \mathbb{E}\left[\frac{r(x_0, c)}{\beta} - \log \frac{p(x_0|c)}{q(x_0|c)}\right]$$
+  </div>
+
+  <p>其中 $x_0$ 是输出，$r$ 是奖励模型，$c$ 是条件输入，$p$ 和 $q$ 是分布，$\beta$ 是正则化项。Re-DMD基于奖励加权回归框架，通过EM算法将RL问题重构为概率推理。</p>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">E-step：最优解</h3>
+  <p>在E-step中，将Eq(3)作为约束优化问题求解，得到最优解：</p>
+
+  <div class="formula">
+    <div class="formula-label">Eq (9): E-step Optimal Solution</div>
+    $$p(x_0|c) = \frac{1}{Z(c)} q(x_0|c) \exp\left(\frac{r(x_0, c)}{\beta}\right)$$
+  </div>
+
+  <p>其中 $Z(c) = \sum_{x_0} q(x_0|c) \exp\left(\frac{r(x_0, c)}{\beta}\right)$。将Eq(3)中的分布分配为 $q = p'_{\text{fake}}$ 和 $p = p'_{\text{real}}$。</p>
+
+  <div class="insight">
+    <div class="insight-title">E-step 的数学直觉：奖励驱动的分布重加权</div>
+    <p>最优解 $p(x_0|c) \propto q(x_0|c) \cdot \exp(r/\beta)$ 表明：最优分布是原分布 $q$ 被<strong>奖励指数加权</strong>后的归一化结果。高奖励样本的概率被指数级放大，低奖励样本被抑制。$\beta$ 控制这种重加权的强度：$\beta$ 越小，奖励影响越大，分布偏离原分布越远；$\beta$ 越大，分布越接近原分布，奖励影响越弱。</p>
+  </div>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">M-step：奖励加权梯度</h3>
+  <p>在M-step中，将非参数最优模型 $p = p'_{\text{real}}$ 投影到参数化模型上，通过最大化期望对数似然：</p>
+
+  <div class="formula">
+    <div class="formula-label">Eq (10): M-step Re-DMD Objective</div>
+    $$\mathcal{J}_{\text{Re-DMD}} = \mathbb{E}_{p(c) p'_{\text{fake}}(x_0|c)} \left[ \frac{\exp(r(x_0, c)/\beta)}{Z(c)} \log \frac{p_{\text{fake}}(x_0|c)}{p_{\text{real}}(x_0|c)} \right]$$
+  </div>
+
+  <p>对Eq(10)求导得到Re-DMD的梯度：</p>
+
+  <div class="formula">
+    <div class="formula-label">Eq (11): Re-DMD Gradient</div>
+    $$\nabla_\theta \mathcal{J}_{\text{Re-DMD}} \approx -\mathbb{E}_t \left[ \int \exp(r_c(x_t)/\beta) \cdot \left(s_{\text{real}}(\cdot) - s_{\text{fake}}(\cdot)\right) \frac{dG_\theta(\epsilon)}{d\theta} d\epsilon \right]$$
+  </div>
+
+  <p>其中 $r_c(x_t)$ 由 $r_c(x_0)$ 估计。这种方法通过绕过不可处理的归一化常数并避免计算奖励函数的梯度来稳定训练并加速收敛。</p>
+
+  <div class="insight">
+    <div class="insight-title">静态加权 vs 反向传播奖励：关键设计权衡</div>
+    <p>Re-DMD的一个精妙设计是<strong>将奖励作为静态加权因子</strong>，而非通过奖励模型反向传播梯度。这一选择带来三个关键优势：(1) <strong>避免奖励梯度噪声</strong>——VLM奖励模型的梯度可能极不稳定，直接反传会导致训练崩溃；(2) <strong>计算效率</strong>——无需在奖励模型上计算梯度，大幅降低训练开销；(3) <strong>避免典型RL计算成本</strong>——方法隐式优化约束奖励最大化问题（在分布匹配约束下最大化期望奖励），确保系统性质量提升而不发生分布崩溃。代价是奖励信号无法通过梯度反向影响生成器的深层表示，但这正是"分布匹配约束"的作用——它作为锚点防止过度偏移。</p>
+  </div>
+
+  <!-- SVG: Re-DMD pipeline -->
+  <div class="svg-container">
+    <svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="760" height="300" fill="#faf8f5" rx="12"/>
+
+      <!-- Generator -->
+      <rect x="30" y="60" width="100" height="60" fill="#e9d5ff" stroke="#a855f7" stroke-width="2" rx="10"/>
+      <text x="80" y="85" text-anchor="middle" font-size="12" fill="#7e22ce" font-weight="600">Generator</text>
+      <text x="80" y="102" text-anchor="middle" font-size="11" fill="#787887">G_θ(ε)</text>
+
+      <!-- Noise input -->
+      <text x="15" y="55" font-size="10" fill="#787887">ε ~ N(0,I)</text>
+      <line x1="15" y1="90" x2="25" y2="90" stroke="#787887" stroke-width="1.5"/>
+
+      <!-- Forward diffusion -->
+      <rect x="155" y="60" width="80" height="60" fill="#fef3c7" stroke="#fbbf24" stroke-width="2" rx="10"/>
+      <text x="195" y="85" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">Ψ(G_θ(ε), t)</text>
+      <text x="195" y="102" text-anchor="middle" font-size="10" fill="#787887">forward diff.</text>
+
+      <line x1="130" y1="90" x2="150" y2="90" stroke="#a855f7" stroke-width="2" marker-end="url(#b1)"/>
+      <defs><marker id="b1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#a855f7"/></marker></defs>
+
+      <!-- Score functions -->
+      <rect x="265" y="30" width="90" height="50" fill="#d1fae5" stroke="#34d399" stroke-width="2" rx="8"/>
+      <text x="310" y="50" text-anchor="middle" font-size="11" fill="#065f46" font-weight="600">s_real</text>
+      <text x="310" y="68" text-anchor="middle" font-size="9" fill="#787887">teacher (frozen)</text>
+
+      <rect x="265" y="100" width="90" height="50" fill="#fecdd3" stroke="#fb7185" stroke-width="2" rx="8"/>
+      <text x="310" y="120" text-anchor="middle" font-size="11" fill="#9f1239" font-weight="600">s_fake</text>
+      <text x="310" y="138" text-anchor="middle" font-size="9" fill="#787887">student score</text>
+
+      <line x1="235" y1="75" x2="260" y2="55" stroke="#34d399" stroke-width="1.5"/>
+      <line x1="235" y1="100" x2="260" y2="125" stroke="#fb7185" stroke-width="1.5"/>
+
+      <!-- KL gradient -->
+      <rect x="385" y="65" width="70" height="50" fill="none" stroke="#9333ea" stroke-width="2" stroke-dasharray="4,3" rx="8"/>
+      <text x="420" y="85" text-anchor="middle" font-size="10" fill="#7e22ce">s_real -</text>
+      <text x="420" y="100" text-anchor="middle" font-size="10" fill="#7e22ce">s_fake</text>
+
+      <line x1="355" y1="55" x2="380" y2="80" stroke="#9333ea" stroke-width="1.5"/>
+      <line x1="355" y1="125" x2="380" y2="100" stroke="#9333ea" stroke-width="1.5"/>
+
+      <!-- Reward weighting -->
+      <rect x="485" y="45" width="100" height="90" fill="#fffbeb" stroke="#f59e0b" stroke-width="2" rx="10"/>
+      <text x="535" y="70" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">Reward Weight</text>
+      <text x="535" y="90" text-anchor="middle" font-size="13" fill="#d97706" font-weight="700">exp(r/β)</text>
+      <text x="535" y="108" text-anchor="middle" font-size="9" fill="#787887">VLM motion quality</text>
+      <text x="535" y="122" text-anchor="middle" font-size="9" fill="#787887">β = 1/2</text>
+
+      <line x1="455" y1="90" x2="480" y2="90" stroke="#f59e0b" stroke-width="2" marker-end="url(#b2)"/>
+      <defs><marker id="b2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/></marker></defs>
+
+      <!-- Final gradient -->
+      <rect x="620" y="55" width="110" height="70" fill="#f3e8ff" stroke="#9333ea" stroke-width="2" rx="10"/>
+      <text x="675" y="80" text-anchor="middle" font-size="11" fill="#7e22ce" font-weight="600">Re-DMD Gradient</text>
+      <text x="675" y="98" text-anchor="middle" font-size="10" fill="#787887">weighted KL grad</text>
+      <text x="675" y="113" text-anchor="middle" font-size="9" fill="#a855f7">→ ∇_θ J</text>
+
+      <line x1="585" y1="90" x2="615" y2="90" stroke="#9333ea" stroke-width="2" marker-end="url(#b3)"/>
+      <defs><marker id="b3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9333ea"/></marker></defs>
+
+      <!-- Decode to video -->
+      <rect x="80" y="170" width="120" height="50" fill="#e9d5ff" stroke="#c084fc" stroke-width="1.5" rx="8"/>
+      <text x="140" y="190" text-anchor="middle" font-size="11" fill="#7e22ce">VAE Decoder</text>
+      <text x="140" y="207" text-anchor="middle" font-size="10" fill="#787887">→ video frames</text>
+
+      <line x1="80" y1="120" x2="100" y2="165" stroke="#c084fc" stroke-width="1.5" stroke-dasharray="3,2"/>
+
+      <!-- Reward function -->
+      <rect x="240" y="170" width="120" height="50" fill="#fef3c7" stroke="#fbbf24" stroke-width="1.5" rx="8"/>
+      <text x="300" y="190" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">Reward Function</text>
+      <text x="300" y="207" text-anchor="middle" font-size="10" fill="#787887">VideoAlign motion</text>
+
+      <line x1="200" y1="195" x2="235" y2="195" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#b4)"/>
+      <defs><marker id="b4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#fbbf24"/></marker></defs>
+
+      <!-- Feedback loop -->
+      <path d="M360 195 Q450 195 450 140 Q450 110 485 100" stroke="#f59e0b" stroke-width="2" fill="none" stroke-dasharray="5,3" marker-end="url(#b2)"/>
+
+      <!-- Note -->
+      <text x="380" y="260" text-anchor="middle" font-size="11" fill="#4c4b5e">奖励作为<strong>静态加权因子</strong>，避免在奖励模型上反向传播梯度</text>
+      <text x="380" y="280" text-anchor="middle" font-size="10" fill="#787887">分布匹配约束作为锚点，防止分布崩溃</text>
+    </svg>
+    <div class="svg-caption">图3. Re-DMD 数据流：生成器输出 → 前向扩散 → 分数函数差异 → 奖励加权 → 最终梯度。奖励来自VLM对运动质量的评估</div>
+  </div>
+
+  <div class="insight">
+    <div class="insight-title">跨论文连接：Re-DMD 与 DPO/GRPO 的本质区别</div>
+    <p>Re-DMD 与直接偏好优化（DPO）和群体相对策略优化（GRPO）都试图将奖励信号融入生成模型训练，但机制截然不同。DPO 从偏好数据集隐式学习偏好，无需显式奖励建模；GRPO 使用策略梯度直接优化奖励。而 Re-DMD 将奖励<strong>嵌入分布匹配框架</strong>中，作为KL梯度的静态权重——既保留了DMD的分布对齐能力，又引入了奖励偏好。这种设计的代价是奖励信号的表达能力受限（仅作为标量权重），但换来了训练稳定性和计算效率。论文指出，Self-Forcing++ 将 Flow-GRPO 集成到DMD蒸馏模型中以改善长时序平滑性，但其性能本质上依赖于基础模型的质量。</p>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ===== CH4 ===== -->
+<section class="chapter" id="ch4">
+  <div class="chapter-id">CHAPTER 04</div>
+  <h2 class="chapter-title">整体架构与<span class="accent">训练流程</span></h2>
+
+  <div class="figure">
+    <img src="assets/fig3_pipeline.webp" alt="Reward Forcing Pipeline">
+    <div class="figure-caption">图4. Reward Forcing 整体流程：流式去噪token投影为KV对，追加到缓存中；缓存满时通过EMA更新sink token；训练时将幻觉token解码为视频计算奖励分数，加权分布匹配梯度</div>
+  </div>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">三阶段训练流程</h3>
+
+  <!-- SVG: Training stages -->
+  <div class="svg-container">
+    <svg viewBox="0 0 760 200" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="760" height="200" fill="#faf8f5" rx="12"/>
+
+      <!-- Stage 1 -->
+      <rect x="20" y="50" width="200" height="100" fill="#e9d5ff" stroke="#a855f7" stroke-width="2" rx="12"/>
+      <text x="120" y="75" text-anchor="middle" font-size="12" fill="#7e22ce" font-weight="700">Stage 1: ODE 初始化</text>
+      <text x="120" y="95" text-anchor="middle" font-size="10" fill="#4c4b5e">16k ODE解对</text>
+      <text x="120" y="110" text-anchor="middle" font-size="10" fill="#4c4b5e">因果注意力掩码</text>
+      <text x="120" y="125" text-anchor="middle" font-size="10" fill="#787887">CausVid 范式</text>
+      <text x="120" y="142" text-anchor="middle" font-size="9" fill="#a855f7">VidProM 数据集</text>
+
+      <!-- Arrow -->
+      <line x1="225" y1="100" x2="255" y2="100" stroke="#a855f7" stroke-width="2" marker-end="url(#c1)"/>
+      <defs><marker id="c1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#a855f7"/></marker></defs>
+
+      <!-- Stage 2 -->
+      <rect x="260" y="50" width="200" height="100" fill="#fecdd3" stroke="#fb7185" stroke-width="2" rx="12"/>
+      <text x="360" y="75" text-anchor="middle" font-size="12" fill="#9f1239" font-weight="700">Stage 2: 因果蒸馏</text>
+      <text x="360" y="95" text-anchor="middle" font-size="10" fill="#4c4b5e">DMD 分布匹配</text>
+      <text x="360" y="110" text-anchor="middle" font-size="10" fill="#4c4b5e">KV Cache 自展开</text>
+      <text x="360" y="125" text-anchor="middle" font-size="10" fill="#787887">Self-Forcing 范式</text>
+      <text x="360" y="142" text-anchor="middle" font-size="9" fill="#fb7185">窗口大小=9, 3帧/chunk</text>
+
+      <!-- Arrow -->
+      <line x1="465" y1="100" x2="495" y2="100" stroke="#fb7185" stroke-width="2" marker-end="url(#c2)"/>
+      <defs><marker id="c2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#fb7185"/></marker></defs>
+
+      <!-- Stage 3 -->
+      <rect x="500" y="50" width="240" height="100" fill="#a7f3d0" stroke="#34d399" stroke-width="2" rx="12"/>
+      <text x="620" y="75" text-anchor="middle" font-size="12" fill="#065f46" font-weight="700">Stage 3: Re-DMD 训练</text>
+      <text x="620" y="95" text-anchor="middle" font-size="10" fill="#4c4b5e">奖励加权分布匹配</text>
+      <text x="620" y="110" text-anchor="middle" font-size="10" fill="#4c4b5e">EMA-Sink 更新</text>
+      <text x="620" y="125" text-anchor="middle" font-size="10" fill="#787887">VideoAlign 运动奖励</text>
+      <text x="620" y="142" text-anchor="middle" font-size="9" fill="#34d399">β=1/2, α=0.99, 600 steps</text>
+
+      <!-- Timeline -->
+      <line x1="20" y1="170" x2="740" y2="170" stroke="#e9d5ff" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="120" cy="170" r="6" fill="#a855f7"/>
+      <circle cx="360" cy="170" r="6" fill="#fb7185"/>
+      <circle cx="620" cy="170" r="6" fill="#34d399"/>
+      <text x="120" y="190" text-anchor="middle" font-size="9" fill="#787887">基础初始化</text>
+      <text x="360" y="190" text-anchor="middle" font-size="9" fill="#787887">因果对齐</text>
+      <text x="620" y="190" text-anchor="middle" font-size="9" fill="#787887">动态增强 (~3小时)</text>
+    </svg>
+    <div class="svg-caption">图5. 三阶段训练流程：ODE初始化 → 因果蒸馏 → Re-DMD 奖励增强</div>
+  </div>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">关键实现细节</h3>
+  <p>Reward Forcing 基于 <strong>Wan2.1-T2V-1.3B</strong> 构建，生成5秒视频，分辨率 $832 \times 480$。具体配置如下：</p>
+
+  <table class="data-table">
+    <tr><th>参数</th><th>值</th><th>说明</th></tr>
+    <tr><td>基础模型</td><td>Wan2.1-T2V-1.3B</td><td>双向扩散模型</td></tr>
+    <tr><td>ODE训练对</td><td>16k</td><td>从基础模型采样</td></tr>
+    <tr><td>数据集</td><td>VidProM (LLM增强)</td><td>文本提示来源</td></tr>
+    <tr><td>奖励函数</td><td>VideoAlign 运动质量</td><td>VLM评估</td></tr>
+    <tr><td>β (奖励权重)</td><td>1/2</td><td>平衡动态与一致性</td></tr>
+    <tr><td>α (EMA衰减)</td><td>0.99</td><td>长记忆保留</td></tr>
+    <tr><td>窗口大小</td><td>9</td><td>注意力窗口</td></tr>
+    <tr><td>去噪步数</td><td>[1000, 750, 500, 250]</td><td>4步均匀调度</td></tr>
+    <tr><td>训练步数</td><td>600</td><td>~3小时</td></tr>
+    <tr><td>GPU</td><td>64 × H200</td><td>总batch=64</td></tr>
+    <tr><td>学习率(G)</td><td>2.0×10⁻⁶</td><td>生成器</td></tr>
+    <tr><td>学习率(s_fake)</td><td>4.0×10⁻⁷</td><td>fake score</td></tr>
+    <tr><td>更新频率</td><td>每5步更新G</td><td>交替更新</td></tr>
+  </table>
+
+  <div class="insight">
+    <div class="insight-title">设计 Rationale：为什么选择4步去噪和窗口大小9？</div>
+    <p>4步去噪调度 $[1000, 750, 500, 250]$ 是质量与速度的折衷：步数太少（1-2步）导致去噪不充分，步数太多增加延迟。窗口大小 $w=9$ 在 VBench 上达到了最佳的质量-速度平衡点——论文 Figure 6 显示推理FPS与注意力窗口大小成反比，$w=9$ 时达到 23.1 FPS。每3帧为一个chunk进行chunk-wise去噪，是 Self-Forcing 的默认配置。生成器每5步更新一次的设计防止 fake score 和 generator 之间的"追赶"不稳定。</p>
+  </div>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">数据预测模型</h3>
+  <p>基于 Wan2.1 和 Self Forcing 的流匹配框架，采用时间步偏移：</p>
+
+  <div class="formula">
+    <div class="formula-label">Time Step Shift & Data Prediction Model</div>
+    $$t'(k, t) = \frac{kt/1000}{1 + (k-1)(t/1000)} \cdot 1000, \quad k = 5$$
+    $$x_t = \frac{t'}{1000}x + \frac{1000-t'}{1000}\epsilon, \quad \epsilon \sim \mathcal{N}(0, I)$$
+    $$G_\theta(x, t, c) = c_{\text{skip}} \cdot \epsilon - c_{\text{out}} \cdot v_\theta(c_{\text{in}} \cdot x_t, c_{\text{noise}}(t'), c)$$
+  </div>
+
+  <p>其中预处理系数 $c_{\text{skip}}, c_{\text{in}}, c_{\text{out}}$ 均为1，$c_{\text{noise}}(t) = t$。少步采样采用均匀4步调度 $\{1000, 750, 500, 250\}$。</p>
+
+  <div class="insight">
+    <div class="insight-title">实时推理效率</div>
+    <p>长视频生成面临密集因果注意力的二次复杂度。局部窗口注意力将复杂度限制在窗口大小范围内，与序列长度无关。KV缓存按窗口维度而非视频长度扩展，更小的窗口加速推理并显著提升效率。最终在单张 H100 GPU 上实现 <strong>23.1 FPS</strong> 的实时生成速度——比 SkyReels-V2 快 47.14 倍，比 Self Forcing 快 1.36 倍。</p>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ===== CH5 ===== -->
+<section class="chapter" id="ch5">
+  <div class="chapter-id">CHAPTER 05</div>
+  <h2 class="chapter-title">代码实现<span class="accent">解析</span></h2>
+
+  <p>Reward Forcing 尚未公开代码仓库，但其架构基于 Self-Forcing 和 CausVid 构建。以下代码实现基于论文公式和这两个开源仓库的代码模式进行还原。</p>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">1. KV Cache 初始化与滑动窗口</h3>
+  <p>基于 Self-Forcing 的 <code>causal_diffusion_inference.py</code>，KV缓存通过 <code>local_attn_size</code> 控制滑动窗口大小，每个transformer block维护独立的键值缓存。</p>
+
+  <div class="code-block">
+    <div class="code-header">
+      <span class="code-lang">Python</span>
+      <span class="code-note">基于 Self-Forcing pipeline/causal_diffusion_inference.py</span>
+    </div>
+    <pre><code><span class="com"># KV Cache 初始化 (基于 Self-Forcing 代码还原)</span>
+<span class="kw">class</span> <span class="fn">CausalDiffusionPipeline</span>:
+    <span class="kw">def</span> <span class="fn">_initialize_kv_cache</span>(<span class="kw">self</span>, batch_size, dtype, device):
+        <span class="com"># 滑动窗口大小决定 KV cache 容量</span>
+        <span class="kw">if</span> <span class="kw">self</span>.local_attn_size != -<span class="num">1</span>:
+            kv_cache_size = <span class="kw">self</span>.local_attn_size * <span class="kw">self</span>.frame_seq_length
+        <span class="kw">else</span>:
+            kv_cache_size = <span class="num">32760</span>  <span class="com"># 全注意力回退</span>
+
+        kv_cache = []
+        <span class="kw">for</span> _ <span class="kw">in</span> <span class="fn">range</span>(<span class="kw">self</span>.num_transformer_blocks):  <span class="com"># 30 blocks</span>
+            kv_cache.append({
+                <span class="str">"k"</span>: torch.zeros([batch_size, kv_cache_size, <span class="num">12</span>, <span class="num">128</span>],
+                                  dtype=dtype, device=device),
+                <span class="str">"v"</span>: torch.zeros([batch_size, kv_cache_size, <span class="num">12</span>, <span class="num">128</span>],
+                                  dtype=dtype, device=device),
+                <span class="str">"global_end_index"</span>: torch.tensor([<span class="num">0</span>], device=device),
+                <span class="str">"local_end_index"</span>: torch.tensor([<span class="num">0</span>], device=device)
+            })
+        <span class="kw">return</span> kv_cache
+
+    <span class="kw">def</span> <span class="fn">_update_kv_cache</span>(<span class="kw">self</span>, latents, timestep, ...):
+        <span class="com"># 用 timestep=0 重新运行以用干净上下文更新 KV cache</span>
+        <span class="kw">self</span>.generator(
+            noisy_image_or_video=latents,
+            timestep=timestep * <span class="num">0</span>,  <span class="com"># clean context</span>
+            kv_cache=<span class="kw">self</span>.kv_cache_pos,
+            current_start=current_start * <span class="kw">self</span>.frame_seq_length,
+            cache_start=cache_start * <span class="kw">self</span>.frame_seq_length
+        )</code></pre>
+  </div>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">2. EMA-Sink 更新机制</h3>
+  <p>以下伪代码基于论文 Eq(4-7) 实现 EMA-Sink 的核心更新逻辑。当帧被逐出滑动窗口时，其KV通过EMA融合到sink状态。</p>
+
+  <div class="code-block">
+    <div class="code-header">
+      <span class="code-lang">Python (伪代码)</span>
+      <span class="code-note">基于论文 Eq(4-7) 实现</span>
+    </div>
+    <pre><code><span class="com"># EMA-Sink 更新机制 (基于论文公式 Eq 4-7)</span>
+<span class="kw">class</span> <span class="fn">EMASink</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(<span class="kw">self</span>, sink_size, num_heads, head_dim, alpha=<span class="num">0.99</span>):
+        <span class="kw">self</span>.alpha = alpha  <span class="com"># EMA 动量衰减因子</span>
+        <span class="kw">self</span>.sink_size = sink_size  <span class="com"># 固定 sink token 数量</span>
+        <span class="com"># 初始化 sink 状态 (从初始帧的 KV 初始化)</span>
+        <span class="kw">self</span>.sink_K = <span class="kw">None</span>  <span class="com"># [B, sink_size, num_heads, head_dim]</span>
+        <span class="kw">self</span>.sink_V = <span class="kw">None</span>
+
+    <span class="kw">def</span> <span class="fn">initialize_from_frames</span>(<span class="kw">self</span>, initial_K, initial_V):
+        <span class="com"># 用初始帧的 KV 初始化 sink 状态</span>
+        <span class="kw">self</span>.sink_K = initial_K[:, :<span class="kw">self</span>.sink_size].clone()
+        <span class="kw">self</span>.sink_V = initial_V[:, :<span class="kw">self</span>.sink_size].clone()
+
+    <span class="kw">def</span> <span class="fn">update</span>(<span class="kw">self</span>, evicted_K, evicted_V):
+        <span class="com"># Eq(4): S_i^K = α * S_{i-1}^K + (1-α) * K_{i-w}</span>
+        <span class="kw">self</span>.sink_K = (<span class="kw">self</span>.alpha * <span class="kw">self</span>.sink_K +
+                    (<span class="num">1</span> - <span class="kw">self</span>.alpha) * evicted_K)
+        <span class="com"># Eq(5): S_i^V = α * S_{i-1}^V + (1-α) * V_{i-w}</span>
+        <span class="kw">self</span>.sink_V = (<span class="kw">self</span>.alpha * <span class="kw">self</span>.sink_V +
+                    (<span class="num">1</span> - <span class="kw">self</span>.alpha) * evicted_V)
+
+    <span class="kw">def</span> <span class="fn">get_global_context</span>(<span class="kw">self</span>, window_K, window_V):
+        <span class="com"># Eq(6-7): K_global = [S_K; K_window], V_global = [S_V; V_window]</span>
+        K_global = torch.cat([<span class="kw">self</span>.sink_K, window_K], dim=<span class="num">1</span>)
+        V_global = torch.cat([<span class="kw">self</span>.sink_V, window_V], dim=<span class="num">1</span>)
+        <span class="kw">return</span> K_global, V_global
+
+<span class="com"># 在推理循环中使用</span>
+<span class="kw">def</span> <span class="fn">streaming_inference</span>(pipeline, prompt, num_frames, window_size=<span class="num">9</span>):
+    ema_sink = <span class="fn">EMASink</span>(sink_size=<span class="num">2</span>, alpha=<span class="num">0.99</span>)
+    kv_cache = pipeline._initialize_kv_cache(...)
+
+    <span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(num_frames):
+        <span class="com"># 1. 生成当前帧</span>
+        frame = pipeline.generate_frame(kv_cache, prompt, ...)
+
+        <span class="com"># 2. 更新 KV cache</span>
+        <span class="kw">if</span> cache_full:
+            <span class="com"># 3. 提取被逐出的 KV</span>
+            evicted_K, evicted_V = kv_cache.evict_oldest()
+            <span class="com"># 4. EMA 更新 sink 状态</span>
+            ema_sink.update(evicted_K, evicted_V)
+
+        <span class="com"># 5. 构建全局上下文</span>
+        K_global, V_global = ema_sink.get_global_context(window_K, window_V)
+        <span class="com"># 6. 因果注意力计算 (ROPE)</span>
+        output = attention(query, K_global, V_global, rope=<span class="kw">True</span>, causal=<span class="kw">True</span>)</code></pre>
+  </div>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">3. Re-DMD 训练循环</h3>
+  <p>以下伪代码基于论文 Eq(11) 和 CausVid 的 <code>dmd.py</code> 实现，展示了 Re-DMD 的核心训练逻辑——在DMD梯度上施加奖励权重。</p>
+
+  <div class="code-block">
+    <div class="code-header">
+      <span class="code-lang">Python (伪代码)</span>
+      <span class="code-note">基于论文 Eq(11) + CausVid dmd.py 还原</span>
+    </div>
+    <pre><code><span class="com"># Re-DMD 训练循环 (基于论文 Eq 11 + CausVid DMD 代码)</span>
+<span class="kw">class</span> <span class="fn">ReDMDTrainer</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(<span class="kw">self</span>, generator, real_score, fake_score,
+                 reward_fn, beta=<span class="num">0.5</span>, lr_G=<span class="num">2e-6</span>, lr_fake=<span class="num">4e-7</span>):
+        <span class="kw">self</span>.generator = generator       <span class="com"># G_θ (可训练)</span>
+        <span class="kw">self</span>.real_score = real_score     <span class="com"># s_real (冻结的教师)</span>
+        <span class="kw">self</span>.fake_score = fake_score     <span class="com"># s_fake (可训练)</span>
+        <span class="kw">self</span>.reward_fn = reward_fn       <span class="com"># VLM 运动质量奖励</span>
+        <span class="kw">self</span>.beta = beta                 <span class="com"># β = 1/2</span>
+        <span class="kw">self</span>.opt_G = AdamW(generator.parameters(), lr=lr_G)
+        <span class="kw">self</span>.opt_fake = AdamW(fake_score.parameters(), lr=lr_fake)
+
+    <span class="kw">def</span> <span class="fn">compute_re_dmd_gradient</span>(<span class="kw">self</span>, noise, conditional_dict):
+        <span class="com"># Step 1: 生成器前向 (保留梯度)</span>
+        generated = <span class="kw">self</span>.generator(noise, conditional_dict)
+
+        <span class="com"># Step 2: 解码为视频帧用于奖励计算</span>
+        video_frames = <span class="kw">self</span>.vae_decode(generated)
+
+        <span class="com"># Step 3: 计算运动质量奖励 (静态加权, 不反传梯度)</span>
+        <span class="kw">with</span> torch.no_grad():
+            reward = <span class="kw">self</span>.reward_fn(video_frames, conditional_dict)
+            <span class="com"># Eq(11): exp(r_c(x_t)/β) 作为静态权重</span>
+            reward_weight = torch.exp(reward / <span class="kw">self</span>.beta)
+
+        <span class="com"># Step 4: 计算分数函数差异 (KL 梯度核心)</span>
+        <span class="kw">with</span> torch.no_grad():
+            pred_fake = <span class="kw">self</span>.fake_score(generated, conditional_dict)
+            pred_real_cond = <span class="kw">self</span>.real_score(generated, conditional_dict)
+            pred_real_uncond = <span class="kw">self</span>.real_score(generated, {})
+            <span class="com"># CFG (classifier-free guidance)</span>
+            pred_real = pred_real_cond + (pred_real_cond - pred_real_uncond) * guidance_scale
+            <span class="com"># KL 梯度: s_real - s_fake</span>
+            kl_grad = pred_fake - pred_real
+            <span class="com"># 归一化</span>
+            normalizer = torch.abs(generated - pred_real).mean(dim=[<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">4</span>], keepdim=<span class="kw">True</span>)
+            kl_grad = kl_grad / normalizer
+
+        <span class="com"># Step 5: 应用奖励加权 (Eq 11)</span>
+        weighted_grad = reward_weight * kl_grad
+
+        <span class="com"># Step 6: 计算损失 (梯度通过生成器传播)</span>
+        loss = <span class="num">0.5</span> * F.mse_loss(generated,
+                             (generated - weighted_grad).detach(),
+                             reduction=<span class="str">"mean"</span>)
+        <span class="kw">return</span> loss
+
+    <span class="kw">def</span> <span class="fn">train_step</span>(<span class="kw">self</span>, noise, conditional_dict):
+        <span class="com"># 交替更新: 每5步更新一次生成器</span>
+        <span class="kw">if</span> <span class="kw">self</span>.step_count % <span class="num">5</span> == <span class="num">0</span>:
+            loss = <span class="kw">self</span>.compute_re_dmd_gradient(noise, conditional_dict)
+            <span class="kw">self</span>.opt_G.zero_grad()
+            loss.backward()
+            <span class="kw">self</span>.opt_G.step()
+
+        <span class="com"># 更新 fake score</span>
+        <span class="kw">with</span> torch.no_grad():
+            generated = <span class="kw">self</span>.generator(noise, conditional_dict)
+        fake_loss = <span class="kw">self</span>.fake_score.compute_denoising_loss(generated)
+        <span class="kw">self</span>.opt_fake.zero_grad()
+        fake_loss.backward()
+        <span class="kw">self</span>.opt_fake.step()
+
+        <span class="kw">self</span>.step_count += <span class="num">1</span></code></pre>
+  </div>
+
+  <div class="insight">
+    <div class="insight-title">代码实现的关键设计决策</div>
+    <p>从代码层面可以看到三个精妙的设计：(1) <strong>奖励不反传梯度</strong>——<code>reward_weight</code> 在 <code>torch.no_grad()</code> 上下文中计算，作为静态标量乘到KL梯度上，避免了VLM奖励模型可能引入的梯度噪声；(2) <strong>交替更新策略</strong>——生成器每5步更新一次，fake score每步更新，这种"慢快"节奏防止两者"追赶"导致的不稳定；(3) <strong>梯度归一化</strong>——用 <code>|x - pred_real|</code> 的均值作为归一化因子，使不同样本的梯度量级一致，防止某些样本的梯度主导训练。</p>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ===== CH6 ===== -->
+<section class="chapter" id="ch6">
+  <div class="chapter-id">CHAPTER 06</div>
+  <h2 class="chapter-title">实验结果与<span class="accent">分析</span></h2>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">短视频生成：VBench 全面领先</h3>
+
+  <div class="figure">
+    <img src="assets/tab1_short_video.webp" alt="Table 1: Short Video Results">
+    <div class="figure-caption">Table 1. 短视频性能对比：Reward Forcing 在总体得分(84.13)和推理速度(23.1 FPS)上均领先</div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value lav">84.13</div>
+      <div class="stat-label">VBench Total ↑</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value coral">23.1</div>
+      <div class="stat-label">FPS (H100) ↑</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value mint">84.84</div>
+      <div class="stat-label">Quality Score ↑</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value amber">81.32</div>
+      <div class="stat-label">Semantic Score ↑</div>
+    </div>
+  </div>
+
+  <p>Reward Forcing 以 <strong>84.13</strong> 的总分超越了所有现有基线，包括 Self Forcing (83.80) 和 LongLive (83.22)。值得注意的是，该方法使用了<strong>最小的注意力窗口</strong>（窗口大小9）同时达到了最快的推理速度——比 SkyReels-V2 快 47.14 倍，比 Self Forcing 快 1.36 倍。</p>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">长视频生成：动态指标 88.38% 提升</h3>
+
+  <div class="figure">
+    <img src="assets/tab2_long_video.webp" alt="Table 2: Long Video Results">
+    <div class="figure-caption">Table 2. 长视频性能对比：动态指标 66.95（88.38%提升），质量漂移最低 2.505</div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value lav">81.41</div>
+      <div class="stat-label">VBenchLong Total ↑</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value coral">66.95</div>
+      <div class="stat-label">Dynamic (+88.38%) ↑</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value mint">2.505</div>
+      <div class="stat-label">Quality Drift ↓</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value amber">4.82</div>
+      <div class="stat-label">Qwen3-VL Visual ↑</div>
+    </div>
+  </div>
+
+  <p>在60秒长视频生成中，Reward Forcing 总分 <strong>81.41</strong>，显著超越 SOTA 基线 LongLive (79.53)。最突出的改进在动态指标：<strong>66.95</strong>，比 LongLive 的 35.54 提升了 <strong>88.38%</strong>。同时质量漂移最低（2.505），证明 EMA-Sink 有效维持了长程一致性。</p>
+
+  <!-- SVG: Performance comparison across baselines -->
+  <div class="svg-container">
+    <svg viewBox="0 0 760 360" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="rfGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#c084fc" stop-opacity="0.95"/>
+          <stop offset="100%" stop-color="#9333ea" stop-opacity="0.8"/>
+        </linearGradient>
+        <linearGradient id="llGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fb7185" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#f43f5e" stop-opacity="0.7"/>
+        </linearGradient>
+        <linearGradient id="sfGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#34d399" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#10b981" stop-opacity="0.7"/>
+        </linearGradient>
+        <linearGradient id="cvGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.7"/>
+        </linearGradient>
+        <filter id="barShadow" x="-10%" y="-10%" width="120%" height="130%">
+          <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#1e1b4b" flood-opacity="0.15"/>
+        </filter>
+      </defs>
+
+      <!-- Title -->
+      <text x="380" y="28" text-anchor="middle" font-family="Noto Serif SC, serif" font-size="16" font-weight="700" fill="#1e1b4b">Reward Forcing vs 基线方法：速度-动态-漂移三维对比</text>
+
+      <!-- Y-axis labels (left: Dynamic Score) -->
+      <text x="50" y="60" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#787887" transform="rotate(-90,50,60)">Dynamic Score ↑</text>
+      <!-- Y-axis labels (right: FPS) -->
+      <text x="730" y="60" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#787887" transform="rotate(90,730,60)">FPS ↑</text>
+
+      <!-- Grid lines -->
+      <line x1="80" y1="80" x2="680" y2="80" stroke="#e9d5ff" stroke-width="1" stroke-dasharray="4,4"/>
+      <line x1="80" y1="130" x2="680" y2="130" stroke="#e9d5ff" stroke-width="1" stroke-dasharray="4,4"/>
+      <line x1="80" y1="180" x2="680" y2="180" stroke="#e9d5ff" stroke-width="1" stroke-dasharray="4,4"/>
+      <line x1="80" y1="230" x2="680" y2="230" stroke="#e9d5ff" stroke-width="1" stroke-dasharray="4,4"/>
+      <line x1="80" y1="280" x2="680" y2="280" stroke="#e9d5ff" stroke-width="1" stroke-dasharray="4,4"/>
+
+      <!-- Left axis scale (0-80 Dynamic) -->
+      <text x="72" y="84" text-anchor="end" font-size="10" fill="#a855f7" font-family="Noto Sans SC, sans-serif">80</text>
+      <text x="72" y="134" text-anchor="end" font-size="10" fill="#a855f7" font-family="Noto Sans SC, sans-serif">60</text>
+      <text x="72" y="184" text-anchor="end" font-size="10" fill="#a855f7" font-family="Noto Sans SC, sans-serif">40</text>
+      <text x="72" y="234" text-anchor="end" font-size="10" fill="#a855f7" font-family="Noto Sans SC, sans-serif">20</text>
+      <text x="72" y="284" text-anchor="end" font-size="10" fill="#a855f7" font-family="Noto Sans SC, sans-serif">0</text>
+
+      <!-- Right axis scale (0-25 FPS) -->
+      <text x="688" y="84" text-anchor="start" font-size="10" fill="#f59e0b" font-family="Noto Sans SC, sans-serif">25</text>
+      <text x="688" y="134" text-anchor="start" font-size="10" fill="#f59e0b" font-family="Noto Sans SC, sans-serif">20</text>
+      <text x="688" y="184" text-anchor="start" font-size="10" fill="#f59e0b" font-family="Noto Sans SC, sans-serif">15</text>
+      <text x="688" y="234" text-anchor="start" font-size="10" fill="#f59e0b" font-family="Noto Sans SC, sans-serif">10</text>
+      <text x="688" y="284" text-anchor="start" font-size="10" fill="#f59e0b" font-family="Noto Sans SC, sans-serif">5</text>
+
+      <!-- X-axis -->
+      <line x1="80" y1="280" x2="680" y2="280" stroke="#4c4b5e" stroke-width="1.5"/>
+
+      <!-- Method groups: Reward Forcing / LongLive / Self Forcing / CausVid -->
+      <!-- X positions: center at 160, 300, 440, 580 -->
+
+      <!-- Reward Forcing: Dynamic=66.95 (h=167), FPS=23.1 (h=185) -->
+      <rect x="130" y="113" width="35" height="167" rx="4" fill="url(#rfGrad)" filter="url(#barShadow)"/>
+      <rect x="170" y="95" width="35" height="185" rx="4" fill="url(#rfGrad)" filter="url(#barShadow)" opacity="0.7"/>
+      <text x="147" y="108" text-anchor="middle" font-size="11" font-weight="700" fill="#7e22ce" font-family="Noto Sans SC, sans-serif">66.95</text>
+      <text x="187" y="90" text-anchor="middle" font-size="11" font-weight="700" fill="#b45309" font-family="Noto Sans SC, sans-serif">23.1</text>
+
+      <!-- LongLive: Dynamic=35.54 (h=89), FPS=20.7 (h=166) -->
+      <rect x="270" y="191" width="35" height="89" rx="4" fill="url(#llGrad)" filter="url(#barShadow)"/>
+      <rect x="310" y="114" width="35" height="166" rx="4" fill="url(#llGrad)" filter="url(#barShadow)" opacity="0.7"/>
+      <text x="287" y="186" text-anchor="middle" font-size="11" font-weight="700" fill="#be123c" font-family="Noto Sans SC, sans-serif">35.54</text>
+      <text x="327" y="109" text-anchor="middle" font-size="11" font-weight="700" fill="#b45309" font-family="Noto Sans SC, sans-serif">20.7</text>
+
+      <!-- Self Forcing: Dynamic=54.94 (h=137), FPS=17.0 (h=136) -->
+      <rect x="410" y="143" width="35" height="137" rx="4" fill="url(#sfGrad)" filter="url(#barShadow)"/>
+      <rect x="450" y="144" width="35" height="136" rx="4" fill="url(#sfGrad)" filter="url(#barShadow)" opacity="0.7"/>
+      <text x="427" y="138" text-anchor="middle" font-size="11" font-weight="700" fill="#047857" font-family="Noto Sans SC, sans-serif">54.94</text>
+      <text x="467" y="139" text-anchor="middle" font-size="11" font-weight="700" fill="#b45309" font-family="Noto Sans SC, sans-serif">17.0</text>
+
+      <!-- CausVid: Dynamic=27.55 (h=69), FPS=17.0 (h=136) -->
+      <rect x="550" y="211" width="35" height="69" rx="4" fill="url(#cvGrad)" filter="url(#barShadow)"/>
+      <rect x="590" y="144" width="35" height="136" rx="4" fill="url(#cvGrad)" filter="url(#barShadow)" opacity="0.7"/>
+      <text x="567" y="206" text-anchor="middle" font-size="11" font-weight="700" fill="#92400e" font-family="Noto Sans SC, sans-serif">27.55</text>
+      <text x="607" y="139" text-anchor="middle" font-size="11" font-weight="700" fill="#b45309" font-family="Noto Sans SC, sans-serif">17.0</text>
+
+      <!-- Method labels -->
+      <text x="167" y="302" text-anchor="middle" font-size="12" font-weight="600" fill="#7e22ce" font-family="Noto Sans SC, sans-serif">Reward Forcing</text>
+      <text x="307" y="302" text-anchor="middle" font-size="12" font-weight="600" fill="#be123c" font-family="Noto Sans SC, sans-serif">LongLive</text>
+      <text x="447" y="302" text-anchor="middle" font-size="12" font-weight="600" fill="#047857" font-family="Noto Sans SC, sans-serif">Self Forcing</text>
+      <text x="587" y="302" text-anchor="middle" font-size="12" font-weight="600" fill="#92400e" font-family="Noto Sans SC, sans-serif">CausVid</text>
+
+      <!-- Quality Drift annotation (lower is better) -->
+      <text x="167" y="320" text-anchor="middle" font-size="9" fill="#787887" font-family="Noto Sans SC, sans-serif">Drift: 2.505 ↓</text>
+      <text x="307" y="320" text-anchor="middle" font-size="9" fill="#787887" font-family="Noto Sans SC, sans-serif">Drift: 2.531</text>
+      <text x="447" y="320" text-anchor="middle" font-size="9" fill="#787887" font-family="Noto Sans SC, sans-serif">Drift: 5.075</text>
+      <text x="587" y="320" text-anchor="middle" font-size="9" fill="#787887" font-family="Noto Sans SC, sans-serif">Drift: 2.906</text>
+
+      <!-- Legend -->
+      <rect x="100" y="338" width="14" height="14" rx="3" fill="url(#rfGrad)"/>
+      <text x="120" y="350" font-size="10" fill="#4c4b5e" font-family="Noto Sans SC, sans-serif">Dynamic Score（左轴，长视频60s）</text>
+      <rect x="340" y="338" width="14" height="14" rx="3" fill="url(#rfGrad)" opacity="0.7"/>
+      <text x="360" y="350" font-size="10" fill="#4c4b5e" font-family="Noto Sans SC, sans-serif">FPS（右轴，H100推理速度）</text>
+      <text x="560" y="350" font-size="10" fill="#787887" font-family="Noto Sans SC, sans-serif">Drift ↓ = 质量漂移（越低越好）</text>
+    </svg>
+    <div class="svg-caption">图6. 四方法性能对比：紫色柱=动态分数（左轴），半透明柱=FPS（右轴）。Reward Forcing 在动态分数和FPS上同时领先，且质量漂移最低——唯一实现"高动态×高速度×低漂移"三赢的方法</div>
+  </div>
+
+  <div class="insight">
+    <div class="insight-title">动态指标 88.38% 提升的根源</div>
+    <p>这一惊人提升来自两个创新的协同效应：EMA-Sink 消除了对初始帧的过度依赖（从结构上解除"帧复制"约束），Re-DMD 则在蒸馏层面优先匹配高动态样本。消融实验证明两者缺一不可——移除 Re-DMD 后动态分从 64.06 降至 43.75，移除 EMA 后进一步降至 35.15。这说明 EMA-Sink 提供了"能力上限"（模型可以生成动态内容），而 Re-DMD 提供了"优化方向"（引导模型优先学习动态样本）。</p>
+  </div>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">消融实验</h3>
+
+  <div class="figure">
+    <img src="assets/tab3_ablation.webp" alt="Table 3: Ablation Studies">
+    <div class="figure-caption">Table 3. 消融实验：EMA-Sink 和 Re-DMD 的各自贡献，以及 α 和 β 的影响</div>
+  </div>
+
+  <div class="figure">
+    <img src="assets/fig6_ablation.webp" alt="Figure 6: Ablation Qualitative">
+    <div class="figure-caption">Figure 6. 消融实验定性对比：完整模型保持平滑过渡和高动态；移除组件导致不同程度的退化</div>
+  </div>
+
+  <table class="data-table">
+    <tr><th>配置</th><th>Dynamic ↑</th><th>Drift ↓</th><th>关键发现</th></tr>
+    <tr class="ours"><td class="best">完整模型</td><td class="best">64.06</td><td>2.51</td><td>平滑过渡 + 高动态</td></tr>
+    <tr><td>w/o Re-DMD</td><td>43.75</td><td class="best">1.77</td><td>平滑但低动态</td></tr>
+    <tr><td>w/o EMA</td><td>35.15</td><td>2.65</td><td>帧复制 + 极低动态</td></tr>
+    <tr><td>w/o Sink</td><td>51.56</td><td>5.08</td><td>质量退化 + 高漂移</td></tr>
+  </table>
+
+  <div class="insight">
+    <div class="insight-title">α 和 β 的敏感性分析</div>
+    <p><strong>α（EMA衰减）</strong>：$\alpha=0.99$ 达到运动平滑度 98.96 与漂移 2.52 的最佳平衡。降低 $\alpha$ 到 0.9 虽然提升了平滑度到 99.09，但漂移增至 3.23——说明过快的EMA更新导致sink状态"健忘"，无法有效维持长程一致性。<strong>β（奖励权重）</strong>：$\beta=1/2$ 是最优选择。过小的 $\beta$（如 1/5）导致动态分过高（94.53）但背景一致性（92.40）和图像质量（68.26）严重退化——奖励权重过大导致模型"为了动态而动态"，牺牲了视觉保真度。过大的 $\beta$（如 1）则动态不足（54.68）。</p>
+  </div>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">用户研究与 Qwen3-VL 评估</h3>
+  <p>20名参与者对4种方法的60秒视频进行评估（4分制），Reward Forcing 在所有维度上全面领先：</p>
+
+  <table class="data-table">
+    <tr><th>方法</th><th>时序一致性</th><th>动态复杂度</th><th>整体偏好</th></tr>
+    <tr><td>CausVid</td><td>1.81</td><td>1.73</td><td>1.87</td></tr>
+    <tr><td>Self Forcing</td><td>1.19</td><td>1.75</td><td>1.27</td></tr>
+    <tr><td>LongLive</td><td>2.79</td><td>2.38</td><td>2.75</td></tr>
+    <tr class="ours"><td class="best">Reward Forcing</td><td class="best">3.60</td><td class="best">3.72</td><td class="best">3.75</td></tr>
+  </table>
+
+  <p>Qwen3-VL-235B-A22B-Instruct 的自动评估结果同样确认了全面领先：视觉质量 4.82、动态 4.18、文本对齐 4.04。</p>
+
+  <div class="insight">
+    <div class="insight-title">批判评估：Self Forcing 时序一致性极低的原因</div>
+    <p>Self Forcing 在用户研究中时序一致性仅 1.19（接近"Poor"），这与论文中"高动态但严重漂移"的描述一致。Self Forcing 虽然动态分数较高，但其无sink机制的设计导致长视频生成时质量快速退化。LongLive 通过KV recaching缓解了这一问题（一致性2.79），但牺牲了动态（2.38）。Reward Forcing 通过 EMA-Sink + Re-DMD 的组合，首次在一致性(3.60)和动态(3.72)上同时接近"Good"水平，验证了"动态记忆"范式的有效性。</p>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ===== CH7 ===== -->
+<section class="chapter" id="ch7">
+  <div class="chapter-id">CHAPTER 07</div>
+  <h2 class="chapter-title">自主<span class="accent">科研问题</span></h2>
+
+  <p>基于对 Reward Forcing 的深入分析，以下提出五个值得探索的研究方向，每个问题附带理论分析。</p>
+
+  <div class="rq-card" data-num="Q1">
+    <div class="rq-title">EMA-Sink 的"信息容量"是否存在理论上界？</div>
+    <p>EMA-Sink 将整个视频历史压缩到固定大小的sink token中。从信息论角度，这是一个有损压缩过程——sink token的容量（token数 × 每token维度）决定了能保留的最大信息量。对于极长视频（如数千帧），历史信息必然以指数速率丢失。理论上，sink token的最优大小应与视频的<strong>有效信息维度</strong>（而非帧数）成正比。一个自然的问题是：能否设计<strong>自适应大小的sink</strong>，根据历史复杂度动态调整容量？这需要解决"何时扩容"和"如何压缩"的联合优化问题，可能需要引入信息瓶颈理论的形式化。</p>
+  </div>
+
+  <div class="rq-card" data-num="Q2">
+    <div class="rq-title">Re-DMD 的奖励函数与VBench评估准则的错配如何系统性解决？</div>
+    <p>论文在讨论部分承认了奖励函数优化方向与VBench评估准则之间的错配问题。VideoAlign的运动质量奖励可能过度偏重时序一致性而忽略美学质量，导致奖励改善无法等比例转化为VBench分数提升。根本原因在于<strong>单一标量奖励无法捕捉视频质量的多维性</strong>。解决方向包括：(1) 多目标奖励建模——为不同质量维度（运动、美学、语义）训练独立奖励模型，通过帕累托优化联合提升；(2) 分层奖励模型——在不同时间尺度评估质量（帧级、片段级、视频级）；(3) 人机协作反馈——将人类感知判断嵌入奖励循环。这需要重新审视RLHF在视频生成中的适用性边界。</p>
+  </div>
+
+  <div class="rq-card" data-num="Q3">
+    <div class="rq-title">EMA 的指数衰减是否是最优的历史压缩策略？不同压缩核函数的影响如何？</div>
+    <p>EMA 使用指数核 $w(k) = (1-\alpha)^k$ 对历史帧加权。但不同的核函数可能更适合不同的视频内容：对于场景导航类视频，均匀核（所有历史等权）可能更好；对于动作类视频，高斯核（集中在局部历史）可能更优。理论上，最优核函数应与视频的<strong>时序自相关结构</strong>匹配。一个有趣的研究方向是<strong>学习型压缩核</strong>——让模型自动学习最优的历史衰减模式，而非固定使用指数核。但引入可学习参数会增加计算开销和过拟合风险，需要找到参数效率与表达能力的平衡点。</p>
+  </div>
+
+  <div class="rq-card" data-num="Q4">
+    <div class="rq-title">Re-DMD 能否扩展到多模态条件视频生成（如音频驱动、轨迹控制）？</div>
+    <p>当前 Re-DMD 的奖励函数仅评估运动质量，但实际应用中视频生成常需要满足多模态约束（如音频同步、轨迹跟随、物理合理性）。将 Re-DMD 扩展到多模态条件面临两个挑战：(1) <strong>奖励函数的设计</strong>——如何评估音频-视频同步或轨迹一致性？可能需要专门的多模态奖励模型；(2) <strong>多奖励融合</strong>——当存在多个奖励信号时，如何确定权重？简单的加权平均可能导致"顾此失彼"。理论框架可能需要从单目标EM扩展到<strong>多目标EM</strong>，这在概率推理中是一个开放问题。此外，不同奖励的梯度尺度差异可能导致训练不稳定，需要自适应归一化策略。</p>
+  </div>
+
+  <div class="rq-card" data-num="Q5">
+    <div class="rq-title">EMA-Sink 与 Test-Time Training (TTT) 的结合能否突破长视频生成的质量上限？</div>
+    <p>EMA-Sink 通过无参数的EMA压缩历史，而 Test-Time Training 方法（如 One-Minute Video Generation）在推理时对模型进行在线微调以适应长序列。两者本质上是互补的：EMA-Sink 解决"记忆容量"问题（如何保留历史），TTT 解决"模型适应"问题（如何处理超出训练长度的序列）。将两者结合的潜在方案是：在EMA-Sink的基础上，定期对sink状态进行TTT式的"回忆巩固"——用少量梯度更新调整模型参数以更好地利用压缩的历史信息。但这面临<strong>灾难性遗忘</strong>的风险：在线微调可能导致模型遗忘预训练知识。需要设计正则化策略（如LoRA式的低秩适应）来限制参数漂移幅度。</p>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ===== Summary ===== -->
+<section class="chapter">
+  <div class="chapter-id">SUMMARY</div>
+  <h2 class="chapter-title">总结与<span class="accent">展望</span></h2>
+
+  <p>Reward Forcing 通过两个核心创新——<strong>EMA-Sink</strong> 和 <strong>Re-DMD</strong>——成功解决了流式视频生成中"低延迟 vs 高动态保真度"的核心矛盾。EMA-Sink 将静态的初始帧锚点转变为动态压缩的历史记忆，以 O(1) 的代价维护全局上下文；Re-DMD 将奖励信号嵌入分布匹配框架，以静态加权的方式引导模型优先学习高动态样本，避免了典型RL的计算开销和不稳定性。</p>
+
+  <div class="insight">
+    <div class="insight-title">核心贡献回顾</div>
+    <p>Reward Forcing 的贡献不仅在于技术层面的两个创新，更在于<strong>范式层面的启示</strong>：在蒸馏框架中嵌入奖励偏好不一定需要复杂的策略梯度——一个简单的指数加权就能有效偏置分布匹配方向。同样，维护长程一致性不一定需要更大的上下文窗口——一个固定大小的"动态记忆"就能替代静态的初始帧锚点。这种"最小充分复杂度"的设计哲学，为未来高效视频生成系统的设计提供了重要参考。</p>
+  </div>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">技术局限</h3>
+  <ul style="list-style:none;padding-left:0;">
+    <li style="margin-bottom:12px;padding-left:20px;border-left:3px solid var(--coral-300);"><strong>奖励-评估错配</strong>：单一运动质量奖励无法全面代表视频质量，与多维评估准则存在系统性错配</li>
+    <li style="margin-bottom:12px;padding-left:20px;border-left:3px solid var(--coral-300);"><strong>VLM奖励局限</strong>：当前视频奖励模型难以捕捉细微时序伪影（如帧抖动）和复杂语义属性</li>
+    <li style="margin-bottom:12px;padding-left:20px;border-left:3px solid var(--coral-300);"><strong>sink容量限制</strong>：固定大小的sink token对极长视频存在信息容量瓶颈</li>
+    <li style="margin-bottom:12px;padding-left:20px;border-left:3px solid var(--coral-300);"><strong>基础模型依赖</strong>：性能受限于Wan2.1-1.3B的基础能力，scaling到更大模型的效果未知</li>
+  </ul>
+
+  <h3 style="font-size:1.15rem;margin:24px 0 12px;color:var(--ink);">未来方向</h3>
+  <p>论文指出，随着视频奖励模型的进步，该框架将自然受益。有前景的研究方向包括：多目标奖励建模（为不同质量维度设计独立组件）、分层模型（在多时间尺度评估质量）、人机协作反馈机制、领域自适应模型（按内容类型调整评估准则），以及编码物理和语义先验的架构设计。</p>
+
+  <div class="insight">
+    <div class="insight-title">更广阔的视角：从"视频生成"到"世界模拟"</div>
+    <p>Reward Forcing 建立了流式视频生成的新基准——23.1 FPS 的实时速度加上高动态保真度，使其更接近"世界模拟器"的愿景。EMA-Sink 的"动态记忆"机制和 Re-DMD 的"奖励驱动蒸馏"思想，不仅适用于视频生成，也可推广到其他需要长程序列建模和奖励对齐的领域，如机器人轨迹规划、游戏环境模拟等。随着交互式视频生成（论文展示的prompt切换功能）的成熟，这类方法有望成为构建交互式虚拟世界的基础设施。</p>
+  </div>
+</section>
+
+</div>
+
+<!-- Footer -->
+<footer class="footer">
+  <p>Reward Forcing: Efficient Streaming Video Generation with Rewarded Distribution Matching Distillation</p>
+  <p style="margin-top:8px;">arXiv:2512.04678v2 &middot; ZJU &amp; Ant Group &middot; 2025.12</p>
+  <p style="margin-top:8px;">本文为论文精读博客，所有公式和实验数据均来自原始论文</p>
+</footer>
+
+</body>
+</html>

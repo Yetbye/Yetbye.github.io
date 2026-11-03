@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MIGA: 无训练无限帧长视频生成 | 论文精读</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- MathJax 3.x with three-layer CDN fallback and skipHtmlTags -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true
+  },
+  chtml: { scale: 1.05 },
+  startup: { typeset: true },
+  options: {
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+  }
+};
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js" onerror="this.remove();document.write('<script src=\"https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js\"><\/script>')"></script>
+<script>
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    if (!window.MathJax || !window.MathJax.startup || !window.MathJax.startup.promise) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+      document.head.appendChild(s);
+    }
+  }, 5000);
+});
+</script>
+
+<style>
+:root {
+  --lav-50:#faf5ff;--lav-100:#f3e8ff;--lav-200:#e9d5ff;--lav-300:#d8b4fe;
+  --lav-400:#c084fc;--lav-500:#a855f7;--lav-600:#9333ea;--lav-700:#7e22ce;
+  --coral-100:#ffe4e6;--coral-200:#fecdd3;--coral-300:#fda4af;--coral-400:#fb7185;--coral-500:#f43f5e;
+  --mint-100:#d1fae5;--mint-200:#a7f3d0;--mint-300:#6ee7b7;--mint-400:#34d399;--mint-500:#10b981;
+  --warm-100:#fef3c7;--warm-200:#fde68a;--amber-500:#f59e0b;
+  --ink:#1e1b4b;--ink-soft:#4c4b5e;--ink-muted:#787887;
+  --paper:#ffffff;--paper-warm:#faf8f5;--paper-cream:#fdf6e3;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:'Noto Sans SC',sans-serif;background:var(--paper-warm);color:var(--ink);line-height:1.8;overflow-x:hidden}
+h1,h2,h3,h4{font-family:'Noto Serif SC',serif;font-weight:700}
+
+/* Navigation */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(250,248,245,0.85);backdrop-filter:blur(16px) saturate(1.5);border-bottom:1px solid rgba(192,132,252,0.15);padding:10px 24px}
+nav .nav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+nav .logo{font-family:'Noto Serif SC',serif;font-weight:900;font-size:18px;background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+nav .nav-links{display:flex;gap:6px;flex-wrap:wrap}
+nav .nav-links a{font-size:12px;color:var(--ink-soft);text-decoration:none;padding:4px 10px;border-radius:100px;transition:all .2s}
+nav .nav-links a:hover{background:var(--lav-100);color:var(--lav-600)}
+
+/* Hero */
+.hero{position:relative;min-height:auto;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:120px 24px 80px;background:linear-gradient(135deg,#faf5ff 0%,#f3e8ff 18%,#fdf4e3 50%,#fffbeb 100%)}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 520px 320px at 12% 22%,rgba(192,132,252,0.16),transparent 60%),radial-gradient(ellipse 520px 320px at 88% 78%,rgba(251,191,36,0.13),transparent 60%)}
+.hero-wrap{position:relative;z-index:2;width:100%;max-width:780px;text-align:center}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,0.6);backdrop-filter:blur(12px) saturate(1.5);border:1px solid rgba(192,132,252,0.3);color:var(--lav-600);padding:7px 20px;border-radius:100px;font-family:'Noto Sans SC',sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;margin-bottom:20px;box-shadow:0 4px 20px rgba(192,132,252,0.12)}
+.hero h1{font-family:'Noto Serif SC',serif;font-size:clamp(2.8rem,8vw,5rem);font-weight:900;letter-spacing:-0.03em;line-height:1.1;margin:12px 0 10px;background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 38%,var(--coral-500) 62%,var(--amber-500) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:clamp(0.95rem,2.5vw,1.25rem);color:var(--ink-soft);font-weight:400;line-height:1.6;margin-bottom:8px}
+.hero-art{margin:20px auto 8px;max-width:760px;width:100%}
+.hero-img{width:100%;height:auto;border-radius:24px;box-shadow:0 24px 70px -24px rgba(30,27,75,0.18);border:1px solid rgba(192,132,252,0.12)}
+.hero-caption{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--ink-muted);margin-top:8px}
+.scroll-indicator{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:4px;color:var(--ink-muted);text-transform:uppercase;animation:bounce 2s infinite}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+
+/* Content */
+.content{max-width:820px;margin:0 auto;padding:60px 24px}
+section{margin-bottom:80px;scroll-margin-top:80px}
+.section-tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--lav-600);background:var(--lav-50);padding:4px 14px;border-radius:100px;margin-bottom:12px}
+h2{font-size:clamp(1.6rem,4vw,2.2rem);margin-bottom:16px;color:var(--ink);line-height:1.3}
+h3{font-size:clamp(1.15rem,3vw,1.45rem);margin:24px 0 12px;color:var(--lav-700)}
+p{margin-bottom:14px;color:var(--ink-soft);font-size:15px;line-height:1.85}
+strong{color:var(--ink);font-weight:600}
+em{color:var(--lav-600);font-style:normal;font-weight:500}
+
+/* Formula */
+.formula{background:var(--paper-cream);border-left:3px solid var(--lav-400);padding:16px 20px;margin:16px 0;border-radius:0 12px 12px 0;overflow-x:auto}
+.formula-label{font-size:11px;font-weight:700;color:var(--lav-600);margin-bottom:6px;letter-spacing:1px}
+
+/* Insight box (mint green) */
+.insight{background:linear-gradient(135deg,var(--mint-100) 0%,#ecfdf5 100%);border:1px solid var(--mint-300);border-left:4px solid var(--mint-400);padding:18px 22px;margin:20px 0;border-radius:0 16px 16px 0}
+.insight-title{font-weight:700;color:var(--mint-500);font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.insight-title::before{content:'';display:inline-block;width:16px;height:16px;background:var(--mint-400);border-radius:50%;flex-shrink:0}
+.insight p{color:var(--ink-soft);font-size:14px;margin:0}
+
+/* Deep insight (lavender) */
+.deep-insight{background:linear-gradient(135deg,var(--lav-50) 0%,var(--lav-100) 100%);border:1px solid var(--lav-300);border-left:4px solid var(--lav-500);padding:18px 22px;margin:20px 0;border-radius:0 16px 16px 0}
+.deep-insight-title{font-weight:700;color:var(--lav-600);font-size:13px;margin-bottom:8px}
+.deep-insight p{color:var(--ink-soft);font-size:14px;margin:0}
+
+/* Code block */
+.code-block{background:#1e1b4b;border-radius:12px;padding:20px 24px;margin:20px 0;overflow-x:auto;position:relative}
+.code-block::before{content:attr(data-label);position:absolute;top:-10px;left:20px;background:var(--lav-500);color:white;font-size:10px;font-weight:700;padding:2px 12px;border-radius:100px;letter-spacing:1px}
+.code-block pre{margin:0}
+.code-block code{font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.65;color:#e0e0e0}
+.code-block .kw{color:#c084fc}
+.code-block .str{color:#6ee7b7}
+.code-block .com{color:#787887}
+.code-block .fn{color:#fbbf24}
+.code-block .num{color:#fb7185}
+
+/* Figure */
+.figure{margin:24px 0;text-align:center}
+.figure img{max-width:100%;border-radius:12px;box-shadow:0 8px 30px -12px rgba(30,27,75,0.15);border:1px solid rgba(192,132,252,0.1)}
+.figure-caption{font-size:12px;color:var(--ink-muted);margin-top:8px;line-height:1.5}
+
+/* Table */
+.result-table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}
+.result-table th{background:var(--lav-100);color:var(--lav-700);padding:8px 10px;text-align:center;font-weight:600;border-radius:6px}
+.result-table td{padding:8px 10px;text-align:center;border-bottom:1px solid var(--lav-100)}
+.result-table tr:hover{background:var(--lav-50)}
+.result-table .best{color:var(--mint-500);font-weight:700}
+.result-table .ours{background:var(--mint-50,#ecfdf5)}
+
+/* Research question */
+.rq-card{background:linear-gradient(135deg,var(--warm-100) 0%,#fefce8 100%);border:1px solid var(--warm-200);border-left:4px solid var(--amber-500);padding:18px 22px;margin:16px 0;border-radius:0 16px 16px 0}
+.rq-tag{display:inline-block;background:var(--amber-500);color:white;font-size:10px;font-weight:700;padding:2px 10px;border-radius:100px;margin-bottom:8px;letter-spacing:1px}
+.rq-card h4{font-size:15px;color:var(--ink);margin-bottom:8px}
+.rq-card p{font-size:14px;margin:0}
+
+/* Compare cards */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:20px 0}
+.compare-card{padding:16px;border-radius:12px;border:1px solid}
+.compare-card.bad{border-color:var(--coral-300);background:var(--coral-100)}
+.compare-card.mid{border-color:var(--warm-200);background:var(--warm-100)}
+.compare-card.good{border-color:var(--mint-300);background:var(--mint-100)}
+.compare-card h4{font-size:13px;margin-bottom:8px}
+.compare-card p{font-size:12px;margin:0;line-height:1.6}
+
+/* SVG container */
+.svg-container{margin:24px 0;text-align:center;overflow-x:auto}
+.svg-container svg{max-width:100%;height:auto}
+.svg-caption{font-size:12px;color:var(--ink-muted);margin-top:6px}
+
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0}
+.stat-card{background:var(--paper);border:1px solid var(--lav-200);border-radius:12px;padding:16px;text-align:center}
+.stat-card .num{font-size:28px;font-weight:900;background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.stat-card .label{font-size:11px;color:var(--ink-muted);margin-top:4px}
+
+/* Summary */
+.summary-box{background:linear-gradient(135deg,var(--lav-50),var(--coral-100));border:1px solid var(--lav-200);border-radius:16px;padding:24px;margin:20px 0}
+.summary-box h3{color:var(--lav-700);margin-top:0}
+
+/* Links */
+a{color:var(--lav-600);text-decoration:none}
+a:hover{text-decoration:underline}
+
+footer{text-align:center;padding:40px 24px;background:var(--ink);color:var(--ink-muted);font-size:12px}
+footer a{color:var(--lav-400);text-decoration:none}
+
+@media(max-width:640px){
+  .compare-grid{grid-template-columns:1fr}
+  nav .nav-links{display:none}
+}
+
+/* === FORMAT FIXES v1 === */
+/* Stats grid 必须并行4列 */
+.stats-grid,.stats-row,.hero-stats,.stat-grid{
+  display:grid !important;
+  grid-template-columns:repeat(4,1fr) !important;
+  gap:12px !important;
+  max-width:720px !important;
+  margin:24px auto !important;
+}
+.stat-card,.stat-item,.stat-box{
+  text-align:center !important;
+  padding:16px !important;
+}
+/* figure 居中对齐 */
+.figure,.fig,.img-wrap{margin:24px auto !important;text-align:center !important}
+.figure img,.fig img,.img-wrap img,.figure figure img{display:block;margin:0 auto !important;max-width:100% !important}
+/* SVG 居中 */
+.svg-wrap,.svg-container{text-align:center !important;margin:24px auto !important}
+.svg-wrap svg,.svg-container svg{display:block;margin:0 auto !important;max-width:100% !important}
+/* hero 不要太大 */
+.hero{min-height:auto !important;padding:100px 24px 60px !important}
+/* 减少过度效果 - 移除非必要动画 */
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+.scroll-indicator{animation:bounce 2s infinite}
+/* 确保关键交互保留hover效果 */
+a:hover,button:hover,input:focus{transition:all .2s !important}
+
+</style>
+</head>
+<body>
+
+<nav>
+<div class="nav-inner">
+<span class="logo">MIGA</span>
+<div class="nav-links"><a href="../index.html">« 合辑</a>
+<a href="#ch1">长视频困境</a>
+<a href="#ch2">FIFO分析</a>
+<a href="#ch3">TTA机制</a>
+<a href="#ch4">DCE机制</a>
+<a href="#ch5">自反思</a>
+<a href="#ch6">远程引导</a>
+<a href="#ch7">实验结果</a>
+<a href="#ch8">消融研究</a>
+<a href="#ch9">科研问题</a>
+</div>
+</div>
+</nav>
+
+<!-- ========== HERO ========== -->
+<div class="hero" id="hero">
+<div class="hero-wrap">
+<div class="hero-badge">ICML 2026 &middot; Seoul, South Korea</div>
+<h1>MIGA</h1>
+<p class="hero-sub">两阶段训练-推理对齐 &times; 双重一致性增强 &middot; 无训练无限帧长视频生成 &middot; 1000+ 帧 &middot; 恒定显存</p>
+<div class="hero-art">
+<img src="assets/cover.webp" alt="MIGA Cover" class="hero-img">
+</div>
+<p class="hero-caption">水彩写意风格 &middot; 延伸至无穷的胶片卷轴象征无限帧生成，左侧噪声粒子渐变为清晰画面代表两阶段对齐，镜面反射与远程连线象征双重一致性增强</p>
+</div>
+<div class="scroll-indicator">Scroll to Read</div>
+</div>
+
+<div class="content">
+
+<!-- ========== CH1 ========== -->
+<section id="ch1">
+<span class="section-tag">CH1 &middot; 问题分析</span>
+<h2>无限帧长视频生成的三重困境</h2>
+
+<p>长视频生成是电影制作、游戏开发和世界模拟等应用场景的核心需求。然而，现有基础视频生成模型（如Wan2.1、VideoCrafter2）通常仅支持<strong>固定长度的短视频</strong>（如81帧）。如何在不增加训练成本的前提下，将短视频生成能力扩展到无限帧长视频？这一问题构成了当前研究的核心挑战。</p>
+
+<p>MIGA论文指出，现有的无训练帧级自回归框架（以FIFO-Diffusion为代表）面临三重困境：<strong>训练-推理不匹配</strong>、<strong>长期一致性不足</strong>、以及<strong>噪声跨度约束</strong>。这三个问题相互交织，严重制约了基础模型的生成潜力。</p>
+
+<div class="svg-container">
+<svg viewBox="0 0 780 340" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#c084fc" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#fb7185" stop-opacity="0.15"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#c084fc"/>
+      <stop offset="100%" stop-color="#fb7185"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect x="0" y="0" width="780" height="340" rx="16" fill="url(#g1)"/>
+  <!-- Title -->
+  <text x="390" y="36" text-anchor="middle" font-family="Noto Sans SC" font-size="14" font-weight="700" fill="#7e22ce">MIGA: 解决无限帧长视频生成的三重困境</text>
+  <!-- Three pillars -->
+  <rect x="60" y="65" width="200" height="240" rx="14" fill="white" stroke="#fecdd3" stroke-width="1.5"/>
+  <rect x="290" y="65" width="200" height="240" rx="14" fill="white" stroke="#fde68a" stroke-width="1.5"/>
+  <rect x="520" y="65" width="200" height="240" rx="14" fill="white" stroke="#a7f3d0" stroke-width="1.5"/>
+  <!-- Pillar icons -->
+  <circle cx="160" cy="108" r="24" fill="#ffe4e6"/>
+  <text x="160" y="115" text-anchor="middle" font-size="22">&#x26A0;</text>
+  <circle cx="390" cy="108" r="24" fill="#fef3c7"/>
+  <text x="390" y="115" text-anchor="middle" font-size="22">&#x1F501;</text>
+  <circle cx="620" cy="108" r="24" fill="#d1fae5"/>
+  <text x="620" y="115" text-anchor="middle" font-size="22">&#x1F3AF;</text>
+  <!-- Pillar titles -->
+  <text x="160" y="152" text-anchor="middle" font-family="Noto Sans SC" font-size="13" font-weight="700" fill="#f43f5e">训练-推理不匹配</text>
+  <text x="390" y="152" text-anchor="middle" font-family="Noto Sans SC" font-size="13" font-weight="700" fill="#f59e0b">长期一致性不足</text>
+  <text x="620" y="152" text-anchor="middle" font-family="Noto Sans SC" font-size="13" font-weight="700" fill="#10b981">噪声跨度约束</text>
+  <!-- Pillar descriptions -->
+  <text x="160" y="178" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">训练时单噪声级别</text>
+  <text x="160" y="196" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">推理时多噪声级别</text>
+  <text x="160" y="214" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">噪声跨度 = f&#x2080;</text>
+  <text x="160" y="240" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#787887">导致内容漂移</text>
+  <text x="160" y="258" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#787887">和视觉伪影</text>
+  <text x="390" y="178" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">仅相邻块特征交互</text>
+  <text x="390" y="196" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">缺乏远程依赖建模</text>
+  <text x="390" y="214" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">lookahead去噪有限</text>
+  <text x="390" y="240" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#787887">主体背景一致性</text>
+  <text x="390" y="258" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#787887">随时间退化</text>
+  <text x="620" y="178" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">窗口内帧噪声差异大</text>
+  <text x="620" y="196" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">模型无法充分发挥</text>
+  <text x="620" y="214" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">基础生成能力</text>
+  <text x="620" y="240" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#787887">生成质量受限</text>
+  <text x="620" y="258" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#787887">难以实际应用</text>
+  <!-- Solution arrows -->
+  <line x1="260" y1="185" x2="290" y2="185" stroke="url(#g2)" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="490" y1="185" x2="520" y2="185" stroke="url(#g2)" stroke-width="2"/>
+  <!-- Bottom labels -->
+  <rect x="265" y="290" width="250" height="32" rx="16" fill="url(#g2)"/>
+  <text x="390" y="311" text-anchor="middle" font-family="Noto Sans SC" font-size="12" font-weight="700" fill="white">MIGA: TTA + DCE 双机制联合解决</text>
+</svg>
+<p class="svg-caption">图：MIGA论文识别的三重困境及其对应的解决方案架构</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：从"能用"到"好用"的鸿沟</div>
+<p>FIFO-Diffusion虽然实现了无限帧生成的技术可行性，但其实际生成质量与训练阶段的能力之间存在巨大差距。这类似于让一个只学习过统一考试的学生突然面对混合难度试卷——模型并非不能工作，而是无法在不匹配的条件下充分发挥潜力。MIGA的核心洞察在于：与其让模型适应不匹配的条件，不如主动消除不匹配本身。</p>
+</div>
+
+<div class="stats-grid">
+<div class="stat-card"><div class="num">+4.7%</div><div class="label">主体一致性提升</div></div>
+<div class="stat-card"><div class="num">+2.0%</div><div class="label">背景一致性提升</div></div>
+<div class="stat-card"><div class="num">1000+</div><div class="label">可生成帧数</div></div>
+<div class="stat-card"><div class="num">恒定</div><div class="label">显存消耗</div></div>
+</div>
+
+<div class="insight">
+<div class="insight-title">关键观察</div>
+<p>MIGA在VideoCrafter2和Wan2.1-1.3B两个基础模型上均取得SOTA性能，且不引入任何额外训练参数。这意味着该方法具有良好的通用性和即插即用特性，可以与未来更强大的基础模型无缝结合。</p>
+</div>
+</section>
+
+<!-- ========== CH2 ========== -->
+<section id="ch2">
+<span class="section-tag">CH2 &middot; 基线分析</span>
+<h2>FIFO-Diffusion：无限帧生成的先驱与瓶颈</h2>
+
+<p>要理解MIGA的创新，首先需要深入分析其基线方法FIFO-Diffusion的核心机制。FIFO-Diffusion通过维护一个<strong>噪声队列</strong>实现帧级自回归生成：队列中包含T个潜在特征，噪声级别从低到高排列。每次推理后，队首的干净帧被出队保存，队尾追加新的高斯噪声帧，从而实现"先进先出"的连续生成。</p>
+
+<div class="svg-container">
+<svg viewBox="0 0 780 320" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="noiseGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#a7f3d0"/>
+      <stop offset="50%" stop-color="#fde68a"/>
+      <stop offset="100%" stop-color="#fb7185"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="780" height="320" rx="16" fill="#faf5ff"/>
+  <!-- Title -->
+  <text x="390" y="32" text-anchor="middle" font-family="Noto Sans SC" font-size="14" font-weight="700" fill="#7e22ce">FIFO-Diffusion 噪声队列与滑动窗口推理</text>
+  <!-- Queue visualization -->
+  <rect x="60" y="55" width="660" height="60" rx="8" fill="white" stroke="#e9d5ff" stroke-width="1.5"/>
+  <!-- Noise levels in queue -->
+  <rect x="70" y="62" width="55" height="46" rx="4" fill="#d1fae5" stroke="#6ee7b7" stroke-width="1"/>
+  <rect x="130" y="62" width="55" height="46" rx="4" fill="#a7f3d0" stroke="#6ee7b7" stroke-width="1"/>
+  <rect x="190" y="62" width="55" height="46" rx="4" fill="#fef3c7" stroke="#fde68a" stroke-width="1"/>
+  <rect x="250" y="62" width="55" height="46" rx="4" fill="#fef3c7" stroke="#fde68a" stroke-width="1"/>
+  <rect x="310" y="62" width="55" height="46" rx="4" fill="#fde68a" stroke="#f59e0b" stroke-width="1"/>
+  <rect x="370" y="62" width="55" height="46" rx="4" fill="#fde68a" stroke="#f59e0b" stroke-width="1"/>
+  <rect x="430" y="62" width="55" height="46" rx="4" fill="#fecdd3" stroke="#fb7185" stroke-width="1"/>
+  <rect x="490" y="62" width="55" height="46" rx="4" fill="#fecdd3" stroke="#fb7185" stroke-width="1"/>
+  <rect x="550" y="62" width="55" height="46" rx="4" fill="#ffe4e6" stroke="#fb7185" stroke-width="1"/>
+  <rect x="610" y="62" width="55" height="46" rx="4" fill="#ffe4e6" stroke="#fb7185" stroke-width="1"/>
+  <rect x="670" y="62" width="40" height="46" rx="4" fill="#f3e8ff" stroke="#c084fc" stroke-width="1"/>
+  <!-- Labels -->
+  <text x="97" y="90" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#065f46">&#x3C4;&#x2081;</text>
+  <text x="157" y="90" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#065f46">&#x3C4;&#x2082;</text>
+  <text x="217" y="90" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#92400e">&#x3C4;&#x2083;</text>
+  <text x="577" y="90" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#9f1239">&#x3C4;&#x2092;&#x208B;&#x2081;</text>
+  <text x="690" y="90" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#7e22ce">&#x3C4;&#x2092;</text>
+  <!-- Noise level arrow -->
+  <line x1="70" y1="120" x2="700" y2="120" stroke="url(#noiseGrad)" stroke-width="3"/>
+  <text x="710" y="125" font-family="Noto Sans SC" font-size="10" fill="#4c4b5e">噪声级别</text>
+  <text x="60" y="125" font-family="Noto Sans SC" font-size="10" fill="#4c4b5e">低</text>
+  <text x="720" y="125" font-family="Noto Sans SC" font-size="10" fill="#4c4b5e">高</text>
+  <!-- Sliding window -->
+  <rect x="70" y="145" width="280" height="35" rx="6" fill="rgba(192,132,252,0.12)" stroke="#c084fc" stroke-width="2" stroke-dasharray="6,3"/>
+  <text x="210" y="168" text-anchor="middle" font-family="Noto Sans SC" font-size="12" font-weight="600" fill="#7e22ce">滑动窗口 (f&#x2080; = 16帧)</text>
+  <!-- FIFO operation -->
+  <text x="390" y="200" text-anchor="middle" font-family="Noto Sans SC" font-size="13" font-weight="600" fill="#4c4b5e">每次推理操作</text>
+  <!-- Dequeue -->
+  <rect x="100" y="215" width="160" height="40" rx="8" fill="#d1fae5" stroke="#34d399" stroke-width="1.5"/>
+  <text x="180" y="240" text-anchor="middle" font-family="Noto Sans SC" font-size="12" fill="#065f46">出队: 干净帧保存</text>
+  <!-- Enqueue -->
+  <rect x="520" y="215" width="160" height="40" rx="8" fill="#ffe4e6" stroke="#fb7185" stroke-width="1.5"/>
+  <text x="600" y="240" text-anchor="middle" font-family="Noto Sans SC" font-size="12" fill="#9f1239">入队: 高斯噪声帧</text>
+  <!-- Denoising -->
+  <rect x="310" y="215" width="160" height="40" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="390" y="240" text-anchor="middle" font-family="Noto Sans SC" font-size="12" fill="#92400e">去噪: 全队列降噪1步</text>
+  <!-- Problem callout -->
+  <rect x="180" y="275" width="420" height="30" rx="8" fill="#ffe4e6" stroke="#fb7185" stroke-width="1"/>
+  <text x="390" y="295" text-anchor="middle" font-family="Noto Sans SC" font-size="11" font-weight="600" fill="#9f1239">问题: 窗口内噪声跨度 = f&#x2080;，远超训练时的单一噪声级别</text>
+</svg>
+<p class="svg-caption">图：FIFO-Diffusion的噪声队列结构与滑动窗口推理机制，以及核心瓶颈</p>
+</div>
+
+<p>FIFO-Diffusion的理论分析已经证明，无训练自回归生成引入的误差<strong>受输入潜在特征的噪声跨度约束</strong>。然而，其最终方案仍然要求模型处理跨度为$f_0$的噪声级别——这与训练时的单一噪声级别条件存在根本性差异。</p>
+
+<h3>理论分析：噪声跨度与误差上界</h3>
+
+<div class="formula">
+<div class="formula-label">噪声跨度误差上界</div>
+$$\mathcal{E}_{\text{train-free}} \leq C \cdot \Delta\tau_{\text{span}}$$
+<p style="margin-top:8px;font-size:13px;color:#4c4b5e;">其中 $\Delta\tau_{\text{span}}$ 为输入潜在特征的噪声跨度，$C$ 为与模型相关的常数。FIFO-Diffusion中 $\Delta\tau_{\text{span}} = f_0$，而训练时 $\Delta\tau_{\text{span}} = 0$。</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：噪声跨度是训练-推理差距的根本原因</div>
+<p>FIFO-Diffusion的滑动窗口机制意味着每次推理时，模型需要同时处理从低噪声到高噪声的$f_0$个帧。这种"混合难度"输入在训练阶段从未出现过——模型只学习过处理统一噪声级别的帧。误差上界的分析表明，噪声跨度直接决定了生成质量的上限，这为MIGA的两阶段对齐机制提供了理论依据。</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：有限扩展 vs 无限扩展的方法论分野</div>
+<p>FreeNoise、FreeLong、FreePCA等方法通过增加输入帧数实现长视频生成，但其显存消耗与帧数成正比，无法支持分钟级视频。FIFO-Diffusion的恒定显存特性使其成为无限帧生成的唯一可行方案。MIGA选择在FIFO框架内进行优化，而非另起炉灶，体现了对方法论基础的深刻理解和务实选择。</p>
+</div>
+</section>
+
+<!-- ========== CH3 ========== -->
+<section id="ch3">
+<span class="section-tag">CH3 &middot; 核心创新一</span>
+<h2>两阶段训练-推理对齐 (TTA)：缩小噪声跨度</h2>
+
+<p>MIGA的核心创新之一是<strong>两阶段训练-推理对齐机制 (Two-Stage Training-Inference Alignment, TTA)</strong>。该机制通过两个专门的优化阶段，系统性地缩小推理时输入潜在特征的噪声跨度，从而最大化地对齐训练和推理条件。</p>
+
+<h3>第一阶段：Zigzag迭代去噪</h3>
+
+<p>第一阶段的核心思想是<strong>减缓噪声级别的变化速率</strong>。传统FIFO-Diffusion中，每个帧的噪声级别依次递增；而在MIGA的Zigzag结构中，每$L_{\text{zig}}$个连续帧共享同一噪声级别。这种"阶梯式"的噪声分布显著降低了模型在单次推理中需要处理的噪声跨度。</p>
+
+<div class="svg-container">
+<svg viewBox="0 0 780 380" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="780" height="380" rx="16" fill="#faf5ff"/>
+  <!-- Title -->
+  <text x="390" y="30" text-anchor="middle" font-family="Noto Sans SC" font-size="14" font-weight="700" fill="#7e22ce">TTA两阶段机制: Zigzag队列 vs 传统队列</text>
+  <!-- FIFO queue (top) -->
+  <text x="120" y="68" text-anchor="middle" font-family="Noto Sans SC" font-size="12" font-weight="600" fill="#f43f5e">FIFO-Diffusion队列</text>
+  <rect x="50" y="78" width="680" height="55" rx="8" fill="white" stroke="#fecdd3" stroke-width="1.5"/>
+  <!-- Individual noise levels -->
+  <rect x="58" y="85" width="38" height="40" rx="3" fill="#d1fae5"/><text x="77" y="110" text-anchor="middle" font-size="9" fill="#065f46">1</text>
+  <rect x="100" y="85" width="38" height="40" rx="3" fill="#a7f3d0"/><text x="119" y="110" text-anchor="middle" font-size="9" fill="#065f46">2</text>
+  <rect x="142" y="85" width="38" height="40" rx="3" fill="#fef3c7"/><text x="161" y="110" text-anchor="middle" font-size="9" fill="#92400e">3</text>
+  <rect x="184" y="85" width="38" height="40" rx="3" fill="#fde68a"/><text x="203" y="110" text-anchor="middle" font-size="9" fill="#92400e">4</text>
+  <rect x="226" y="85" width="38" height="40" rx="3" fill="#fde68a"/><text x="245" y="110" text-anchor="middle" font-size="9" fill="#92400e">5</text>
+  <rect x="268" y="85" width="38" height="40" rx="3" fill="#fecdd3"/><text x="287" y="110" text-anchor="middle" font-size="9" fill="#9f1239">6</text>
+  <rect x="310" y="85" width="38" height="40" rx="3" fill="#fecdd3"/><text x="329" y="110" text-anchor="middle" font-size="9" fill="#9f1239">7</text>
+  <rect x="352" y="85" width="38" height="40" rx="3" fill="#ffe4e6"/><text x="371" y="110" text-anchor="middle" font-size="9" fill="#9f1239">8</text>
+  <rect x="394" y="85" width="38" height="40" rx="3" fill="#ffe4e6"/><text x="413" y="110" text-anchor="middle" font-size="9" fill="#9f1239">9</text>
+  <rect x="436" y="85" width="38" height="40" rx="3" fill="#ffe4e6"/><text x="455" y="110" text-anchor="middle" font-size="9" fill="#9f1239">10</text>
+  <rect x="478" y="85" width="38" height="40" rx="3" fill="#fecdd3"/><text x="497" y="110" text-anchor="middle" font-size="9" fill="#9f1239">11</text>
+  <rect x="520" y="85" width="38" height="40" rx="3" fill="#fecdd3"/><text x="539" y="110" text-anchor="middle" font-size="9" fill="#9f1239">12</text>
+  <rect x="562" y="85" width="38" height="40" rx="3" fill="#fde68a"/><text x="581" y="110" text-anchor="middle" font-size="9" fill="#92400e">13</text>
+  <rect x="604" y="85" width="38" height="40" rx="3" fill="#fde68a"/><text x="623" y="110" text-anchor="middle" font-size="9" fill="#92400e">14</text>
+  <rect x="646" y="85" width="38" height="40" rx="3" fill="#fef3c7"/><text x="665" y="110" text-anchor="middle" font-size="9" fill="#92400e">15</text>
+  <rect x="688" y="85" width="35" height="40" rx="3" fill="#d1fae5"/><text x="705" y="110" text-anchor="middle" font-size="9" fill="#065f46">16</text>
+  <!-- FIFO span annotation -->
+  <line x1="58" y1="132" x2="705" y2="132" stroke="#fb7185" stroke-width="2"/>
+  <text x="390" y="146" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#9f1239">噪声跨度 = f&#x2080; (每帧不同噪声级别)</text>
+  <!-- Zigzag queue (bottom) -->
+  <text x="120" y="178" text-anchor="middle" font-family="Noto Sans SC" font-size="12" font-weight="600" fill="#10b981">MIGA Zigzag队列 (L&#x1D63;&#x1D5D;=4)</text>
+  <rect x="50" y="188" width="680" height="55" rx="8" fill="white" stroke="#a7f3d0" stroke-width="1.5"/>
+  <!-- Grouped noise levels -->
+  <rect x="58" y="195" width="160" height="40" rx="4" fill="#d1fae5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="138" y="220" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#065f46">&#x3C4;&#x2091; (4帧共享)</text>
+  <rect x="226" y="195" width="160" height="40" rx="4" fill="#fef3c7" stroke="#fde68a" stroke-width="1.5"/>
+  <text x="306" y="220" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#92400e">&#x3C4;&#x2091;&#x208A;&#x2081; (4帧共享)</text>
+  <rect x="394" y="195" width="160" height="40" rx="4" fill="#fecdd3" stroke="#fb7185" stroke-width="1.5"/>
+  <text x="474" y="220" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#9f1239">&#x3C4;&#x2091;&#x208A;&#x2082; (4帧共享)</text>
+  <rect x="562" y="195" width="160" height="40" rx="4" fill="#ffe4e6" stroke="#fda4af" stroke-width="1.5"/>
+  <text x="642" y="220" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#9f1239">&#x3C4;&#x2091;&#x208A;&#x2083; (4帧共享)</text>
+  <!-- Zigzag span annotation -->
+  <line x1="58" y1="250" x2="218" y2="250" stroke="#10b981" stroke-width="2.5"/>
+  <text x="138" y="266" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#065f46">单步噪声跨度 = L&#x1D63;&#x1D5D;=4</text>
+  <!-- Comparison -->
+  <rect x="260" y="285" width="260" height="75" rx="12" fill="url(#g1)" stroke="#c084fc" stroke-width="1"/>
+  <text x="390" y="308" text-anchor="middle" font-family="Noto Sans SC" font-size="12" font-weight="700" fill="#7e22ce">噪声跨度缩减比</text>
+  <text x="390" y="340" text-anchor="middle" font-family="Noto Sans SC" font-size="18" font-weight="900" fill="#10b981">f&#x2080; : L&#x1D63;&#x1D5D; = 16 : 4 = 4x</text>
+</svg>
+<p class="svg-caption">图：FIFO-Diffusion传统队列与MIGA Zigzag队列的噪声分布对比</p>
+</div>
+
+<h3>第二阶段：统一噪声级别去噪</h3>
+
+<p>在第一阶段经过$n$次迭代后，MIGA获得$nL_{\text{zig}}$个潜在特征，它们全部处于<strong>相同的时间步</strong>$\tau_{e-1}$。这些潜在特征构成第二阶段的队列$Q_{s2}$。由于所有帧共享同一噪声级别，模型在每次去噪操作中处理的是强度一致的输入——这完美匹配了训练条件。</p>
+
+<div class="formula">
+<div class="formula-label">第二阶段队列定义</div>
+$$Q_{s2} = \{z^1_{\tau_{e-1}}, z^2_{\tau_{e-1}}, \ldots, z^{nL_{\text{zig}}}_{\tau_{e-1}}\}$$
+<p style="margin-top:8px;font-size:13px;color:#4c4b5e;">所有潜在特征共享同一噪声级别 $\tau_{e-1}$，训练-推理对齐达到最优</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：两阶段设计的哲学意义</div>
+<p>TTA的设计体现了一种"分而治之"的策略智慧：第一阶段通过Zigzag结构将"大跨度"问题分解为多个"小跨度"子问题，第二阶段则在统一条件下完成最终去噪。这种设计不仅解决了技术问题，还揭示了一个更深层的洞察——训练-推理差距并非不可弥合，关键在于如何设计中间状态使其逐步收敛到训练条件。</p>
+</div>
+
+<div class="compare-grid">
+<div class="compare-card bad">
+<h4>FIFO-Diffusion</h4>
+<p>单步噪声跨度 = $f_0$<br>模型面对混合噪声级别<br>训练-推理差距大</p>
+</div>
+<div class="compare-card mid">
+<h4>MIGA Stage 1</h4>
+<p>单步噪声跨度 = $L_{\text{zig}}$<br>Zigzag减缓噪声变化<br>差距显著缩小</p>
+</div>
+<div class="compare-card good">
+<h4>MIGA Stage 2</h4>
+<p>单步噪声跨度 = 0<br>统一噪声级别去噪<br>完全匹配训练条件</p>
+</div>
+</div>
+
+<div class="code-block" data-label="MIGA TTA - 伪代码 (可信度: 高)">
+<pre><code><span class="com"># MIGA Two-Stage Training-Inference Alignment (TTA)</span>
+<span class="com"># 参考 Algorithm 5 in the paper</span>
+
+<span class="kw">def</span> <span class="fn">miga_tta_generation</span>(Q, t, N, L_zig, e, eps_theta, phi):
+    <span class="str">"""
+    Q: 初始化后的Zigzag噪声队列
+    t: 对应的时间步序列
+    N: 目标生成帧数
+    L_zig: Zigzag宽度 (如4或7)
+    e: Stage 1去噪到的时间步
+    """</span>
+    Q_gen = []
+
+    <span class="com"># ===== Stage 1: Zigzag Iterative Denoising =====</span>
+    n_iter = math.ceil(N / L_zig)
+    <span class="kw">for</span> i <span class="kw">in</span> range(n_iter):
+        <span class="com"># 对整个队列执行一步去噪</span>
+        Q = phi(Q, t, eps_theta)
+
+        <span class="com"># 出队L_zig个部分去噪的潜在特征</span>
+        <span class="kw">for</span> j <span class="kw">in</span> range(L_zig):
+            z_clean = Q.dequeue()
+            Q_gen.append(z_clean)
+            <span class="com"># 追加新的高斯噪声帧到队尾</span>
+            z_noise = torch.randn_like(z_clean)
+            Q.enqueue(z_noise)
+
+    <span class="com"># ===== Stage 2: Unified Noise Level Denoising =====</span>
+    <span class="com"># 所有Q_gen中的帧现在处于相同噪声级别</span>
+    t_unified = [tau_{e-1}] * len(Q_gen)
+
+    <span class="com"># 滑动窗口去噪直到完全干净</span>
+    <span class="kw">for</span> step <span class="kw">in</span> range(e - <span class="num">1</span>):
+        Q_gen = sliding_window_denoise(
+            Q_gen, t_unified, eps_theta, phi
+        )
+        t_unified = [t - <span class="num">1</span> <span class="kw">for</span> t <span class="kw">in</span> t_unified]
+
+    <span class="kw">return</span> Q_gen  <span class="com"># N个完全去噪的帧</span></code></pre>
+</div>
+
+<div class="insight">
+<div class="insight-title">实现细节</div>
+<p>对于VideoCrafter2基础模型，MIGA配置为$T=64$、$L_{\text{zig}}=4$、$\tau_e=10$。这意味着Stage 1将噪声跨度从16（$f_0$）缩减到4（$L_{\text{zig}}$），缩减比达到4倍。对于Wan2.1-1.3B，配置为$T=54$、$L_{\text{zig}}=7$，对应缩减比约为3倍。</p>
+</div>
+</section>
+
+<!-- ========== CH4 ========== -->
+<section id="ch4">
+<span class="section-tag">CH4 &middot; 核心创新二</span>
+<h2>双重一致性增强 (DCE)：自反思与远程引导</h2>
+
+<p>虽然TTA机制有效缓解了训练-推理差距，但长视频生成的另一个核心挑战——<strong>长期一致性</strong>——仍需专门的建模设计。MIGA提出了创新的<strong>双重一致性增强机制 (Dual Consistency Enhancement, DCE)</strong>，利用维护的潜在队列特性，从两个互补角度提升时序一致性。</p>
+
+<div class="svg-container">
+<svg viewBox="0 0 780 360" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="780" height="360" rx="16" fill="#faf5ff"/>
+  <!-- Title -->
+  <text x="390" y="30" text-anchor="middle" font-family="Noto Sans SC" font-size="14" font-weight="700" fill="#7e22ce">DCE双重一致性增强机制</text>
+  <!-- Queue representation -->
+  <rect x="60" y="55" width="660" height="80" rx="10" fill="white" stroke="#e9d5ff" stroke-width="1.5"/>
+  <!-- Queue segments -->
+  <rect x="70" y="62" width="180" height="66" rx="6" fill="#ffe4e6" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <rect x="260" y="62" width="200" height="66" rx="6" fill="#fef3c7" stroke="#fde68a" stroke-width="1"/>
+  <rect x="470" y="62" width="240" height="66" rx="6" fill="#d1fae5" stroke="#34d399" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <!-- Labels for segments -->
+  <text x="160" y="100" text-anchor="middle" font-family="Noto Sans SC" font-size="12" font-weight="700" fill="#f43f5e">高噪声尾部</text>
+  <text x="160" y="118" text-anchor="middle" font-family="Noto Sans SC" font-size="10" fill="#4c4b5e">自反思作用区域</text>
+  <text x="360" y="100" text-anchor="middle" font-family="Noto Sans SC" font-size="12" font-weight="600" fill="#92400e">中间过渡区</text>
+  <text x="590" y="100" text-anchor="middle" font-family="Noto Sans SC" font-size="12" font-weight="700" fill="#10b981">低噪声头部</text>
+  <text x="590" y="118" text-anchor="middle" font-family="Noto Sans SC" font-size="10" fill="#4c4b5e">远程引导作用区域</text>
+  <!-- Self-Reflection mechanism -->
+  <rect x="40" y="155" width="340" height="185" rx="12" fill="white" stroke="#fb7185" stroke-width="1.5"/>
+  <text x="210" y="180" text-anchor="middle" font-family="Noto Sans SC" font-size="13" font-weight="700" fill="#f43f5e">自反思 (Self-Reflection)</text>
+  <!-- Steps -->
+  <circle cx="80" cy="205" r="12" fill="#ffe4e6"/><text x="80" y="210" text-anchor="middle" font-size="10" font-weight="700" fill="#f43f5e">1</text>
+  <text x="100" y="210" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">计算一致性分数 C&#x2091;&#x2092;&#x2093;&#x2096;&#x2091;</text>
+  <circle cx="80" cy="235" r="12" fill="#ffe4e6"/><text x="80" y="240" text-anchor="middle" font-size="10" font-weight="700" fill="#f43f5e">2</text>
+  <text x="100" y="240" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">检测一致性异常 (C&#x2091;&#x2092;&#x2093;&#x2096;&#x2091; &lt; &#x3B4;&#x2090;&#x2095;&#x2097;&#x209E;)</text>
+  <circle cx="80" cy="265" r="12" fill="#ffe4e6"/><text x="80" y="270" text-anchor="middle" font-size="10" font-weight="700" fill="#f43f5e">3</text>
+  <text x="100" y="270" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">触发扩展搜索 (n&#x209B;&#x2090;&#x2098;&#x209A;个候选)</text>
+  <circle cx="80" cy="295" r="12" fill="#ffe4e6"/><text x="80" y="300" text-anchor="middle" font-size="10" font-weight="700" fill="#f43f5e">4</text>
+  <text x="100" y="300" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">选择最优候选替换异常帧</text>
+  <!-- Long-Range Guidance mechanism -->
+  <rect x="400" y="155" width="340" height="185" rx="12" fill="white" stroke="#34d399" stroke-width="1.5"/>
+  <text x="570" y="180" text-anchor="middle" font-family="Noto Sans SC" font-size="13" font-weight="700" fill="#10b981">远程帧引导 (Long-Range Guidance)</text>
+  <!-- Steps -->
+  <circle cx="440" cy="205" r="12" fill="#d1fae5"/><text x="440" y="210" text-anchor="middle" font-size="10" font-weight="700" fill="#10b981">1</text>
+  <text x="460" y="210" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">从队列头部稀疏采样 m&#x2091;&#x209E;&#x1D56;&#x1D43; 帧</text>
+  <circle cx="440" cy="235" r="12" fill="#d1fae5"/><text x="440" y="240" text-anchor="middle" font-size="10" font-weight="700" fill="#10b981">2</text>
+  <text x="460" y="240" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">将引导帧拼接到当前窗口前端</text>
+  <circle cx="440" cy="265" r="12" fill="#d1fae5"/><text x="440" y="270" text-anchor="middle" font-size="10" font-weight="700" fill="#10b981">3</text>
+  <text x="460" y="270" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">模型同时处理局部+远程帧</text>
+  <circle cx="440" cy="295" r="12" fill="#d1fae5"/><text x="440" y="300" text-anchor="middle" font-size="10" font-weight="700" fill="#10b981">4</text>
+  <text x="460" y="300" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">仅更新当前窗口，远程帧不变</text>
+</svg>
+<p class="svg-caption">图：MIGA双重一致性增强机制——自反思作用于高噪声尾部，远程引导作用于低噪声头部</p>
+</div>
+
+<p>DCE的两个组件针对队列的不同位置发挥互补作用：<strong>自反思</strong>关注队列尾部的高噪声潜在特征，通过自我一致性评估和纠正确保新生成内容的质量；<strong>远程帧引导</strong>则关注队列头部的低噪声潜在特征，将其融入每次局部去噪过程中，建立远距离帧之间的特征交互。</p>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：队列结构的双重利用</div>
+<p>DCE的设计巧妙地利用了Zigzag队列的自然结构：尾部的高噪声帧是"不确定的"，需要自我纠正；头部的低噪声帧是"确定的"，可以作为可靠的引导信号。这种对同一数据结构的双重解读——既是需要修正的对象，又是可靠的参考——体现了作者对扩散模型去噪过程的深刻理解。</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：与ScalingNoise的本质区别</div>
+<p>ScalingNoise在每一步都执行搜索，计算开销巨大且缺乏针对性。MIGA的自反思机制则首先定位一致性异常的位置，只在必要时触发搜索——这是一种"按需计算"的策略。更重要的是，MIGA的搜索在高噪声阶段进行，纠正效果可以通过后续去噪过程传播到整个视频，而ScalingNoise的搜索在干净像素级别进行，无法影响早期帧的布局决策。</p>
+</div>
+</section>
+
+<!-- ========== CH5 ========== -->
+<section id="ch5">
+<span class="section-tag">CH5 &middot; 技术深度</span>
+<h2>自反思机制：无外部评估器的一致性检测</h2>
+
+<p>自反思机制的核心创新在于提出了一种<strong>无需外部评估模型</strong>的一致性检测方法。现有方法（如ScalingNoise）依赖DINO等外部模型进行一致性评估，不仅增加了计算开销，还需要额外的去噪和VAE解码步骤。MIGA的关键发现是：VAE预训练产生的潜在空间具有<strong>强可解释性</strong>，潜在特征之间的距离直接反映了对应视频帧之间的差异程度。</p>
+
+<h3>一致性分数计算</h3>
+
+<div class="formula">
+<div class="formula-label">一致性分数定义</div>
+$$q'_{\text{eval}} = \text{norm}_1(\text{mean}_2(q_{\text{eval}})), \quad q'_{\text{ref}} = \text{norm}_1(\text{mean}_2(q_{\text{ref}}))$$
+$$C_{\text{score}} = \text{mean}_1(\text{mean}_2(q'_{\text{eval}} \cdot q'^{\text{T}}_{\text{ref}}))$$
+<p style="margin-top:8px;font-size:13px;color:#4c4b5e;">其中 $q_{\text{eval}}$ 为待评估的 $f_{\text{eval}}$ 个连续潜在特征，$q_{\text{ref}}$ 为前 $f_{\text{ref}}$ 个相邻潜在特征作为参考</p>
+</div>
+
+<h3>关键发现：噪声一致性与干净一致性的强相关性</h3>
+
+<p>论文中最令人惊讶的发现之一是：即使在高噪声级别下，潜在特征的一致性分数与干净潜在特征的一致性分数之间仍然保持<strong>强相关性</strong>。这意味着可以在去噪的早期阶段就检测到一致性异常，而无需等到生成干净像素后再评估。</p>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig4_ablation.webp" alt="消融研究可视化" class="hero-img" style="max-width:720px">
+<p class="figure-caption">图：消融研究可视化——从基线依次添加Stage 1、Stage 2和DCE机制的效果对比。黄色框标识噪声突出区域，红色框标识与前帧不一致的区域</p>
+</div>
+
+<div class="formula">
+<div class="formula-label">相关性分析结果</div>
+$$\rho(C_{\text{score}}^{\text{noisy}}, C_{\text{score}}^{\text{clean}}) \gg 0.8 \quad \text{even at noise level} = 40$$
+<p style="margin-top:8px;font-size:13px;color:#4c4b5e;">最大噪声级别为50时，相关系数仍保持在0.8以上</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：潜在空间的"一致性保持"特性</div>
+<p>VAE的潜在空间不仅是数据的压缩表示，更是一个保持语义一致性的度量空间。高噪声扰动虽然改变了潜在特征的绝对值，但相对关系（一致性模式）基本保持不变。这一发现不仅支撑了MIGA的自反思机制，也为更广泛的扩散模型研究提供了重要启示——潜在空间的几何结构在去噪过程中是稳定的。</p>
+</div>
+
+<h3>渐进式引导搜索策略</h3>
+
+<p>当检测到一致性异常时，MIGA设计了<strong>渐进式引导搜索</strong>策略进行纠正。该策略首先随机生成$n_{\text{samp}}$个高斯噪声作为候选起点，然后使用已通过评估的引导帧$q_{\text{guid}}$作为参考，对每个候选进行迭代去噪。最终选择一致性分数最高的候选替换异常帧。</p>
+
+<div class="code-block" data-label="自反思搜索 - 伪代码 (可信度: 高)">
+<pre><code><span class="com"># MIGA Self-Reflection: 渐进式引导搜索</span>
+<span class="com"># 参考 Algorithm 6 in the paper</span>
+
+<span class="kw">def</span> <span class="fn">self_reflection_search</span>(
+    Q, f_judge, f_ref, f_eval, f_guid,
+    delta_adju, n_samp, eps_theta, phi
+):
+    <span class="str">"""
+    Q: 当前噪声队列
+    f_judge: 判断位置索引
+    delta_adju: 一致性异常阈值
+    n_samp: 搜索候选数
+    """</span>
+    <span class="com"># 1. 计算当前一致性分数</span>
+    q_ref = Q[f_judge - f_ref : f_judge]
+    q_eval = Q[f_judge : f_judge + f_eval]
+    C_init = compute_consistency_score(q_eval, q_ref)
+
+    <span class="com"># 2. 检测一致性异常</span>
+    C_prev = get_previous_score()  <span class="com"># 前一个块的分数</span>
+    <span class="kw">if</span> C_prev - C_init <span class="kw">not</span> &lt; delta_adju:
+        <span class="kw">return</span> Q  <span class="com"># 无异常，直接返回</span>
+
+    <span class="com"># 3. 触发扩展搜索</span>
+    q_guid = Q[f_judge - f_guid : f_judge]
+    best_score = C_init
+    best_sample = <span class="kw">None</span>
+
+    <span class="kw">for</span> k <span class="kw">in</span> range(n_samp):
+        <span class="com"># 随机初始化候选起点</span>
+        q_k = [torch.randn_like(Q[<span class="num">0</span>])]
+
+        <span class="com"># 渐进式引导去噪</span>
+        <span class="kw">for</span> step <span class="kw">in</span> range(L - f_judge):
+            <span class="com"># 拼接引导帧和候选帧</span>
+            input_k = concat(q_guid, q_k)
+            <span class="com"># 执行一步去噪</span>
+            output = phi(input_k, t, eps_theta)
+            <span class="com"># 仅更新候选部分</span>
+            q_k.append(output[-<span class="num">1</span>])
+            <span class="com"># 追加新噪声帧</span>
+            q_k.append(torch.randn_like(q_k[<span class="num">0</span>]))
+
+        <span class="com"># 评估候选质量</span>
+        C_k = compute_consistency_score(q_k[:f_eval], q_guid)
+        <span class="kw">if</span> C_k &gt; best_score:
+            best_score = C_k
+            best_sample = q_k
+
+    <span class="com"># 4. 替换异常帧</span>
+    <span class="kw">if</span> best_sample <span class="kw">is not</span> <span class="kw">None</span>:
+        Q[f_judge:] = best_sample
+
+    <span class="kw">return</span> Q</code></pre>
+</div>
+
+<div class="insight">
+<div class="insight-title">Test-Time Scaling的视频生成适配</div>
+<p>自反思机制本质上是将LLM领域的Test-Time Scaling (TTS)思想适配到视频生成场景。与LLM的"思考-验证-修正"类似，MIGA在推理时通过"生成-评估-搜索"循环提升视频质量。关键创新在于：(1) 利用潜在空间的一致性分数避免外部评估器；(2) 通过噪声-干净相关性实现早期异常检测；(3) 渐进式引导搜索确保纠正效果的传播。</p>
+</div>
+</section>
+
+<!-- ========== CH6 ========== -->
+<section id="ch6">
+<span class="section-tag">CH6 &middot; 技术深度</span>
+<h2>远程帧引导：打破局部窗口的视野限制</h2>
+
+<p>基础模型的滑动窗口推理机制意味着，每次去噪时模型只能"看到"$f_0$个相邻帧。这种局部视野严重限制了远距离帧之间的信息交互，导致长视频的一致性随距离衰减。MIGA的<strong>远程帧引导 (Long-Range Frame Guidance)</strong>机制通过从队列头部稀疏采样$m_{\text{guid}}$个低噪声帧，将其拼接到当前窗口前端，显式建立远距离帧之间的特征交互。</p>
+
+<div class="formula">
+<div class="formula-label">远程引导输入构造</div>
+$$q_{\text{input}} = [z^1, \ldots, z^{m_{\text{guid}}}, z^l, \ldots, z^{l+f_0-m_{\text{guid}}-1}]$$
+<p style="margin-top:8px;font-size:13px;color:#4c4b5e;">当 $l \in (m_{\text{guid}}, L - m_{\text{guid}}]$ 时，从位置 $l$ 之前均匀采样 $m_{\text{guid}}$ 个引导帧</p>
+</div>
+
+<div class="svg-container">
+<svg viewBox="0 0 780 260" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="780" height="260" rx="16" fill="#faf5ff"/>
+  <text x="390" y="28" text-anchor="middle" font-family="Noto Sans SC" font-size="14" font-weight="700" fill="#7e22ce">远程帧引导: 扩展模型视野</text>
+  <!-- Queue -->
+  <rect x="50" y="50" width="680" height="50" rx="8" fill="white" stroke="#e9d5ff" stroke-width="1.5"/>
+  <!-- Head (clean) -->
+  <rect x="58" y="57" width="120" height="36" rx="4" fill="#d1fae5" stroke="#34d399" stroke-width="1.5"/>
+  <text x="118" y="80" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#065f46">低噪声头部</text>
+  <!-- Middle -->
+  <rect x="186" y="57" width="400" height="36" rx="4" fill="#f3e8ff" stroke="#c084fc" stroke-width="1"/>
+  <text x="386" y="80" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#7e22ce">中间帧...</text>
+  <!-- Current window -->
+  <rect x="594" y="57" width="128" height="36" rx="4" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+  <text x="658" y="80" text-anchor="middle" font-family="Noto Sans SC" font-size="11" font-weight="600" fill="#92400e">当前窗口</text>
+  <!-- Guidance sampling arrow -->
+  <path d="M118,97 C118,120 658,120 658,97" fill="none" stroke="#34d399" stroke-width="2.5" stroke-dasharray="6,3"/>
+  <text x="390" y="130" text-anchor="middle" font-family="Noto Sans SC" font-size="12" font-weight="600" fill="#10b981">均匀采样 m&#x2091;&#x209E;&#x1D56;&#x1D43; = 6 个引导帧</text>
+  <!-- Expanded window -->
+  <rect x="340" y="150" width="400" height="80" rx="10" fill="white" stroke="#34d399" stroke-width="2"/>
+  <text x="540" y="170" text-anchor="middle" font-family="Noto Sans SC" font-size="12" font-weight="600" fill="#10b981">扩展后的模型输入</text>
+  <!-- Guide frames in expanded window -->
+  <rect x="350" y="180" width="100" height="38" rx="4" fill="#d1fae5" stroke="#34d399" stroke-width="1.5"/>
+  <text x="400" y="204" text-anchor="middle" font-family="Noto Sans SC" font-size="10" fill="#065f46">引导帧 x6</text>
+  <!-- Local frames in expanded window -->
+  <rect x="460" y="180" width="270" height="38" rx="4" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="595" y="204" text-anchor="middle" font-family="Noto Sans SC" font-size="10" fill="#92400e">局部窗口帧 x(f&#x2080;-m&#x2091;&#x209E;&#x1D56;&#x1D43;)</text>
+  <!-- Arrow -->
+  <line x1="594" y1="107" x2="460" y2="173" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="500" y="148" font-family="Noto Sans SC" font-size="10" fill="#92400e">替换</text>
+  <!-- Key point -->
+  <text x="390" y="250" text-anchor="middle" font-family="Noto Sans SC" font-size="11" fill="#4c4b5e">仅更新局部窗口帧，引导帧保持不变</text>
+</svg>
+<p class="svg-caption">图：远程帧引导机制——从队列头部采样低噪声帧扩展模型视野</p>
+</div>
+
+<p>引导帧的选择策略是<strong>均匀采样</strong>：从$\min(m_{\text{guid}} \cdot L_{\text{zig}}, l-1)$个前序帧中均匀选取$m_{\text{guid}}$个。这种稀疏采样既保证了远程信息的覆盖，又避免了过度增加计算负担。由于引导帧已经是低噪声的干净帧，它们为当前去噪过程提供了稳定的语义锚点。</p>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：稀疏采样的信息论基础</div>
+<p>远程引导的均匀稀疏采样策略有其信息论基础：在长视频中，相邻帧之间的信息高度冗余，而远距离帧之间的信息更具互补性。通过均匀采样而非连续采样，每增加一个引导帧所带来的边际信息增益最大化。实验结果表明，$m_{\text{guid}}=6$时达到最优性能，这暗示了在信息增益和计算开销之间存在一个自然的平衡点。</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：引导帧的"语义锚点"效应</div>
+<p>低噪声的引导帧在去噪过程中扮演着"语义锚点"的角色——它们已经接近最终的干净状态，包含了确定的语义信息（如主体外观、背景布局、运动方向）。当模型处理这些引导帧与当前窗口帧的拼接输入时，注意力机制自然地建立了远距离帧之间的特征对齐，从而确保新生成的帧在语义上与早期帧保持一致。</p>
+</div>
+
+<div class="code-block" data-label="远程帧引导 - 实现 (可信度: 中高)">
+<pre><code><span class="com"># MIGA Long-Range Frame Guidance</span>
+<span class="com"># 集成到滑动窗口推理中</span>
+
+<span class="kw">def</span> <span class="fn">guided_sliding_window_denoise</span>(
+    Q, t, eps_theta, phi, m_guid, L_zig
+):
+    <span class="str">"""
+    Q: 噪声队列 (L个帧)
+    m_guid: 引导帧数量
+    L_zig: Zigzag宽度
+    """</span>
+    L = len(Q)
+    f0 = model.max_frames  <span class="com"># 基础模型窗口大小</span>
+    l_stride = f0 // <span class="num">2</span>
+    n_iter = math.ceil((L - f0) / l_stride) + <span class="num">1</span>
+
+    <span class="kw">for</span> i <span class="kw">in</span> range(n_iter):
+        s_idx = i * l_stride
+        e_idx = min(s_idx + f0, L)
+
+        <span class="kw">if</span> s_idx &lt;= m_guid:
+            <span class="com"># 队列头部: 不应用引导</span>
+            <span class="com"># (引导帧不足)</span>
+            q_input = Q[s_idx : e_idx]
+        <span class="kw">else</span>:
+            <span class="com"># 从前序帧中均匀采样引导帧</span>
+            n_prior = min(m_guid * L_zig, s_idx)
+            guide_indices = np.linspace(
+                <span class="num">0</span>, n_prior - <span class="num">1</span>, m_guid
+            ).astype(int)
+            q_guid = [Q[idx] <span class="kw">for</span> idx <span class="kw">in</span> guide_indices]
+
+            <span class="com"># 拼接: [引导帧 | 局部窗口帧]</span>
+            q_local = Q[s_idx : e_idx - m_guid]
+            q_input = q_guid + q_local
+
+        <span class="com"># 执行去噪 (仅更新局部帧)</span>
+        q_output = phi(q_input, t[s_idx:e_idx], eps_theta)
+
+        <span class="com"># 引导帧保持不变，仅更新局部帧</span>
+        <span class="kw">for</span> j <span class="kw">in</span> range(min(l_stride, e_idx - s_idx)):
+            Q[s_idx + m_guid + j] = q_output[m_guid + j]
+
+    <span class="kw">return</span> Q</code></pre>
+</div>
+
+<div class="insight">
+<div class="insight-title">参数调优</div>
+<p>消融实验表明，$m_{\text{guid}}=6$时达到最优的Overall Score (96.87)。$m_{\text{guid}}=0$时不应用引导，性能下降约1个点；$m_{\text{guid}}=8$时性能略有下降，可能是因为过多引导帧压缩了局部窗口的有效帧数。这验证了稀疏采样策略的合理性。</p>
+</div>
+</section>
+
+<!-- ========== CH7 ========== -->
+<section id="ch7">
+<span class="section-tag">CH7 &middot; 实验验证</span>
+<h2>全面实验：VBench与NarrLV双基准SOTA</h2>
+
+<p>MIGA在两个主流基准上进行了全面评估：<strong>VBench</strong>评估视频质量（主体一致性、背景一致性、运动平滑度、时间闪烁），<strong>NarrLV</strong>评估叙事表达能力（场景属性、目标属性、目标动作）。</p>
+
+<h3>VBench定量结果</h3>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig1_teaser.webp" alt="MIGA生成示例" class="hero-img" style="max-width:720px">
+<p class="figure-caption">图：MIGA生成的1000+帧长视频示例，基础模型Wan2.1-1.3B默认仅支持81帧</p>
+</div>
+
+<table class="result-table">
+<thead>
+<tr><th>方法</th><th>无限帧</th><th>主体一致性</th><th>背景一致性</th><th>运动平滑</th><th>时间闪烁</th><th>总分</th></tr>
+</thead>
+<tbody>
+<tr><td colspan="7" style="background:var(--lav-50);font-weight:600;text-align:left;color:var(--lav-700)">VideoCrafter2-Based</td></tr>
+<tr><td>FreePCA</td><td>否</td><td>93.57</td><td>95.24</td><td>93.73</td><td>91.27</td><td>93.45</td></tr>
+<tr><td>FreeLong</td><td>否</td><td>95.72</td><td>96.42</td><td>98.38</td><td>97.28</td><td>96.95</td></tr>
+<tr><td>FIFO-Diffusion</td><td>是</td><td>92.92</td><td>95.01</td><td>97.19</td><td>94.94</td><td>95.02</td></tr>
+<tr><td>ScalingNoise</td><td>是</td><td>94.29</td><td>95.52</td><td>97.86</td><td>96.12</td><td>95.95</td></tr>
+<tr class="ours"><td><strong>MIGA (ours)</strong></td><td>是</td><td class="best">97.66</td><td class="best">96.99</td><td class="best">98.60</td><td class="best">98.03</td><td class="best">97.82</td></tr>
+<tr><td colspan="7" style="background:var(--lav-50);font-weight:600;text-align:left;color:var(--lav-700)">Wan2.1-Based</td></tr>
+<tr><td>FIFO-Diffusion</td><td>是</td><td>92.67</td><td>93.37</td><td>98.03</td><td>97.09</td><td>95.29</td></tr>
+<tr class="ours"><td><strong>MIGA (ours)</strong></td><td>是</td><td class="best">96.46</td><td class="best">95.50</td><td class="best">98.85</td><td class="best">98.14</td><td class="best">97.24</td></tr>
+</tbody>
+</table>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：无限帧方法 vs 有限扩展方法的公平比较</div>
+<p>值得注意的是，MIGA作为无限帧生成方法，在VBench上超越了FreeLong等有限扩展方法。这意味着MIGA不仅解决了显存约束问题（恒定显存 vs 线性增长），还在生成质量上实现了突破。更有趣的是，Wan2.1-based MIGA的主体一致性分数（96.46）略低于VideoCrafter2-based MIGA（97.66），论文将此归因于Wan2.1生成的是写实风格视频，一致性维护难度高于动画风格。</p>
+</div>
+
+<h3>NarrLV叙事表达评估</h3>
+
+<p>NarrLV是一个评估长视频叙事表达能力的新兴基准，通过变化的文本提示测试模型的多场景转换能力。</p>
+
+<table class="result-table">
+<thead>
+<tr><th>方法</th><th>无限帧</th><th>TNA=2 satt</th><th>TNA=2 tatt</th><th>TNA=2 tact</th><th>TNA=4 satt</th><th>TNA=4 tatt</th><th>TNA=4 tact</th></tr>
+</thead>
+<tbody>
+<tr><td colspan="8" style="background:var(--lav-50);font-weight:600;text-align:left;color:var(--lav-700)">Wan2.1-Based</td></tr>
+<tr><td>FIFO-Diffusion</td><td>是</td><td>67.77</td><td>64.25</td><td>65.40</td><td>57.43</td><td>56.10</td><td>53.89</td></tr>
+<tr class="ours"><td><strong>MIGA</strong></td><td>是</td><td class="best">79.32</td><td class="best">67.87</td><td class="best">67.94</td><td class="best">75.05</td><td class="best">72.31</td><td class="best">62.90</td></tr>
+</tbody>
+</table>
+
+<div class="insight">
+<div class="insight-title">NarrLV上的显著优势</div>
+<p>在NarrLV的TNA=4设置下（最复杂的叙事场景），MIGA相比FIFO-Diffusion在场景属性上提升了17.62分（从57.43到75.05），这是一个巨大的改进。这表明MIGA的双重一致性增强机制不仅提升了视觉一致性，还显著增强了模型对复杂叙事内容的表达能力——因为只有在视觉稳定的前提下，语义信息才能有效传达。</p>
+</div>
+
+<h3>长视频生成示例</h3>
+
+<div class="figure">
+<img src="assets/Figure_A6__Long_p27.webp" alt="长视频生成示例1" class="hero-img" style="max-width:720px">
+<p class="figure-caption">图：MIGA生成的长视频序列示例，展示跨数百帧的主体和背景一致性</p>
+</div>
+
+<div class="figure">
+<img src="assets/Figure_A7__Long_p28.webp" alt="长视频生成示例2" class="hero-img" style="max-width:720px">
+<p class="figure-caption">图：更多MIGA长视频生成示例，展示丰富的叙事内容和稳定的视觉质量</p>
+</div>
+</section>
+
+<!-- ========== CH8 ========== -->
+<section id="ch8">
+<span class="section-tag">CH8 &middot; 消融研究</span>
+<h2>消融研究：每个组件的独立贡献</h2>
+
+<p>为了验证各机制设计的有效性，论文在VideoCrafter2-based MIGA上进行了全面的消融研究，系统性地分析TTA和DCE各组件的独立和组合贡献。</p>
+
+<h3>核心机制消融</h3>
+
+<table class="result-table">
+<thead>
+<tr><th>TTA</th><th>DCE</th><th>主体一致性</th><th>背景一致性</th><th>运动平滑</th><th>时间闪烁</th><th>总分</th></tr>
+</thead>
+<tbody>
+<tr><td>-</td><td>-</td><td>92.92</td><td>95.01</td><td>97.19</td><td>94.94</td><td>95.02</td></tr>
+<tr><td>&#10003;</td><td>-</td><td>96.74</td><td>96.75</td><td>97.57</td><td>97.12</td><td>97.05</td></tr>
+<tr><td>-</td><td>&#10003;</td><td>96.10</td><td>96.47</td><td>97.88</td><td>96.56</td><td>96.75</td></tr>
+<tr class="ours"><td>&#10003;</td><td>&#10003;</td><td class="best">97.66</td><td class="best">96.99</td><td class="best">98.60</td><td class="best">98.03</td><td class="best">97.82</td></tr>
+</tbody>
+</table>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：TTA与DCE的互补性分析</div>
+<p>单独使用TTA和DCE分别带来+2.03%和+1.73%的总分提升，而两者组合后提升达到+2.80%。这说明两个机制的作用存在正交性：TTA主要解决训练-推理差距带来的系统性退化，DCE则针对长期一致性的渐进性衰减。两者分别从"输入条件优化"和"输出质量增强"两个维度提升性能，组合效果优于简单叠加。</p>
+</div>
+
+<h3>TTA两阶段消融</h3>
+
+<div class="figure">
+<img src="assets/_precise/Table_6_Ablation_results_p9.webp" alt="TTA消融" class="hero-img" style="max-width:720px">
+<p class="figure-caption">表：TTA两阶段设计的消融结果——Stage 1和Stage 2的逐步贡献</p>
+</div>
+
+<p>从基线到Stage 1，主体一致性从92.92提升到95.98（+3.06），这主要归功于Zigzag结构对噪声跨度的大幅缩减。Stage 2进一步将总分从96.78提升到97.05，其关键贡献在于<strong>抑制视频噪声</strong>——统一噪声级别的去噪确保了最终帧的干净程度。</p>
+
+<h3>Zigzag宽度 $L_{\text{zig}}$ 的影响</h3>
+
+<table class="result-table">
+<thead>
+<tr><th>$L_{\text{zig}}$</th><th>主体一致性</th><th>背景一致性</th><th>运动平滑</th><th>时间闪烁</th><th>总分</th></tr>
+</thead>
+<tbody>
+<tr><td>1</td><td>94.23</td><td>94.52</td><td>97.98</td><td>96.47</td><td>95.80</td></tr>
+<tr><td>2</td><td>94.24</td><td>95.93</td><td>98.55</td><td>97.90</td><td>96.66</td></tr>
+<tr class="ours"><td>4</td><td>95.37</td><td class="best">95.96</td><td class="best">98.65</td><td class="best">98.02</td><td class="best">97.00</td></tr>
+<tr><td>6</td><td>95.14</td><td>96.04</td><td>98.60</td><td>97.97</td><td>96.94</td></tr>
+<tr><td>8</td><td class="best">95.54</td><td>95.96</td><td>98.56</td><td>97.90</td><td>96.99</td></tr>
+</tbody>
+</table>
+
+<div class="insight">
+<div class="insight-title">L_zig的饱和效应</div>
+<p>$L_{\text{zig}}$从1增加到4时，总分持续提升（95.80到97.00）；但继续增加到6或8时，性能趋于饱和甚至略有下降。这表明噪声跨度缩减存在边际递减效应：当$L_{\text{zig}}$足够大时，噪声跨度已经小到模型可以轻松处理的程度，进一步缩减带来的收益有限。$L_{\text{zig}}=4$是性能-效率的最优平衡点。</p>
+</div>
+
+<h3>调整阈值 $\delta_{\text{adju}}$ 的影响</h3>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig5_threshold.webp" alt="阈值消融" class="hero-img" style="max-width:720px">
+<p class="figure-caption">图：调整阈值δ_adju对总分、校正率和成功率的影响</p>
+</div>
+
+<p>阈值$\delta_{\text{adju}}$控制自反思搜索的触发频率。较小的阈值导致更频繁的搜索，提升了校正率$R_{\text{corr}}$和总分，但当阈值过小时，$R_{\text{succ}}$下降（触发了不必要的搜索）。$\delta_{\text{adju}}=0.01$是性能与计算开销的最优平衡点。</p>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：Test-Time Scaling的阈值敏感性</div>
+<p>$\delta_{\text{adju}}$的消融结果揭示了Test-Time Scaling在视频生成中的一个关键特性：搜索的收益存在饱和点。当一致性异常的发生概率有限时，增加搜索频率只能捕获到有限的额外异常。这与LLM中TTS的观察一致——推理时计算的增加并非线性提升性能，而是存在一个"计算效率前沿"。MIGA通过$\delta_{\text{adju}}$参数显式地控制这一前沿，使用户可以根据计算预算灵活调整。</p>
+</div>
+
+<h3>引导帧数量 $m_{\text{guid}}$ 的影响</h3>
+
+<table class="result-table">
+<thead>
+<tr><th>$m_{\text{guid}}$</th><th>主体一致性</th><th>背景一致性</th><th>运动平滑</th><th>时间闪烁</th><th>总分</th></tr>
+</thead>
+<tbody>
+<tr><td>0</td><td>94.23</td><td>94.52</td><td>97.98</td><td>96.47</td><td>95.80</td></tr>
+<tr><td>2</td><td>94.66</td><td>94.72</td><td>98.64</td><td>98.05</td><td>96.52</td></tr>
+<tr><td>4</td><td>94.59</td><td>94.58</td><td>98.64</td><td>98.10</td><td>96.48</td></tr>
+<tr class="ours"><td>6</td><td class="best">95.45</td><td class="best">95.69</td><td>98.45</td><td>97.89</td><td class="best">96.87</td></tr>
+<tr><td>8</td><td>95.32</td><td>95.12</td><td class="best">98.60</td><td class="best">98.05</td><td>96.77</td></tr>
+</tbody>
+</table>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：引导帧的最优数量与局部-远程平衡</div>
+<p>$m_{\text{guid}}$的消融结果揭示了一个有趣的U形趋势：从0到6持续提升，8时略有下降。这是因为引导帧占据了模型输入窗口的一部分——过多的引导帧会压缩局部窗口的有效帧数，减少模型处理当前区域的信息量。$m_{\text{guid}}=6$代表了"远程语义信息"与"局部细节信息"之间的最优平衡点。</p>
+</div>
+</section>
+
+<!-- ========== CH9 ========== -->
+<section id="ch9">
+<span class="section-tag">CH9 &middot; 科研问题</span>
+<h2>开放性科研问题</h2>
+
+<p>基于对MIGA论文的深入分析，我们提出以下五个具有研究价值的开放性问题，每个问题都包含理论分析和潜在的调查方向。</p>
+
+<div class="rq-card">
+<span class="rq-tag">RQ-1</span>
+<h4>自反思机制能否与更复杂的搜索策略结合？</h4>
+<p><strong>理论分析：</strong>MIGA当前的渐进式引导搜索采用随机采样+贪心选择策略，搜索效率受限于候选多样性。在LLM领域，蒙特卡洛树搜索(MCTS)、束搜索(Beam Search)等结构化搜索已被证明能显著提升生成质量。<br><br><strong>调查方向：</strong>探索将MCTS引入自反思搜索的可能性——每个候选生成路径可以作为树的一个分支，利用一致性分数作为节点评估函数。关键挑战在于如何设计高效的剪枝策略，避免搜索空间的指数级膨胀。另一个方向是将搜索过程与扩散模型的采样器设计相结合，例如在DDPM的每一步引入多候选评估。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">RQ-2</span>
+<h4>Zigzag结构的最优宽度是否依赖于视频内容复杂度？</h4>
+<p><strong>理论分析：</strong>MIGA对所有视频统一使用$L_{\text{zig}}=4$的固定宽度，但不同内容复杂度的视频可能需要不同的噪声跨度缩减策略。简单场景（如静态背景）可能容忍更大的$L_{\text{zig}}$，而复杂场景（如快速运动、多主体交互）可能需要更小的$L_{\text{zig}}$以确保模型能力的充分发挥。<br><br><strong>调查方向：</strong>设计自适应的$L_{\text{zig}}$调度策略——在生成过程中根据内容复杂度动态调整Zigzag宽度。可以通过前序帧的运动幅度、场景变化率等指标估计当前区域的复杂度。另一种思路是学习一个轻量级的控制器网络，根据当前队列状态预测最优$L_{\text{zig}}$。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">RQ-3</span>
+<h4>一致性分数在潜在空间的几何解释是什么？</h4>
+<p><strong>理论分析：</strong>MIGA发现潜在空间的余弦相似度能有效衡量帧间一致性，且该指标在高噪声下仍保持强相关性。这一现象的理论解释尚不完整——为什么VAE的潜在空间具有这种"噪声不变的一序保持"特性？这是否与VAE的训练目标（重构损失+KL散度）有关？<br><br><strong>调查方向：</strong>从信息几何角度分析VAE潜在空间的结构特性，特别是噪声扰动对流形结构的影响。可以通过可视化高维潜在空间的局部几何（如测地线距离、曲率）来理解一致性分数的数学基础。另一个方向是探索其他潜在空间（如预训练DINO-ViT的特征空间）是否具有类似的性质。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">RQ-4</span>
+<h4>MIGA框架能否扩展到多模态条件控制的长视频生成？</h4>
+<p><strong>理论分析：</strong>论文展示了MIGA支持多文本提示控制的能力（不同时间位置对应不同文本条件）。然而，实际应用中的长视频生成往往需要更丰富的条件控制，如深度图序列、光流、人体姿态、音频信号等。这些多模态条件与MIGA的Zigzag队列和DCE机制之间可能存在有趣的交互效应。<br><br><strong>调查方向：</strong>探索在MIGA框架中引入额外条件信号的方法——例如，将深度图序列作为队列中帧的附加特征，或利用音频信号指导自反思搜索的方向。关键挑战在于如何在保持恒定显存的同时处理多模态信息的对齐和融合。另一个有趣的方向是探索条件信号的一致性是否可以辅助MIGA的一致性检测机制。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">RQ-5</span>
+<h4>训练-推理对齐的理论边界在哪里？</h4>
+<p><strong>理论分析：</strong>TTA通过两阶段设计将噪声跨度从$f_0$缩减到$L_{\text{zig}}$再到0。理论上，噪声跨度的缩减极限是0（完全匹配训练条件），但这是否意味着无限缩减一定带来无限提升？是否存在一个"对齐收益递减"的理论边界？FIFO-Diffusion的误差上界分析是否可以扩展到TTA框架？<br><br><strong>调查方向：</strong>建立TTA框架的严格误差上界理论，分析$L_{\text{zig}}$、$\tau_e$、Stage 2步数等超参数对生成质量的定量影响。另一个方向是探索"过度对齐"的可能性——当噪声跨度过小时，自回归生成的信息传递能力是否会被削弱？这可能揭示训练-推理对齐与自回归信息流之间的根本性权衡。</p>
+</div>
+
+<!-- ========== Summary ========== -->
+<section id="summary">
+<span class="section-tag">CONCLUSION &middot; 总结</span>
+<h2>论文总结与未来展望</h2>
+
+<div class="summary-box">
+<h3>MIGA的核心贡献</h3>
+<p>MIGA提出了一个优雅的无训练无限帧长视频生成框架，通过两个互补的创新机制解决了现有方法的根本性局限：</p>
+<ul style="margin:12px 0;padding-left:20px;color:var(--ink-soft);font-size:14px;line-height:1.8">
+<li><strong>两阶段训练-推理对齐 (TTA)</strong>：通过Zigzag迭代去噪和统一噪声级别去噪，将推理时的噪声跨度从$f_0$缩减到0，系统性地弥合训练-推理差距</li>
+<li><strong>双重一致性增强 (DCE)</strong>：自反思机制利用潜在空间的噪声不变一致性实现无外部评估器的异常检测与纠正，远程帧引导通过稀疏采样建立远距离帧之间的特征交互</li>
+</ul>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：从方法论视角审视MIGA的贡献</div>
+<p>MIGA的成功不仅在于具体的技术方案，更在于其方法论层面的启示：(1) "对齐"思想可以系统性地解决训练-推理差距，这一原则在其他生成任务中也具有普适性；(2) 潜在空间的几何性质可以被创造性地用于设计无外部依赖的评估机制；(3) 自回归框架的队列结构不仅是生成的基础设施，更可以被双重利用为一致性增强的工具。这些洞察对未来的研究方向具有重要的指导价值。</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：局限性与未来方向</div>
+<p>MIGA的计算效率分析表明，自反思搜索虽然只在异常发生时触发，但每次搜索的计算开销仍然可观（需要生成多个候选并评估）。未来的研究可以探索更高效的搜索策略，如利用扩散模型的梯度信息进行定向搜索，或设计轻量级的异常预测模型提前判断是否需要搜索。此外，MIGA目前在动画风格视频上的表现优于写实风格，这暗示了风格感知的自适应策略可能是一个有价值的研究方向。</p>
+</div>
+
+<div class="figure">
+<img src="assets/Figure_A3__Illustration_p21.webp" alt="MIGA框架全景" class="hero-img" style="max-width:720px">
+<p class="figure-caption">图：MIGA框架的完整流程图——展示自反思和远程引导在队列中的作用位置</p>
+</div>
+
+<div class="stats-grid">
+<div class="stat-card"><div class="num">ICML</div><div class="label">2026 顶会</div></div>
+<div class="stat-card"><div class="num">SOTA</div><div class="label">VBench 双模型</div></div>
+<div class="stat-card"><div class="num">0训练</div><div class="label">纯推理优化</div></div>
+<div class="stat-card"><div class="num">∞帧</div><div class="label">恒定显存生成</div></div>
+</div>
+
+</section>
+
+</div>
+
+<footer>
+<p>MIGA: Enhancing Train-Free Infinite-Frame Generation for Consistent Long Videos &middot; ICML 2026</p>
+<p style="margin-top:8px">Authors: Xiaokun Feng, Jiashu Zhu, Meiqi Wu, Chubin Chen, Fangyuan Mao, Haiyang Guo, Jiahong Wu, Xiangxiang Chu, Kaiqi Huang</p>
+<p style="margin-top:8px"><a href="https://xiaokunfeng.github.io/miga_homepage/" target="_blank">Project Page</a> &middot; <a href="https://arxiv.org/abs/2605.18233" target="_blank">arXiv</a></p>
+</footer>
+
+</body>
+</html>

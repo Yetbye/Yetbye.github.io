@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAST-AR: ANN加速自回归视频扩散 | 论文精读</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- MathJax 3.x with three-layer CDN fallback and skipHtmlTags -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true
+  },
+  chtml: { scale: 1.05 },
+  startup: { typeset: true },
+  options: {
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+  }
+};
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js" onerror="this.remove();document.write('<script src=\"https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js\"><\/script>')"></script>
+<script>
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    if (!window.MathJax || !window.MathJax.startup || !window.MathJax.startup.promise) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+      document.head.appendChild(s);
+    }
+  }, 5000);
+});
+</script>
+
+<style>
+:root {
+  --lav-50:#faf5ff;--lav-100:#f3e8ff;--lav-200:#e9d5ff;--lav-300:#d8b4fe;
+  --lav-400:#c084fc;--lav-500:#a855f7;--lav-600:#9333ea;--lav-700:#7e22ce;
+  --coral-100:#ffe4e6;--coral-200:#fecdd3;--coral-300:#fda4af;--coral-400:#fb7185;--coral-500:#f43f5e;
+  --mint-100:#d1fae5;--mint-200:#a7f3d0;--mint-300:#6ee7b7;--mint-400:#34d399;--mint-500:#10b981;
+  --warm-100:#fef3c7;--warm-200:#fde68a;--amber-500:#f59e0b;
+  --ink:#1e1b4b;--ink-soft:#4c4b5e;--ink-muted:#787887;
+  --paper:#ffffff;--paper-warm:#faf8f5;--paper-cream:#fdf6e3;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:'Noto Sans SC',sans-serif;background:var(--paper-warm);color:var(--ink);line-height:1.8;overflow-x:hidden}
+h1,h2,h3,h4{font-family:'Noto Serif SC',serif;font-weight:700}
+
+/* Navigation */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(250,248,245,0.85);backdrop-filter:blur(16px) saturate(1.5);border-bottom:1px solid rgba(192,132,252,0.15);padding:10px 24px}
+nav .nav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+nav .logo{font-family:'Noto Serif SC',serif;font-weight:900;font-size:18px;background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+nav .nav-links{display:flex;gap:6px;flex-wrap:wrap}
+nav .nav-links a{font-size:12px;color:var(--ink-soft);text-decoration:none;padding:4px 10px;border-radius:100px;transition:all .2s}
+nav .nav-links a:hover{background:var(--lav-100);color:var(--lav-600)}
+
+/* Hero */
+.hero{position:relative;min-height:auto;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:120px 24px 80px;background:linear-gradient(135deg,#faf5ff 0%,#f3e8ff 18%,#fdf4e3 50%,#fffbeb 100%)}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 520px 320px at 12% 22%,rgba(192,132,252,0.16),transparent 60%),radial-gradient(ellipse 520px 320px at 88% 78%,rgba(251,191,36,0.13),transparent 60%)}
+.hero-wrap{position:relative;z-index:2;width:100%;max-width:780px;text-align:center}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,0.6);backdrop-filter:blur(12px) saturate(1.5);border:1px solid rgba(192,132,252,0.3);color:var(--lav-600);padding:7px 20px;border-radius:100px;font-family:'Noto Sans SC',sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;margin-bottom:20px;box-shadow:0 4px 20px rgba(192,132,252,0.12)}
+.hero h1{font-family:'Noto Serif SC',serif;font-size:clamp(2.8rem,8vw,5rem);font-weight:900;letter-spacing:-0.03em;line-height:1.1;margin:12px 0 10px;background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 38%,var(--coral-500) 62%,var(--amber-500) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:clamp(0.95rem,2.5vw,1.25rem);color:var(--ink-soft);font-weight:400;line-height:1.6;margin-bottom:8px}
+.hero-art{margin:20px auto 8px;max-width:760px;width:100%}
+.hero-img{width:100%;height:auto;border-radius:24px;box-shadow:0 24px 70px -24px rgba(30,27,75,0.18);border:1px solid rgba(192,132,252,0.12)}
+.hero-caption{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--ink-muted);margin-top:8px}
+.scroll-indicator{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:4px;color:var(--ink-muted);text-transform:uppercase;animation:bounce 2s infinite}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+
+/* Content */
+.content{max-width:820px;margin:0 auto;padding:60px 24px}
+section{margin-bottom:80px;scroll-margin-top:80px}
+.section-tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--lav-600);background:var(--lav-50);padding:4px 14px;border-radius:100px;margin-bottom:12px}
+h2{font-size:clamp(1.6rem,4vw,2.2rem);margin-bottom:16px;color:var(--ink);line-height:1.3}
+h3{font-size:clamp(1.15rem,3vw,1.45rem);margin:24px 0 12px;color:var(--lav-700)}
+p{margin-bottom:14px;color:var(--ink-soft);font-size:15px;line-height:1.85}
+strong{color:var(--ink);font-weight:600}
+em{color:var(--lav-600);font-style:normal;font-weight:500}
+
+/* Formula */
+.formula{background:var(--paper-cream);border-left:3px solid var(--lav-400);padding:16px 20px;margin:16px 0;border-radius:0 12px 12px 0;overflow-x:auto}
+.formula-label{font-size:11px;font-weight:700;color:var(--lav-600);margin-bottom:6px;letter-spacing:1px}
+
+/* Insight box (mint green) */
+.insight{background:linear-gradient(135deg,var(--mint-100) 0%,#ecfdf5 100%);border:1px solid var(--mint-300);border-left:4px solid var(--mint-400);padding:18px 22px;margin:20px 0;border-radius:0 16px 16px 0}
+.insight-title{font-weight:700;color:var(--mint-500);font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.insight-title::before{content:'';display:inline-block;width:16px;height:16px;background:var(--mint-400);border-radius:50%;flex-shrink:0}
+.insight p{color:var(--ink-soft);font-size:14px;margin:0}
+
+/* Deep insight (lavender) */
+.deep-insight{background:linear-gradient(135deg,var(--lav-50) 0%,var(--lav-100) 100%);border:1px solid var(--lav-300);border-left:4px solid var(--lav-500);padding:18px 22px;margin:20px 0;border-radius:0 16px 16px 0}
+.deep-insight-title{font-weight:700;color:var(--lav-600);font-size:13px;margin-bottom:8px}
+.deep-insight p{color:var(--ink-soft);font-size:14px;margin:0}
+
+/* Code block */
+.code-block{background:#1e1b4b;border-radius:12px;padding:20px 24px;margin:20px 0;overflow-x:auto;position:relative}
+.code-block::before{content:attr(data-label);position:absolute;top:-10px;left:20px;background:var(--lav-500);color:white;font-size:10px;font-weight:700;padding:2px 12px;border-radius:100px;letter-spacing:1px}
+.code-block .trust{position:absolute;top:-10px;right:20px;background:var(--mint-500);color:white;font-size:10px;font-weight:700;padding:2px 12px;border-radius:100px;letter-spacing:1px}
+.code-block pre{margin:0}
+.code-block code{font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.65;color:#e0e0e0}
+.code-block .kw{color:#c084fc}
+.code-block .str{color:#6ee7b7}
+.code-block .com{color:#787887}
+.code-block .fn{color:#fbbf24}
+.code-block .num{color:#fb7185}
+
+/* Figure */
+.figure{margin:24px 0;text-align:center}
+.figure img{max-width:100%;border-radius:12px;box-shadow:0 8px 30px -12px rgba(30,27,75,0.15);border:1px solid rgba(192,132,252,0.1)}
+.figure-caption{font-size:12px;color:var(--ink-muted);margin-top:8px;line-height:1.5}
+
+/* Table */
+.result-table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}
+.result-table th{background:var(--lav-100);color:var(--lav-700);padding:8px 10px;text-align:center;font-weight:600;border-radius:6px}
+.result-table td{padding:8px 10px;text-align:center;border-bottom:1px solid var(--lav-100)}
+.result-table tr:hover{background:var(--lav-50)}
+.result-table .best{color:var(--mint-500);font-weight:700}
+.result-table .ours{background:var(--mint-50,#ecfdf5)}
+
+/* Research question */
+.rq-card{background:linear-gradient(135deg,var(--warm-100) 0%,#fefce8 100%);border:1px solid var(--warm-200);border-left:4px solid var(--amber-500);padding:18px 22px;margin:16px 0;border-radius:0 16px 16px 0}
+.rq-tag{display:inline-block;background:var(--amber-500);color:white;font-size:10px;font-weight:700;padding:2px 10px;border-radius:100px;margin-bottom:8px;letter-spacing:1px}
+.rq-card h4{font-size:15px;color:var(--ink);margin-bottom:8px}
+.rq-card p{font-size:14px;margin:0}
+
+/* Compare cards */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:20px 0}
+.compare-card{padding:16px;border-radius:12px;border:1px solid}
+.compare-card.bad{border-color:var(--coral-300);background:var(--coral-100)}
+.compare-card.mid{border-color:var(--warm-200);background:var(--warm-100)}
+.compare-card.good{border-color:var(--mint-300);background:var(--mint-100)}
+.compare-card h4{font-size:13px;margin-bottom:8px}
+.compare-card p{font-size:12px;margin:0;line-height:1.6}
+
+/* SVG container */
+.svg-container{margin:24px 0;text-align:center;overflow-x:auto}
+.svg-container svg{max-width:100%;height:auto}
+.svg-caption{font-size:12px;color:var(--ink-muted);margin-top:6px}
+
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0}
+.stat-card{background:var(--paper);border:1px solid var(--lav-200);border-radius:12px;padding:16px;text-align:center}
+.stat-card .num{font-size:28px;font-weight:900;background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.stat-card .label{font-size:11px;color:var(--ink-muted);margin-top:4px}
+
+/* Summary */
+.summary-box{background:linear-gradient(135deg,var(--lav-50),var(--coral-100));border:1px solid var(--lav-200);border-radius:16px;padding:24px;margin:20px 0}
+.summary-box h3{color:var(--lav-700);margin-top:0}
+
+/* Links */
+a{color:var(--lav-600);text-decoration:none}
+a:hover{text-decoration:underline}
+
+footer{text-align:center;padding:40px 24px;background:var(--ink);color:var(--ink-muted);font-size:12px}
+footer a{color:var(--lav-400);text-decoration:none}
+
+@media(max-width:640px){
+  .compare-grid{grid-template-columns:1fr}
+  nav .nav-links{display:none}
+}
+
+/* === FORMAT FIXES v1 === */
+/* Stats grid 必须并行4列 */
+.stats-grid,.stats-row,.hero-stats,.stat-grid{
+  display:grid !important;
+  grid-template-columns:repeat(4,1fr) !important;
+  gap:12px !important;
+  max-width:720px !important;
+  margin:24px auto !important;
+}
+.stat-card,.stat-item,.stat-box{
+  text-align:center !important;
+  padding:16px !important;
+}
+/* figure 居中对齐 */
+.figure,.fig,.img-wrap{margin:24px auto !important;text-align:center !important}
+.figure img,.fig img,.img-wrap img,.figure figure img{display:block;margin:0 auto !important;max-width:100% !important}
+/* SVG 居中 */
+.svg-wrap,.svg-container{text-align:center !important;margin:24px auto !important}
+.svg-wrap svg,.svg-container svg{display:block;margin:0 auto !important;max-width:100% !important}
+/* hero 不要太大 */
+.hero{min-height:auto !important;padding:100px 24px 60px !important}
+/* 减少过度效果 - 移除非必要动画 */
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+.scroll-indicator{animation:bounce 2s infinite}
+/* 确保关键交互保留hover效果 */
+a:hover,button:hover,input:focus{transition:all .2s !important}
+
+</style>
+</head>
+<body>
+
+<nav>
+<div class="nav-inner">
+<span class="logo">FAST-AR</span>
+<div class="nav-links"><a href="../index.html">« 合辑</a>
+<a href="#ch1">问题背景</a>
+<a href="#ch2">冗余分析</a>
+<a href="#ch3">FAST-AR框架</a>
+<a href="#ch4">TempCache</a>
+<a href="#ch5">AnnCA</a>
+<a href="#ch6">AnnSA</a>
+<a href="#ch7">实验结果</a>
+<a href="#ch8">消融与讨论</a>
+<a href="#ch9">科研问题</a>
+</div>
+</div>
+</nav>
+
+<!-- ========== HERO ========== -->
+<div class="hero" id="hero">
+<div class="hero-wrap">
+<div class="hero-badge">ICML 2026 &middot; arXiv:2602.01801 &middot; OriginAI / Bar-Ilan / NVIDIA</div>
+<h1>FAST-AR</h1>
+<p class="hero-sub">TempCache &times; AnnCA &times; AnnSA &middot; 免训练注意力加速框架 &middot; 5&times;&ndash;10&times; 端到端加速 &middot; 恒定GPU显存 &middot; 长视频流式生成</p>
+<div class="hero-art">
+<img src="assets/cover.webp" alt="FAST-AR Cover" class="hero-img">
+</div>
+<p class="hero-caption">水墨融合风格 &middot; 近似最近邻搜索的金色光束连接视频帧token，时序缓存压缩的流动光谱，稀疏注意力矩阵的点阵星空</p>
+</div>
+<div class="scroll-indicator">Scroll to Read</div>
+</div>
+
+<div class="content">
+
+<!-- ========== CH1 ========== -->
+<section id="ch1">
+<span class="section-tag">CH1 &middot; 问题背景</span>
+<h2>自回归视频扩散的注意力瓶颈</h2>
+
+<p>自回归视频扩散模型（如Rolling Forcing、LongVie2）实现了<strong>流式帧生成</strong>，为长视频合成、视频世界模型和交互式神经游戏引擎打开了大门。然而，这些模型的核心注意力机制存在一个根本性瓶颈：随着生成推进，KV缓存不断增长，<strong>推理延迟线性上升，GPU显存持续膨胀</strong>，严重限制了可用的时间上下文并损害长程一致性。</p>
+
+<h3>两大核心挑战</h3>
+
+<div class="compare-grid">
+<div class="compare-card bad">
+<h4>速度挑战</h4>
+<p>3D时空注意力的计算量随KV缓存长度线性增长。3000帧视频的累积注意力复杂度可达 $O(T^2)$，帧率从初始的高FPS持续下降。</p>
+</div>
+<div class="compare-card mid">
+<h4>显存挑战</h4>
+<p>膨胀的KV缓存产生巨大的内存开销。在单张H100上，Dense FA3生成3000帧后显存持续增长，迫使使用短上下文窗口，损害长程时序一致性。</p>
+</div>
+<div class="compare-card good">
+<h4>FAST-AR方案</h4>
+<p>统一的免训练注意力框架：TempCache + AnnCA + AnnSA，实现5&times;&ndash;10&times;加速，同时保持恒定峰值显存和近似无损的视觉质量。</p>
+</div>
+</div>
+
+<div class="stats-grid">
+<div class="stat-card"><div class="num">10.8&times;</div><div class="label">端到端加速（Rolling Forcing）</div></div>
+<div class="stat-card"><div class="num">16.2%</div><div class="label">KV缓存最小密度</div></div>
+<div class="stat-card"><div class="num">91.4%</div><div class="label">最大注意力召回率</div></div>
+<div class="stat-card"><div class="num">0</div><div class="label">额外训练参数</div></div>
+</div>
+
+<!-- SVG 1: KV Cache Growth Problem -->
+<div class="svg-container">
+<svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="cacheGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#d1fae5"/><stop offset="100%" stop-color="#fb7185"/></linearGradient>
+<linearGradient id="barGrad" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#c084fc" stop-opacity="0.3"/><stop offset="100%" stop-color="#c084fc" stop-opacity="0.9"/></linearGradient>
+<marker id="arr1" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#787887"/></marker>
+</defs>
+<text x="360" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">自回归视频生成中KV缓存增长 vs 吞吐量与显存</text>
+<!-- Axes -->
+<line x1="70" y1="40" x2="70" y2="260" stroke="#787887" stroke-width="1.5"/>
+<line x1="70" y1="260" x2="690" y2="260" stroke="#787887" stroke-width="1.5" marker-end="url(#arr1)"/>
+<text x="695" y="278" font-size="10" fill="#787887" font-family="Noto Sans SC">帧数</text>
+<!-- Frame ticks -->
+<text x="110" y="278" font-size="9" fill="#787887">500</text>
+<text x="250" y="278" font-size="9" fill="#787887">1000</text>
+<text x="390" y="278" font-size="9" fill="#787887">2000</text>
+<text x="560" y="278" font-size="9" fill="#787887">3000</text>
+<!-- KV Cache bars (growing) -->
+<rect x="90" y="230" width="30" height="30" rx="4" fill="url(#barGrad)" opacity="0.5"/>
+<rect x="140" y="210" width="30" height="50" rx="4" fill="url(#barGrad)" opacity="0.55"/>
+<rect x="190" y="185" width="30" height="75" rx="4" fill="url(#barGrad)" opacity="0.6"/>
+<rect x="240" y="160" width="30" height="100" rx="4" fill="url(#barGrad)" opacity="0.65"/>
+<rect x="290" y="130" width="30" height="130" rx="4" fill="url(#barGrad)" opacity="0.7"/>
+<rect x="340" y="100" width="30" height="160" rx="4" fill="url(#barGrad)" opacity="0.75"/>
+<rect x="390" y="75" width="30" height="185" rx="4" fill="url(#barGrad)" opacity="0.8"/>
+<rect x="440" y="55" width="30" height="205" rx="4" fill="url(#barGrad)" opacity="0.85"/>
+<rect x="490" y="45" width="30" height="215" rx="4" fill="url(#barGrad)" opacity="0.9"/>
+<text x="460" y="42" font-size="9" fill="#9333ea" font-weight="600">KV缓存持续增长</text>
+<!-- FPS decline curve -->
+<path d="M90,60 Q150,65 200,80 Q280,110 360,145 Q440,175 520,200 Q580,215 640,225" stroke="#f43f5e" stroke-width="2.5" fill="none" stroke-dasharray="6,3"/>
+<text x="140" y="55" font-size="9" fill="#f43f5e" font-weight="600">Dense FA3 FPS下降</text>
+<!-- Ours flat line -->
+<path d="M90,80 L640,85" stroke="#10b981" stroke-width="2.5" fill="none"/>
+<circle cx="90" cy="80" r="4" fill="#10b981"/>
+<circle cx="640" cy="85" r="4" fill="#10b981"/>
+<text x="540" y="78" font-size="9" fill="#10b981" font-weight="700">FAST-AR 恒定FPS</text>
+<!-- Memory area (Dense) -->
+<path d="M90,230 L140,210 L190,185 L240,160 L290,130 L340,100 L390,75 L440,55 L490,45 L490,260 L90,260 Z" fill="#f43f5e" opacity="0.08"/>
+<!-- Legend -->
+<rect x="80" y="290" width="12" height="8" rx="2" fill="#c084fc" opacity="0.7"/>
+<text x="96" y="298" font-size="9" fill="#4c4b5e">KV缓存大小</text>
+<line x1="180" y1="294" x2="200" y2="294" stroke="#f43f5e" stroke-width="2" stroke-dasharray="4,2"/>
+<text x="204" y="298" font-size="9" fill="#4c4b5e">Dense FPS</text>
+<line x1="280" y1="294" x2="300" y2="294" stroke="#10b981" stroke-width="2"/>
+<text x="304" y="298" font-size="9" fill="#4c4b5e">FAST-AR FPS</text>
+</svg>
+</div>
+<div class="svg-caption">图示：KV缓存随帧数线性增长导致Dense FA3的FPS持续下降，而FAST-AR保持恒定吞吐量</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：从NLP到视频扩散的KV缓存挑战本质不同</div>
+<p>LLM的KV缓存问题主要关注单序列内的长上下文，而自回归视频扩散的KV缓存需要跨越数百个去噪步和数千帧的时间维度积累。LLM中的KV压缩技术（如H2O、StreamingLLM）无法直接迁移，因为视频扩散的注意力模式具有独特的时空结构和因果约束。FAST-AR的贡献在于首次针对这一特殊场景设计了系统化的压缩方案。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">工程洞察：单张H100上的分钟级视频生成</div>
+<p>FAST-AR在单张H100 GPU上生成3000帧（约2分钟视频）时保持恒定FPS和近似恒定显存。这意味着原本需要多GPU集群或反复缩减上下文窗口的长视频生成任务，现在可以在消费级硬件上完成。这对于实时世界模型和交互式游戏引擎的应用落地具有决定性意义。</p>
+</div>
+</section>
+
+<!-- ========== CH2 ========== -->
+<section id="ch2">
+<span class="section-tag">CH2 &middot; 冗余分析</span>
+<h2>自回归视频扩散中的三种冗余源</h2>
+
+<p>FAST-AR的核心出发点是一个实证观察：自回归视频扩散的注意力机制存在<strong>大量可利用的冗余</strong>。论文通过对Rolling Forcing生成的100个视频进行系统分析，识别出三种持久的冗余来源。</p>
+
+<h3>冗余一：跨帧近重复Key</h3>
+<p>如Figure 3的PCA可视化所示，许多cached keys在不同帧之间<strong>几乎完全重复</strong>。同一个语义区域（如前景物体、背景纹理）对应的key特征在连续帧中反复出现。这种重复跨越扩散时间步和几乎所有Transformer层持续存在，表明KV缓存可以被大幅压缩。</p>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig3_semantic.webp" alt="PCA of Q and K" onerror="this.style.display='none'">
+<img src="assets/_precise_v2/fig4_cross_attention.webp" alt="Temporal Correspondence">
+<div class="figure-caption">Figure 5：时序对应关系用于KV压缩。许多key特征在帧间持续存在，可通过时序对应匹配（彩色点/箭头）进行压缩</div>
+</div>
+
+<h3>冗余二：缓慢演化的语义Query/Key</h3>
+<p>Q和K特征具有强烈的语义聚类特性——前景token（如猫）聚在一起并关注对应的语义区域，背景token形成独立的聚类。由于Q和K演化缓慢，<strong>大量query-key点积计算是冗余的</strong>，可以通过近似最近邻匹配快速定位真正相关的key。</p>
+
+<h3>冗余三：跨注意力的提示词浪费</h3>
+<p>自回归视频扩散模型通常使用长且详细的文本提示词（描述物体、动作、事件），但在生成每一帧时，只有<strong>少数提示词token真正相关</strong>。如Figure 4所示，cross-attention高度选择性：当画面中有猫时，注意力集中在"cat"相关token；当货车遮挡后变为狗时，注意力转向"dog"。</p>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig2_sparsity.webp" alt="Attention sparsity">
+<div class="figure-caption">Figure 2：注意力稀疏性分析。仅保留30%的注意力计算即可保留超过85%的注意力质量，存在巨大的优化空间</div>
+</div>
+
+<!-- SVG 2: Three Redundancies Diagram -->
+<div class="svg-container">
+<svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="arr2" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#787887"/></marker>
+</defs>
+<text x="360" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">三种注意力冗余源及其对应的解决方案</text>
+<!-- Frame timeline -->
+<rect x="30" y="50" width="660" height="60" rx="10" fill="#f3e8ff" stroke="#d8b4fe"/>
+<text x="60" y="75" font-size="10" fill="#7e22ce" font-weight="600">帧序列：</text>
+<!-- Frame tokens -->
+<rect x="130" y="58" width="50" height="44" rx="6" fill="#c084fc" opacity="0.6"/><text x="155" y="85" text-anchor="middle" font-size="9" fill="white" font-weight="600">F<tspan font-size="7" dy="-3">1</tspan></text>
+<rect x="195" y="58" width="50" height="44" rx="6" fill="#c084fc" opacity="0.5"/><text x="220" y="85" text-anchor="middle" font-size="9" fill="white" font-weight="600">F<tspan font-size="7" dy="-3">2</tspan></text>
+<rect x="260" y="58" width="50" height="44" rx="6" fill="#c084fc" opacity="0.45"/><text x="285" y="85" text-anchor="middle" font-size="9" fill="white" font-weight="600">F<tspan font-size="7" dy="-3">3</tspan></text>
+<rect x="325" y="58" width="50" height="44" rx="6" fill="#c084fc" opacity="0.4"/><text x="350" y="85" text-anchor="middle" font-size="9" fill="#1e1b4b" font-weight="600">F<tspan font-size="7" dy="-3">4</tspan></text>
+<rect x="390" y="58" width="50" height="44" rx="6" fill="#c084fc" opacity="0.35"/><text x="415" y="85" text-anchor="middle" font-size="9" fill="#1e1b4b" font-weight="600">F<tspan font-size="7" dy="-3">5</tspan></text>
+<text x="460" y="85" font-size="14" fill="#787887">...</text>
+<!-- Duplicate key arrows -->
+<path d="M155,58 L220,58" stroke="#f43f5e" stroke-width="2" marker-end="url(#arr2)" stroke-dasharray="4,2"/>
+<path d="M220,58 L285,58" stroke="#f43f5e" stroke-width="2" marker-end="url(#arr2)" stroke-dasharray="4,2"/>
+<text x="220" y="48" text-anchor="middle" font-size="9" fill="#f43f5e" font-weight="600">近重复Key</text>
+<!-- Three solution boxes -->
+<!-- Redundancy 1 -->
+<rect x="30" y="130" width="200" height="130" rx="12" fill="#fff" stroke="#fb7185" stroke-width="1.5"/>
+<circle cx="55" cy="152" r="10" fill="#f43f5e" opacity="0.2"/><text x="55" y="156" text-anchor="middle" font-size="11" fill="#f43f5e" font-weight="900">1</text>
+<text x="70" y="157" font-size="12" fill="#f43f5e" font-weight="700">跨帧重复Key</text>
+<text x="55" y="180" font-size="10" fill="#4c4b5e">不同帧中相同语义区域</text>
+<text x="55" y="196" font-size="10" fill="#4c4b5e">的Key几乎完全相同</text>
+<line x1="55" y1="210" x2="185" y2="210" stroke="#fb7185" stroke-width="1" stroke-dasharray="3,2"/>
+<text x="110" y="230" font-size="10" fill="#9333ea" font-weight="600">TempCache</text>
+<text x="110" y="248" font-size="9" fill="#787887">时序对应KV压缩</text>
+<!-- Redundancy 2 -->
+<rect x="260" y="130" width="200" height="130" rx="12" fill="#fff" stroke="#f59e0b" stroke-width="1.5"/>
+<circle cx="285" cy="152" r="10" fill="#f59e0b" opacity="0.2"/><text x="285" y="156" text-anchor="middle" font-size="11" fill="#f59e0b" font-weight="900">2</text>
+<text x="300" y="157" font-size="12" fill="#f59e0b" font-weight="700">语义Q/K缓慢演化</text>
+<text x="285" y="180" font-size="10" fill="#4c4b5e">Q和K具有强语义聚类</text>
+<text x="285" y="196" font-size="10" fill="#4c4b5e">大量点积计算冗余</text>
+<line x1="285" y1="210" x2="415" y2="210" stroke="#f59e0b" stroke-width="1" stroke-dasharray="3,2"/>
+<text x="350" y="230" font-size="10" fill="#9333ea" font-weight="600">AnnSA</text>
+<text x="350" y="248" font-size="9" fill="#787887">ANN稀疏自注意力</text>
+<!-- Redundancy 3 -->
+<rect x="490" y="130" width="200" height="130" rx="12" fill="#fff" stroke="#10b981" stroke-width="1.5"/>
+<circle cx="515" cy="152" r="10" fill="#10b981" opacity="0.2"/><text x="515" y="156" text-anchor="middle" font-size="11" fill="#10b981" font-weight="900">3</text>
+<text x="530" y="157" font-size="12" fill="#10b981" font-weight="700">Cross-Attn浪费</text>
+<text x="515" y="180" font-size="10" fill="#4c4b5e">长提示词中每帧仅少数</text>
+<text x="515" y="196" font-size="10" fill="#4c4b5e">token真正相关</text>
+<line x1="515" y1="210" x2="645" y2="210" stroke="#10b981" stroke-width="1" stroke-dasharray="3,2"/>
+<text x="580" y="230" font-size="10" fill="#9333ea" font-weight="600">AnnCA</text>
+<text x="580" y="248" font-size="9" fill="#787887">ANN稀疏交叉注意力</text>
+<!-- Arrows from redundancy to solutions -->
+<path d="M155,110 L130,130" stroke="#f43f5e" stroke-width="1.5" marker-end="url(#arr2)"/>
+<path d="M285,110 L340,130" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#arr2)"/>
+<path d="M415,110 L560,130" stroke="#10b981" stroke-width="1.5" marker-end="url(#arr2)"/>
+</svg>
+</div>
+<div class="svg-caption">图示：自回归视频扩散中三种注意力冗余源及其对应的FAST-AR解决方案</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：30%密度保留85%注意力质量的深层含义</div>
+<p>Figure 2的实证分析表明，自回归视频扩散的注意力高度稀疏——仅保留30%的计算即可保存超过85%的注意力质量。这并非偶然，而是由视频数据的内在结构决定的：连续帧之间的语义变化是渐进的，大部分区域的注意力模式在帧间保持稳定。这意味着在理论上，存在至少3倍的加速空间，而FAST-AR通过三管齐下逼近了这一极限。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">工程洞察：DiffTrack启发的时序对应发现</div>
+<p>论文巧妙地利用了DiffTrack的发现——视频DiT中的query-key相似性在特定层和时间步上天然编码了跨帧对应关系。这意味着不需要额外的跟踪模型或运动估计网络，仅通过注意力矩阵本身就能恢复时序对应，为KV缓存压缩提供了零成本的信号来源。这一洞察将一个看似需要额外计算的问题转化为了已有计算的副产品。</p>
+</div>
+</section>
+
+<!-- ========== CH3 ========== -->
+<section id="ch3">
+<span class="section-tag">CH3 &middot; 统一框架</span>
+<h2>FAST-AR：将注意力重构为近似最近邻搜索</h2>
+
+<p>FAST-AR的核心思想是将昂贵的全注意力计算<strong>重新表述为近似最近邻（ANN）搜索问题</strong>。对于每个query，不再与所有cached keys计算点积，而是先用ANN快速检索出一小部分候选key indices $N(q) \subseteq \{1, \ldots, |\hat{K}|\}$，然后仅对这些候选者计算注意力：</p>
+
+<div class="formula">
+<div class="formula-label">近似注意力计算</div>
+$$\text{Attn}(q) \approx \text{Softmax}\!\left(\frac{q \hat{K}_{N(q)}^\top}{\sqrt{d}}\right) \hat{V}_{N(q)}$$
+</div>
+
+<p>两种轻量级ANN策略被考虑：<strong>局部敏感哈希（LSH）</strong>将query和key投影到共享低维随机子空间，用哈希桶分组使得query只与落入同桶的key比较；<strong>量化相似度搜索</strong>将query和key量化为低比特表示，在量化空间中直接执行最近邻搜索。两种方法都避免了离线预处理阶段，支持快速推理时匹配。</p>
+
+<!-- SVG 3: FAST-AR Architecture Overview -->
+<div class="svg-container">
+<svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="flowGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#c084fc"/><stop offset="100%" stop-color="#10b981"/></linearGradient>
+<marker id="arr3" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 fill="#4c4b5e"/></marker>
+</defs>
+<text x="360" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">FAST-AR 统一注意力加速框架架构</text>
+<!-- Input -->
+<rect x="30" y="80" width="100" height="60" rx="10" fill="#f3e8ff" stroke="#c084fc"/>
+<text x="80" y="105" text-anchor="middle" font-size="11" fill="#7e22ce" font-weight="600">DiT Block</text>
+<text x="80" y="122" text-anchor="middle" font-size="9" fill="#787887">Q, K, V</text>
+<!-- Arrow -->
+<path d="M130,110 L170,110" stroke="#787887" stroke-width="1.5" marker-end="url(#arr3)"/>
+<!-- ANN Router -->
+<rect x="170" y="60" width="120" height="100" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+<text x="230" y="85" text-anchor="middle" font-size="11" fill="#f59e0b" font-weight="700">ANN Router</text>
+<text x="230" y="102" text-anchor="middle" font-size="9" fill="#4c4b5e">LSH / Quantization</text>
+<text x="230" y="118" text-anchor="middle" font-size="9" fill="#4c4b5e">候选集检索</text>
+<text x="230" y="134" text-anchor="middle" font-size="9" fill="#4c4b5e">FAISS内核</text>
+<!-- Three branches -->
+<path d="M230,160 L120,190" stroke="#f43f5e" stroke-width="1.5" marker-end="url(#arr3)"/>
+<path d="M230,160 L300,190" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#arr3)"/>
+<path d="M230,160 L480,190" stroke="#10b981" stroke-width="1.5" marker-end="url(#arr3)"/>
+<!-- TempCache -->
+<rect x="40" y="190" width="160" height="70" rx="10" fill="#fff" stroke="#f43f5e" stroke-width="1.5"/>
+<text x="120" y="215" text-anchor="middle" font-size="11" fill="#f43f5e" font-weight="700">TempCache</text>
+<text x="120" y="232" text-anchor="middle" font-size="9" fill="#4c4b5e">时序KV缓存压缩</text>
+<text x="120" y="248" text-anchor="middle" font-size="9" fill="#787887">合并跨帧重复Key</text>
+<!-- AnnSA -->
+<rect x="220" y="190" width="160" height="70" rx="10" fill="#fff" stroke="#f59e0b" stroke-width="1.5"/>
+<text x="300" y="215" text-anchor="middle" font-size="11" fill="#f59e0b" font-weight="700">AnnSA</text>
+<text x="300" y="232" text-anchor="middle" font-size="9" fill="#4c4b5e">ANN稀疏自注意力</text>
+<text x="300" y="248" text-anchor="middle" font-size="9" fill="#787887">桶内块稀疏注意力</text>
+<!-- AnnCA -->
+<rect x="400" y="190" width="160" height="70" rx="10" fill="#fff" stroke="#10b981" stroke-width="1.5"/>
+<text x="480" y="215" text-anchor="middle" font-size="11" fill="#10b981" font-weight="700">AnnCA</text>
+<text x="480" y="232" text-anchor="middle" font-size="9" fill="#4c4b5e">ANN稀疏交叉注意力</text>
+<text x="480" y="248" text-anchor="middle" font-size="9" fill="#787887">帧级提示词筛选</text>
+<!-- Merge -->
+<path d="M120,260 L200,295" stroke="#787887" stroke-width="1.2" marker-end="url(#arr3)"/>
+<path d="M300,260 L280,295" stroke="#787887" stroke-width="1.2" marker-end="url(#arr3)"/>
+<path d="M480,260 L360,295" stroke="#787887" stroke-width="1.2" marker-end="url(#arr3)"/>
+<!-- Sparse kernels -->
+<rect x="170" y="290" width="220" height="50" rx="10" fill="#1e1b4b"/>
+<text x="280" y="313" text-anchor="middle" font-size="11" fill="#c084fc" font-weight="600">FlashInfer 稀疏注意力核</text>
+<text x="280" y="330" text-anchor="middle" font-size="9" fill="#a7f3d0">块稀疏 + 候选集注意力计算</text>
+<!-- Output -->
+<path d="M390,315 L470,315" stroke="#787887" stroke-width="1.5" marker-end="url(#arr3)"/>
+<rect x="470" y="295" width="120" height="40" rx="10" fill="#d1fae5" stroke="#34d399"/>
+<text x="530" y="320" text-anchor="middle" font-size="11" fill="#10b981" font-weight="700">加速输出</text>
+<!-- Right side: Key property -->
+<rect x="600" y="60" width="100" height="100" rx="12" fill="#fdf6e3" stroke="#f59e0b" stroke-dasharray="4,3"/>
+<text x="650" y="82" text-anchor="middle" font-size="9" fill="#f59e0b" font-weight="600">核心特性</text>
+<text x="650" y="100" text-anchor="middle" font-size="9" fill="#4c4b5e">免训练</text>
+<text x="650" y="116" text-anchor="middle" font-size="9" fill="#4c4b5e">即插即用</text>
+<text x="650" y="132" text-anchor="middle" font-size="9" fill="#4c4b5e">Kernel无关</text>
+<text x="650" y="148" text-anchor="middle" font-size="9" fill="#4c4b5e">兼容所有DiT</text>
+<path d="M590,110 L560,110 L430,110 L290,110" stroke="#f59e0b" stroke-width="1" stroke-dasharray="4,3" opacity="0.5"/>
+</svg>
+</div>
+<div class="svg-caption">图示：FAST-AR统一架构，通过ANN Router将注意力计算路由到三个互补的加速模块</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：ANN搜索的"足够好"哲学</div>
+<p>FAST-AR的关键哲学转变在于接受注意力计算不需要精确匹配。传统注意力对每个query扫描所有key来找到全局最优的top-k，而ANN搜索通过哈希桶或量化码本快速定位"足够近"的候选集。当注意力天然稀疏时（30%密度保存85%质量），精确搜索的额外开销是浪费的。这种从精确到近似的范式转换，在NLP中由Reformer首创，FAST-AR首次将其推广到自回归视频扩散。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">工程洞察：FAISS的成熟基础设施</div>
+<p>FAST-AR使用Facebook的FAISS库进行LSH和量化检索。FAISS经过多年工业验证，支持GPU加速，可以高效处理高维向量的最近邻搜索。选择FAISS而非自定义实现大幅降低了工程复杂度，同时保证了检索性能。这体现了一种务实的工程哲学：站在成熟基础设施的肩膀上，专注于算法创新。</p>
+</div>
+</section>
+
+<!-- ========== CH4 ========== -->
+<section id="ch4">
+<span class="section-tag">CH4 &middot; 核心模块一</span>
+<h2>TempCache：时序对应驱动的KV缓存压缩</h2>
+
+<p>TempCache是FAST-AR的第一个核心模块，专门解决<strong>跨帧近重复Key</strong>的冗余。其核心观察是：由于视频内容的连续性，许多cached keys在不同帧中追踪相同的内容，因此可以通过时序对应关系将它们合并。</p>
+
+<h3>找到时序对应关系</h3>
+<p>建立在DiffTrack的发现之上：对于当前帧的query token，其在前一帧中的对应token就是<strong>注意力分数最高的key</strong>。为避免显式计算 $QK^\top$，TempCache使用ANN机制检索每个query的top-1最近邻key作为对应估计。一旦对应关系建立，跨帧追踪相同语义token的key被分组，每组仅保留最近的代表性key。</p>
+
+<h3>Lemma 5.1：无冗余注意力</h3>
+
+<div class="formula">
+<div class="formula-label">冗余无关注意力的精确等价性</div>
+<p>设 $q \in \mathbb{R}^{d_k}$ 为query，$K = (k_1, \ldots, k_n)^\top$ 和 $V = (v_1, \ldots, v_n)^\top$ 为keys和values。假设索引集被划分为 $g$ 个组 $\{G_t\}_{t=1}^g$，每组内所有key完全相同。则标准注意力精确等于在 $g$ 个组代表上计算的注意力：</p>
+$$\text{Attn}(q, K, V) = \sum_{t=1}^{g} \frac{e^{\tilde{s}_t}}{\sum_{u=1}^{g} e^{\tilde{s}_u}} \tilde{v}_t, \quad \tilde{s}_t = s_t + \log m_t$$
+<p>其中 $s_t = \frac{q^\top k'_t}{\sqrt{d_k}}$，$m_t = |G_t|$，$\tilde{v}_t = \frac{1}{m_t}\sum_{i \in G_t} v_i$。</p>
+</div>
+
+<p>这个引理的含义极为深远：当key的重复是精确的，合并操作<strong>不引入任何近似误差</strong>。实践中，由于时序特征只是近似重复，合并使用相似度阈值，产生可控的近似。最坏情况下（未检测到冗余时），方法退化为标准稠密注意力。</p>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig4_cross_attention.webp" alt="Temporal correspondence">
+<div class="figure-caption">Figure 5：时序对应关系可视化。彩色点/箭头表示跨帧追踪相同语义区域的token对应关系，这些对应关系指导KV缓存压缩</div>
+</div>
+
+<!-- SVG 4: TempCache Compression Process -->
+<div class="svg-container">
+<svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+<text x="360" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">TempCache KV缓存压缩过程</text>
+<!-- Before compression -->
+<text x="180" y="52" text-anchor="middle" font-size="11" fill="#f43f5e" font-weight="600">压缩前：重复Key堆积</text>
+<rect x="30" y="60" width="300" height="180" rx="10" fill="#fff5f5" stroke="#fecdd3"/>
+<!-- F1 keys -->
+<text x="55" y="88" font-size="9" fill="#787887">F<tspan font-size="7" dy="-3">1</tspan></text>
+<rect x="70" y="75" width="36" height="24" rx="4" fill="#c084fc" opacity="0.7"/><text x="88" y="91" text-anchor="middle" font-size="8" fill="white">k1</text>
+<rect x="112" y="75" width="36" height="24" rx="4" fill="#fb7185" opacity="0.7"/><text x="130" y="91" text-anchor="middle" font-size="8" fill="white">k2</text>
+<rect x="154" y="75" width="36" height="24" rx="4" fill="#34d399" opacity="0.7"/><text x="172" y="91" text-anchor="middle" font-size="8" fill="white">k3</text>
+<rect x="196" y="75" width="36" height="24" rx="4" fill="#fbbf24" opacity="0.7"/><text x="214" y="91" text-anchor="middle" font-size="8" fill="white">k4</text>
+<!-- F2 keys (duplicates) -->
+<text x="55" y="128" font-size="9" fill="#787887">F<tspan font-size="7" dy="-3">2</tspan></text>
+<rect x="70" y="115" width="36" height="24" rx="4" fill="#c084fc" opacity="0.6"/><text x="88" y="131" text-anchor="middle" font-size="8" fill="white">k1'</text>
+<rect x="112" y="115" width="36" height="24" rx="4" fill="#fb7185" opacity="0.6"/><text x="130" y="131" text-anchor="middle" font-size="8" fill="white">k2'</text>
+<rect x="154" y="115" width="36" height="24" rx="4" fill="#34d399" opacity="0.6"/><text x="172" y="131" text-anchor="middle" font-size="8" fill="white">k3'</text>
+<rect x="196" y="115" width="36" height="24" rx="4" fill="#fbbf24" opacity="0.6"/><text x="214" y="131" text-anchor="middle" font-size="8" fill="white">k4'</text>
+<!-- F3 keys -->
+<text x="55" y="168" font-size="9" fill="#787887">F<tspan font-size="7" dy="-3">3</tspan></text>
+<rect x="70" y="155" width="36" height="24" rx="4" fill="#c084fc" opacity="0.5"/><text x="88" y="171" text-anchor="middle" font-size="8" fill="#1e1b4b">k1''</text>
+<rect x="112" y="155" width="36" height="24" rx="4" fill="#fb7185" opacity="0.5"/><text x="130" y="171" text-anchor="middle" font-size="8" fill="#1e1b4b">k2''</text>
+<rect x="154" y="155" width="36" height="24" rx="4" fill="#34d399" opacity="0.5"/><text x="172" y="171" text-anchor="middle" font-size="8" fill="#1e1b4b">k3''</text>
+<!-- Duplicate arrows -->
+<path d="M88,99 L88,115" stroke="#c084fc" stroke-width="1.5" stroke-dasharray="3,2"/>
+<path d="M130,99 L130,115" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="3,2"/>
+<path d="M172,99 L172,115" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3,2"/>
+<path d="M88,139 L88,155" stroke="#c084fc" stroke-width="1.5" stroke-dasharray="3,2"/>
+<path d="M130,139 L130,155" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="3,2"/>
+<text x="280" y="140" font-size="9" fill="#f43f5e" font-weight="600">重复！</text>
+<text x="280" y="155" font-size="9" fill="#787887">12个key</text>
+<!-- Compression arrow -->
+<path d="M340,150 L390,150" stroke="#9333ea" stroke-width="2.5" marker-end="url(#arr3)"/>
+<text x="365" y="140" text-anchor="middle" font-size="9" fill="#9333ea" font-weight="600">合并</text>
+<!-- After compression -->
+<text x="540" y="52" text-anchor="middle" font-size="11" fill="#10b981" font-weight="600">压缩后：代表性Key</text>
+<rect x="390" y="60" width="300" height="180" rx="10" fill="#ecfdf5" stroke="#a7f3d0"/>
+<!-- Merged keys -->
+<text x="415" y="88" font-size="9" fill="#787887">代表</text>
+<rect x="430" y="75" width="80" height="50" rx="8" fill="#c084fc" opacity="0.8"/>
+<text x="470" y="96" text-anchor="middle" font-size="10" fill="white" font-weight="600">k1*</text>
+<text x="470" y="113" text-anchor="middle" font-size="8" fill="#e9d5ff">m=3, mean(v)</text>
+<rect x="520" y="75" width="80" height="50" rx="8" fill="#fb7185" opacity="0.8"/>
+<text x="560" y="96" text-anchor="middle" font-size="10" fill="white" font-weight="600">k2*</text>
+<text x="560" y="113" text-anchor="middle" font-size="8" fill="#ffe4e6">m=3, mean(v)</text>
+<rect x="610" y="75" width="60" height="50" rx="8" fill="#34d399" opacity="0.8"/>
+<text x="640" y="96" text-anchor="middle" font-size="10" fill="white" font-weight="600">k3*</text>
+<text x="640" y="113" text-anchor="middle" font-size="8" fill="#d1fae5">m=2</text>
+<!-- Bias adjustment -->
+<text x="540" y="155" font-size="10" fill="#787887">+ log(m) 偏移修正</text>
+<text x="540" y="175" font-size="10" fill="#787887">value取组均值</text>
+<!-- Savings -->
+<rect x="440" y="190" width="180" height="35" rx="8" fill="#10b981" opacity="0.15"/>
+<text x="530" y="213" text-anchor="middle" font-size="11" fill="#10b981" font-weight="700">12 key &rarr; 4 key (67% 压缩)</text>
+</svg>
+</div>
+<div class="svg-caption">图示：TempCache通过时序对应关系将跨帧重复Key合并为少量代表性Key，实现精确或近似无损的KV缓存压缩</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：Lemma 5.1的理论保证与实践意义</div>
+<p>Lemma 5.1证明了当key完全重复时，合并操作是精确的——无任何近似误差。这是一个非常强的理论保证：它意味着TempCache的压缩质量直接取决于跨帧key的相似程度。当相似度高时（如静态背景区域），压缩近乎无损；当相似度低时（如快速运动区域），自动退化为保留更多独立key。这种自适应行为无需超参数调整，完全由数据驱动。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">工程洞察：Kernel无关设计的巨大优势</div>
+<p>TempCache仅修改注意力核的输入（cached K, V），不需要修改注意力核本身。这意味着它可以无缝兼容FlashAttention、FlashInfer等任何高效注意力实现，甚至未来出现的新核。这种设计将"何时压缩"和"如何计算"完全解耦，是模块化工程设计的典范。相比之下，SVG/RadialAttn等方法需要定制的稀疏核，在新硬件或新模型架构上可能需要重新适配。</p>
+</div>
+
+<!-- Code block 1: TempCache algorithm -->
+<div class="code-block" data-label="TempCache 算法伪代码">
+<span class="trust">可信度: 高 — 基于论文描述</span>
+<pre><code><span class="kw">def</span> <span class="fn">tempcache_compress</span>(Q, K_cache, V_cache, threshold=<span class="num">0.85</span>):
+    <span class="com"># Step 1: ANN检索每个query的top-1最近邻key</span>
+    <span class="com"># 使用FAISS LSH或量化索引</span>
+    neighbors = ann_index.<span class="fn">search</span>(Q, k=<span class="num">1</span>)  <span class="com"># [Nq, 1]</span>
+
+    <span class="com"># Step 2: 建立时序对应分组</span>
+    groups = {}
+    <span class="kw">for</span> q_idx, k_idx <span class="kw">in</span> <span class="fn">enumerate</span>(neighbors):
+        <span class="com"># 计算相似度（余弦相似度或点积）</span>
+        sim = <span class="fn">cosine_similarity</span>(Q[q_idx], K_cache[k_idx])
+        <span class="kw">if</span> sim > threshold:
+            <span class="com"># 归入已有组或创建新组</span>
+            group_id = <span class="fn">find_representative_group</span>(k_idx)
+            groups.setdefault(group_id, []).<span class="fn">append</span>(k_idx)
+
+    <span class="com"># Step 3: 压缩 — 每组保留一个代表key</span>
+    K_new, V_new, biases = [], [], []
+    <span class="kw">for</span> gid, members <span class="kw">in</span> groups.<span class="fn">items</span>():
+        rep_key = K_cache[members[-<span class="num">1</span>]]    <span class="com"># 最近的代表性key</span>
+        mean_val = V_cache[members].<span class="fn">mean</span>(dim=<span class="num">0</span>)  <span class="com"># 组均值</span>
+        log_bias = torch.<span class="fn">log</span>(torch.<span class="fn">tensor</span>(<span class="fn">len</span>(members)))
+        K_new.<span class="fn">append</span>(rep_key)
+        V_new.<span class="fn">append</span>(mean_val)
+        biases.<span class="fn">append</span>(log_bias)
+
+    <span class="com"># Step 4: 返回压缩后的KV缓存</span>
+    <span class="kw">return</span> <span class="fn">stack</span>(K_new), <span class="fn">stack</span>(V_new), <span class="fn">stack</span>(biases)</code></pre>
+</div>
+
+<div class="insight">
+<div class="insight-title">工程洞察：Log偏移修正的精巧设计</div>
+<p>合并重复key时，每组的multiplicity $m_t$ 需要在logit空间加偏移 $\log m_t$。这确保了softmax归一化后的权重分配与原始稠密注意力一致。这个看似微小的细节是保证合并无损的关键——遗漏它会导致组内被低估，系统性地改变注意力分布。</p>
+</div>
+</section>
+
+<!-- ========== CH5 ========== -->
+<section id="ch5">
+<span class="section-tag">CH5 &middot; 核心模块二</span>
+<h2>AnnCA：近似最近邻交叉注意力</h2>
+
+<p>自回归视频扩散模型通常依赖长且详细的文本提示词来描述物体、动作和事件。在每一层和每个生成时间步，cross-attention要求每个latent query attend to <strong>所有prompt tokens</strong>。然而，如Figure 4所示，cross-attention高度选择性——对于当前帧，只有少数prompt token真正相关。</p>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig4_cross_attention.webp" alt="Cross-attention selectivity" onerror="this.style.display='none'">
+</div>
+
+<h3>AnnCA的工作机制</h3>
+<p>AnnCA利用ANN搜索高效地识别相关prompt tokens。具体来说：</p>
+<p>（1）将当前帧的latent queries和prompt keys投影到共享的LSH或量化嵌入空间；（2）对于每个prompt token，检查其桶中是否有任何当前帧的latent query；（3）不与任何当前帧query共享桶的prompt tokens被视为<strong>无关</strong>，从该帧的cross-attention计算中排除。</p>
+
+<h3>为什么ANN匹配优于全注意力</h3>
+<p>在视频生成中，不同帧关注的语义内容截然不同。当画面是猫时，"cat"相关token获得高注意力；当画面变成狗时，"dog"相关token才是关键。这种<strong>帧级语义切换</strong>使得每帧仅需少量prompt tokens。ANN匹配通过哈希桶快速过滤掉无关tokens，将cross-attention的计算量从 $O(N_q \times N_p)$ 降低到 $O(N_q \times N_{selected})$，其中 $N_{selected} \ll N_p$。</p>
+
+<div class="compare-grid">
+<div class="compare-card bad">
+<h4>Dense Cross-Attn</h4>
+<p>每个query与所有prompt token计算注意力，包括大量无关token。随着prompt变长，计算量线性增长。</p>
+</div>
+<div class="compare-card mid">
+<h4>基于规则的筛选</h4>
+<p>使用固定关键词匹配或TF-IDF等启发式方法，但无法捕捉深层语义关联，且需要人工定义规则。</p>
+</div>
+<div class="compare-card good">
+<h4>AnnCA (Ours)</h4>
+<p>基于ANN的帧级prompt token动态选择，无需训练、无需规则，通过嵌入空间相似性自动筛选相关tokens。</p>
+</div>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：Cross-Attn的选择性揭示了视频生成的语义调度</div>
+<p>Figure 4展示了一个精妙的现象：当视频中猫被货车遮挡并转变为狗时，cross-attention的焦点从"cat"平滑过渡到"van"再转移到"dog"。这说明cross-attention不仅仅是一个技术组件，它实际上充当了视频内容的<strong>语义调度器</strong>——根据当前帧的内容动态分配文本语义资源。AnnCA通过ANN匹配近似了这种调度，将稀疏性从观察到的现象转化为了可利用的计算优势。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">工程洞察：AnnCA与AnnSA的语义桶复用</div>
+<p>一个精巧的设计细节是：AnnCA在筛选prompt tokens时建立的LSH/量化分桶信息，可以被AnnSA直接复用于自注意力稀疏化。这意味着ANN匹配的计算成本被两个模块摊销，进一步降低了总体开销。这种跨模块的信息共享体现了FAST-AR作为统一框架的设计哲学。</p>
+</div>
+
+<!-- SVG 5: AnnCA Cross-Attention Selection -->
+<div class="svg-container">
+<svg viewBox="0 0 720 260" xmlns="http://www.w3.org/2000/svg">
+<text x="360" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">AnnCA 帧级提示词Token动态选择</text>
+<!-- Prompt tokens -->
+<text x="360" y="52" text-anchor="middle" font-size="10" fill="#787887">长文本提示词: "A white-and-orange tabby cat walks toward the camera ... a van passes ... cat has transformed into a golden retriever ..."</text>
+<rect x="30" y="62" width="660" height="35" rx="8" fill="#f3e8ff" stroke="#d8b4fe"/>
+<!-- Individual prompt tokens -->
+<rect x="45" y="68" width="48" height="22" rx="4" fill="#c084fc" opacity="0.6"/><text x="69" y="83" text-anchor="middle" font-size="8" fill="white">"cat"</text>
+<rect x="100" y="68" width="48" height="22" rx="4" fill="#c084fc" opacity="0.4"/><text x="124" y="83" text-anchor="middle" font-size="8" fill="#1e1b4b">"walks"</text>
+<rect x="155" y="68" width="55" height="22" rx="4" fill="#c084fc" opacity="0.3"/><text x="182" y="83" text-anchor="middle" font-size="8" fill="#1e1b4b">"camera"</text>
+<rect x="217" y="68" width="48" height="22" rx="4" fill="#c084fc" opacity="0.3"/><text x="241" y="83" text-anchor="middle" font-size="8" fill="#1e1b4b">"warm"</text>
+<rect x="272" y="68" width="55" height="22" rx="4" fill="#c084fc" opacity="0.3"/><text x="299" y="83" text-anchor="middle" font-size="8" fill="#1e1b4b">"sunlight"</text>
+<rect x="334" y="68" width="48" height="22" rx="4" fill="#c084fc" opacity="0.4"/><text x="358" y="83" text-anchor="middle" font-size="8" fill="#1e1b4b">"van"</text>
+<rect x="389" y="68" width="55" height="22" rx="4" fill="#c084fc" opacity="0.3"/><text x="416" y="83" text-anchor="middle" font-size="8" fill="#1e1b4b">"passes"</text>
+<rect x="451" y="68" width="48" height="22" rx="4" fill="#c084fc" opacity="0.3"/><text x="475" y="83" text-anchor="middle" font-size="8" fill="#1e1b4b">"dog"</text>
+<rect x="506" y="68" width="55" height="22" rx="4" fill="#c084fc" opacity="0.3"/><text x="533" y="83" text-anchor="middle" font-size="8" fill="#1e1b4b">"golden"</text>
+<rect x="568" y="68" width="55" height="22" rx="4" fill="#c084fc" opacity="0.3"/><text x="595" y="83" text-anchor="middle" font-size="8" fill="#1e1b4b">"retriever"</text>
+<!-- Frame 1 attention -->
+<text x="50" y="120" font-size="10" fill="#1e1b4b" font-weight="600">帧1 (猫):</text>
+<path d="M110,115 L69,88" stroke="#10b981" stroke-width="2" opacity="0.7"/>
+<circle cx="69" cy="83" r="14" fill="none" stroke="#10b981" stroke-width="2.5" opacity="0.6"/>
+<text x="200" y="120" font-size="9" fill="#787887">仅 &ldquo;cat&rdquo; &ldquo;walks&rdquo; &ldquo;camera&rdquo; 被选中</text>
+<!-- Frame 2 attention -->
+<text x="50" y="155" font-size="10" fill="#1e1b4b" font-weight="600">帧2 (货车):</text>
+<path d="M110,150 L358,88" stroke="#f59e0b" stroke-width="2" opacity="0.7"/>
+<circle cx="358" cy="83" r="14" fill="none" stroke="#f59e0b" stroke-width="2.5" opacity="0.6"/>
+<text x="200" y="155" font-size="9" fill="#787887">仅 &ldquo;van&rdquo; &ldquo;passes&rdquo; &ldquo;warm&rdquo; 被选中</text>
+<!-- Frame 3 attention -->
+<text x="50" y="190" font-size="10" fill="#1e1b4b" font-weight="600">帧3 (狗):</text>
+<path d="M110,185 L475,88" stroke="#9333ea" stroke-width="2" opacity="0.7"/>
+<circle cx="475" cy="83" r="14" fill="none" stroke="#9333ea" stroke-width="2.5" opacity="0.6"/>
+<text x="200" y="190" font-size="9" fill="#787887">仅 &ldquo;dog&rdquo; &ldquo;golden&rdquo; &ldquo;retriever&rdquo; 被选中</text>
+<!-- Savings indicator -->
+<rect x="200" y="210" width="320" height="32" rx="8" fill="#d1fae5" stroke="#34d399"/>
+<text x="360" y="230" text-anchor="middle" font-size="11" fill="#10b981" font-weight="600">每帧仅需 ~30% prompt tokens &rarr; 2.2&ndash;2.3&times; Cross-Attn 加速</text>
+</svg>
+</div>
+<div class="svg-caption">图示：AnnCA根据当前帧内容动态选择相关的prompt tokens，不同帧关注不同的文本语义</div>
+
+<!-- Code block 2: AnnCA implementation -->
+<div class="code-block" data-label="AnnCA 核心逻辑">
+<span class="trust">可信度: 高 — 基于论文描述</span>
+<pre><code><span class="kw">class</span> <span class="fn">AnnCA</span>:
+    <span class="str">"""Approximate Nearest-Neighbor Cross-Attention"""</span>
+
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, d_model, n_buckets=<span class="num">64</span>, method=<span class="str">"lsh"</span>):
+        <span class="kw">if</span> method == <span class="str">"lsh"</span>:
+            <span class="com"># LSH: 随机投影 + 哈希桶</span>
+            self.projection = <span class="fn">random_orthogonal</span>(d_model, n_buckets)
+            self.index = faiss.<span class="fn">IndexLSH</span>(d_model, n_buckets)
+        <span class="kw">else</span>:
+            <span class="com"># 量化: 乘积量化(PQ) 8-bit</span>
+            self.index = faiss.<span class="fn">IndexPQ</span>(d_model, <span class="num">8</span>, <span class="num">8</span>)
+
+    <span class="kw">def</span> <span class="fn">prune_prompt_tokens</span>(self, latent_queries, prompt_keys):
+        <span class="str">"""
+        对当前帧，筛选相关的prompt tokens
+        latent_queries: [Nq, d] - 当前帧的latent query
+        prompt_keys:    [Np, d] - prompt的key投影
+        """</span>
+        <span class="com"># 1. 将latent queries加入索引</span>
+        self.index.<span class="fn">train</span>(latent_queries)
+        self.index.<span class="fn">add</span>(latent_queries)
+
+        <span class="com"># 2. 用prompt keys查询，看哪些落入同桶</span>
+        _, bucket_ids = self.index.<span class="fn">search</span>(prompt_keys, k=<span class="num">1</span>)
+
+        <span class="com"># 3. 标记有neighbor的prompt tokens为相关</span>
+        relevant_mask = torch.<span class="fn">zeros</span>(prompt_keys.shape[<span class="num">0</span>], dtype=bool)
+        <span class="kw">for</span> p_idx, bucket <span class="kw">in</span> <span class="fn">enumerate</span>(bucket_ids):
+            <span class="kw">if</span> <span class="fn">has_neighbor_in_bucket</span>(bucket, latent_queries):
+                relevant_mask[p_idx] = <span class="kw">True</span>
+
+        <span class="com"># 4. 返回筛选后的prompt keys/values indices</span>
+        <span class="kw">return</span> torch.<span class="fn">where</span>(relevant_mask)[<span class="num">0</span>]</code></pre>
+</div>
+</section>
+
+<!-- ========== CH6 ========== -->
+<section id="ch6">
+<span class="section-tag">CH6 &middot; 核心模块三</span>
+<h2>AnnSA：近似最近邻稀疏自注意力</h2>
+
+<p>自注意力在视频扩散模型中具有最强的计算负担：3D时空token的全自注意力复杂度为 $O(N^2)$，其中 $N = H \times W \times T$。AnnSA利用Q和K的语义聚类特性，通过ANN匹配将自注意力限制在语义相关的key子集内。</p>
+
+<h3>语义桶复用</h3>
+<p>AnnSA的一个精巧设计是<strong>复用cross-attention阶段建立的语义分桶</strong>。在AnnCA中，latent queries被投影到LSH/量化空间并分配到桶中，这些桶天然反映了prompt诱导的语义分组。AnnSA将同样的分桶信息用于自注意力：每个token的query被分配到一个或多个桶，自注意力被限制在同一桶内的key之间，通过块稀疏注意力核（如FlashInfer）高效计算。</p>
+
+<h3>语义一致性的理论基础</h3>
+<p>Figure 3的PCA可视化揭示了Q和K的强语义聚类结构：前景token（如猫）聚在一起，背景token形成独立聚类。这意味着基于哈希桶的分组天然对应了语义区域——同一桶中的token大概率属于同一物体或区域，它们之间的注意力才是有意义的。跨桶的注意力（如前景token attend to 深层背景）通常是冗余的。</p>
+
+<div class="figure">
+<img src="assets/_smart/Figure_6_shows_how_p8.webp" alt="AnnSA qualitative" onerror="this.style.display='none'">
+<img src="assets/_smart/Figure_7_provides_qualitative_p8.webp" alt="Qualitative results">
+<div class="figure-caption">Figure 7：长视频生成的定性对比。FAST-AR保持了Dense FA3的视觉保真度和时序一致性，而基线方法（SVG1/2）出现严重伪影和时序漂移</div>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：从离线到自回归——为什么现有稀疏注意力方法失败</div>
+<p>SVG、SVG2和RadialAttention是为离线视频扩散设计的稀疏注意力方法，但在自回归设置中表现严重退化。根本原因是：离线方法需要对每帧的每个block进行昂贵的预处理（如聚类或能量衰减估计），而这些预处理必须在Transformer blocks、扩散时间步和帧之间重复。在长序列自回归生成中，这种重复预处理的累积开销抵消甚至超过了稀疏化带来的收益。FAST-AR的ANN匹配是轻量级且可复用的，成功避免了这一陷阱。</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：语义聚类——注意力的自然归纳偏置</div>
+<p>Q和K的语义聚类不是人为设计，而是视频数据的内在结构。在自然视频中，物体在连续帧中保持语义一致性（猫仍然是猫，背景仍然是背景），这自然导致了特征空间中的聚类结构。AnnSA通过ANN桶化利用了这一结构，本质上是在做一种"免费"的语义分割——不需要额外的分割网络，仅通过哈希投影就能近似恢复语义区域边界。</p>
+</div>
+
+<!-- SVG 6: AnnSA Bucket-based Sparse Self-Attention -->
+<div class="svg-container">
+<svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg">
+<text x="360" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">AnnSA 桶化稀疏自注意力机制</text>
+<!-- Tokens arranged -->
+<text x="360" y="50" text-anchor="middle" font-size="10" fill="#787887">当前帧所有token (前景 + 背景)</text>
+<!-- Foreground tokens -->
+<rect x="50" y="60" width="280" height="50" rx="10" fill="#e9d5ff" stroke="#c084fc"/>
+<text x="60" y="80" font-size="9" fill="#7e22ce" font-weight="600">桶A (前景):</text>
+<circle cx="140" cy="85" r="10" fill="#c084fc"/><text x="140" y="89" text-anchor="middle" font-size="7" fill="white">q1</text>
+<circle cx="170" cy="85" r="10" fill="#c084fc"/><text x="170" y="89" text-anchor="middle" font-size="7" fill="white">q2</text>
+<circle cx="200" cy="85" r="10" fill="#c084fc"/><text x="200" y="89" text-anchor="middle" font-size="7" fill="white">q3</text>
+<circle cx="230" cy="85" r="10" fill="#c084fc"/><text x="230" y="89" text-anchor="middle" font-size="7" fill="white">q4</text>
+<circle cx="260" cy="85" r="10" fill="#c084fc"/><text x="260" y="89" text-anchor="middle" font-size="7" fill="white">q5</text>
+<!-- Background tokens -->
+<rect x="390" y="60" width="280" height="50" rx="10" fill="#d1fae5" stroke="#34d399"/>
+<text x="400" y="80" font-size="9" fill="#10b981" font-weight="600">桶B (背景):</text>
+<circle cx="480" cy="85" r="10" fill="#34d399"/><text x="480" y="89" text-anchor="middle" font-size="7" fill="white">q6</text>
+<circle cx="510" cy="85" r="10" fill="#34d399"/><text x="510" y="89" text-anchor="middle" font-size="7" fill="white">q7</text>
+<circle cx="540" cy="85" r="10" fill="#34d399"/><text x="540" y="89" text-anchor="middle" font-size="7" fill="white">q8</text>
+<circle cx="570" cy="85" r="10" fill="#34d399"/><text x="570" y="89" text-anchor="middle" font-size="7" fill="white">q9</text>
+<circle cx="600" cy="85" r="10" fill="#34d399"/><text x="600" y="89" text-anchor="middle" font-size="7" fill="white">q10</text>
+<!-- Within-bucket attention (dense) -->
+<rect x="50" y="130" width="280" height="40" rx="8" fill="#f3e8ff"/>
+<text x="190" y="155" text-anchor="middle" font-size="10" fill="#9333ea" font-weight="600">桶A内: 稠密注意力 (5&times;5)</text>
+<!-- Within-bucket attention (dense) -->
+<rect x="390" y="130" width="280" height="40" rx="8" fill="#ecfdf5"/>
+<text x="530" y="155" text-anchor="middle" font-size="10" fill="#10b981" font-weight="600">桶B内: 稠密注意力 (5&times;5)</text>
+<!-- Cross-bucket (blocked) -->
+<text x="360" y="200" text-anchor="middle" font-size="10" fill="#f43f5e">跨桶注意力: 阻断 (节省计算)</text>
+<line x1="200" y1="175" x2="520" y2="175" stroke="#f43f5e" stroke-width="1.5" stroke-dasharray="5,3"/>
+<text x="360" y="190" text-anchor="middle" font-size="20" fill="#f43f5e">&times;</text>
+<!-- Savings -->
+<rect x="200" y="210" width="320" height="28" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+<text x="360" y="229" text-anchor="middle" font-size="10" fill="#f59e0b" font-weight="600">10&times;10全注意力 &rarr; 2&times;(5&times;5)块稀疏 = 50% 计算节省</text>
+</svg>
+</div>
+<div class="svg-caption">图示：AnnSA将token按语义桶分组，仅在桶内执行稠密注意力，桶间注意力被阻断以节省计算</div>
+
+<div class="insight">
+<div class="insight-title">工程洞察：FlashInfer块稀疏核的高效利用</div>
+<p>AnnSA产生的桶化稀疏模式完美匹配FlashInfer的块稀疏注意力核。每个桶对应一个连续的token块，块内执行标准稠密注意力，块间跳过。FlashInfer针对这种块稀疏模式做了深度优化（融合内存访问、减少kernel launch开销），使得AnnSA的稀疏注意力计算几乎与理论最优的稀疏模式一样高效。</p>
+</div>
+</section>
+
+<!-- ========== CH7 ========== -->
+<section id="ch7">
+<span class="section-tag">CH7 &middot; 实验结果</span>
+<h2>全面实验：5&times;&ndash;10&times; 加速与近乎无损的质量</h2>
+
+<p>FAST-AR在两个SOTA模型上进行了全面评估：Rolling Forcing（长时序自回归视频扩散）和LongVie2（自回归世界模型）。所有实验在<strong>单张H100 GPU</strong>上运行，生成3000帧（约2分钟视频），不施加上下文窗口限制。</p>
+
+<h3>定量结果</h3>
+
+<table class="result-table">
+<thead>
+<tr><th>方法</th><th>PSNR&uarr;</th><th>SSIM&uarr;</th><th>LPIPS&darr;</th><th>VBench&uarr;</th><th>密度&darr;</th><th>召回&uarr;</th><th>加速&uarr;</th></tr>
+</thead>
+<tbody>
+<tr><td>Dense FA3</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>84.08</td><td>100%</td><td>100%</td><td>1.0&times;</td></tr>
+<tr><td>TeaCache</td><td>16.12</td><td>0.315</td><td>0.523</td><td>84.11</td><td>93.2%</td><td>84.6%</td><td>1.1&times;</td></tr>
+<tr><td>FlowCache</td><td>22.15</td><td>0.634</td><td>0.222</td><td>84.15</td><td>82.9%</td><td>86.9%</td><td>2.3&times;</td></tr>
+<tr class="ours"><td class="best">TempCache-Quant</td><td class="best">24.26</td><td class="best">0.653</td><td class="best">0.143</td><td class="best">84.19</td><td class="best">16.2%</td><td class="best">91.4%</td><td class="best">3.2&times;</td></tr>
+<tr><td>SVG1</td><td>14.22</td><td>0.201</td><td>0.744</td><td>33.15</td><td>76.1%</td><td>30.2%</td><td>0.1&times;</td></tr>
+<tr><td>SVG2</td><td>14.29</td><td>0.226</td><td>0.736</td><td>34.66</td><td>68.8%</td><td>38.9%</td><td>0.2&times;</td></tr>
+<tr><td>RadialAttn</td><td>16.87</td><td>0.289</td><td>0.702</td><td>61.51</td><td>81.6%</td><td>58.3%</td><td>2.8&times;</td></tr>
+<tr class="ours"><td class="best">AnnSA-Quant</td><td class="best">25.77</td><td class="best">0.689</td><td class="best">0.141</td><td class="best">83.29</td><td>28.0%</td><td class="best">92.6%</td><td class="best">2.8&times;</td></tr>
+<tr class="ours"><td class="best">AnnCA-LSH</td><td class="best">25.68</td><td class="best">0.679</td><td class="best">0.155</td><td class="best">83.23</td><td>33.1%</td><td class="best">94.2%</td><td>1.2&times;</td></tr>
+<tr><td>FlowCache+RadialAttn</td><td>16.98</td><td>0.294</td><td>0.687</td><td>45.15</td><td>&mdash;</td><td>&mdash;</td><td>4.4&times;</td></tr>
+<tr class="ours"><td class="best"><strong>All Ours-Quant</strong></td><td class="best">25.73</td><td class="best">0.678</td><td class="best">0.147</td><td class="best">83.99</td><td>&mdash;</td><td>&mdash;</td><td class="best"><strong>10.8&times;</strong></td></tr>
+</tbody>
+</table>
+
+<p>关键发现：FAST-AR的完整组合（All Ours-Quant）实现了<strong>10.8&times; 端到端加速</strong>，同时VBench分数（83.99）仅比Dense FA3（84.08）低0.09分。相比之下，最佳基线组合（FlowCache+RadialAttn）仅达到4.4&times;加速，且VBench暴跌至45.15。</p>
+
+<div class="figure">
+<img src="assets/_smart/Figure_6_shows_how_p8.webp" alt="Scaling with generation length">
+<div class="figure-caption">Figure 6：随生成长度的扩展性。(a) 吞吐量：Dense FA3的FPS急剧下降，基线方法也失败；FAST-AR保持恒定FPS。(b) 峰值显存：FA3和基线方法显存持续增长，FAST-AR保持恒定</div>
+</div>
+
+<!-- SVG 7: Speedup Comparison Bar Chart -->
+<div class="svg-container">
+<svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+<text x="360" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">端到端加速对比（Rolling Forcing, LongVBench）</text>
+<!-- Axes -->
+<line x1="80" y1="50" x2="80" y2="240" stroke="#787887" stroke-width="1"/>
+<line x1="80" y1="240" x2="690" y2="240" stroke="#787887" stroke-width="1"/>
+<!-- Grid lines -->
+<line x1="80" y1="200" x2="690" y2="200" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4,4"/>
+<line x1="80" y1="160" x2="690" y2="160" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4,4"/>
+<line x1="80" y1="120" x2="690" y2="120" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4,4"/>
+<line x1="80" y1="80" x2="690" y2="80" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4,4"/>
+<!-- Y labels -->
+<text x="70" y="244" text-anchor="end" font-size="9" fill="#787887">0&times;</text>
+<text x="70" y="204" text-anchor="end" font-size="9" fill="#787887">2&times;</text>
+<text x="70" y="164" text-anchor="end" font-size="9" fill="#787887">4&times;</text>
+<text x="70" y="124" text-anchor="end" font-size="9" fill="#787887">6&times;</text>
+<text x="70" y="84" text-anchor="end" font-size="9" fill="#787887">8&times;</text>
+<!-- Bars -->
+<!-- Dense FA3 = 1x -->
+<rect x="100" y="230" width="55" height="10" rx="3" fill="#787887" opacity="0.5"/>
+<text x="127" y="225" text-anchor="middle" font-size="9" fill="#787887" font-weight="600">1.0&times;</text>
+<text x="127" y="260" text-anchor="middle" font-size="8" fill="#4c4b5e">Dense</text>
+<!-- TeaCache = 1.1x -->
+<rect x="170" y="229" width="55" height="11" rx="3" fill="#787887" opacity="0.5"/>
+<text x="197" y="224" text-anchor="middle" font-size="9" fill="#787887" font-weight="600">1.1&times;</text>
+<text x="197" y="260" text-anchor="middle" font-size="8" fill="#4c4b5e">TeaCache</text>
+<!-- FlowCache = 2.3x -->
+<rect x="240" y="207" width="55" height="33" rx="3" fill="#787887" opacity="0.5"/>
+<text x="267" y="202" text-anchor="middle" font-size="9" fill="#787887" font-weight="600">2.3&times;</text>
+<text x="267" y="260" text-anchor="middle" font-size="8" fill="#4c4b5e">FlowCache</text>
+<!-- SVG1 = 0.1x (negative!) -->
+<rect x="310" y="238" width="55" height="2" rx="3" fill="#f43f5e" opacity="0.5"/>
+<text x="337" y="234" text-anchor="middle" font-size="9" fill="#f43f5e" font-weight="600">0.1&times;</text>
+<text x="337" y="260" text-anchor="middle" font-size="8" fill="#4c4b5e">SVG1</text>
+<!-- RadialAttn = 2.8x -->
+<rect x="380" y="200" width="55" height="40" rx="3" fill="#787887" opacity="0.5"/>
+<text x="407" y="195" text-anchor="middle" font-size="9" fill="#787887" font-weight="600">2.8&times;</text>
+<text x="407" y="260" text-anchor="middle" font-size="8" fill="#4c4b5e">RadialAttn</text>
+<!-- FlowCache+RadialAttn = 4.4x -->
+<rect x="450" y="170" width="55" height="70" rx="3" fill="#f59e0b" opacity="0.5"/>
+<text x="477" y="165" text-anchor="middle" font-size="9" fill="#f59e0b" font-weight="600">4.4&times;</text>
+<text x="477" y="260" text-anchor="middle" font-size="8" fill="#4c4b5e">F+R</text>
+<!-- All Ours-LSH = 10.7x -->
+<rect x="530" y="82" width="55" height="158" rx="3" fill="#10b981" opacity="0.7"/>
+<text x="557" y="76" text-anchor="middle" font-size="10" fill="#10b981" font-weight="700">10.7&times;</text>
+<text x="557" y="260" text-anchor="middle" font-size="8" fill="#10b981" font-weight="600">Ours-LSH</text>
+<!-- All Ours-Quant = 10.8x -->
+<rect x="600" y="80" width="55" height="160" rx="3" fill="#10b981"/>
+<text x="627" y="74" text-anchor="middle" font-size="10" fill="#10b981" font-weight="700">10.8&times;</text>
+<text x="627" y="260" text-anchor="middle" font-size="8" fill="#10b981" font-weight="700">Ours-Q</text>
+</svg>
+</div>
+<div class="svg-caption">图示：FAST-AR（绿色）实现了10.7&ndash;10.8倍端到端加速，远超所有基线方法</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：离线方法迁移失败的系统性原因</div>
+<p>SVG1/2在自回归设置中产生严重的质量崩塌（VBench从84降至33-34），加速也变成减速（0.1&times;-0.2&times;）。RadialAttn表现稍好但仍远逊于FAST-AR。根本原因不在于方法本身有缺陷，而在于它们的<strong>设计假设与自回归场景不匹配</strong>：离线方法假设全局token序列已知且固定，而自回归生成中序列逐帧扩展，且缓存中的历史帧不可重新排列。FAST-AR的ANN方法不依赖全局信息，天然适应增量生成。</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：恒定FPS和恒定显存的工程意义</div>
+<p>Figure 6展示了FAST-AR最令人印象深刻的特性：在3000帧的完整生成过程中，FPS和峰值显存几乎保持恒定。这意味着用户可以预测生成时间——无论生成500帧还是3000帧，每帧的处理时间基本相同。对于实时世界模型和交互式游戏引擎，这种可预测性与绝对速度同等重要，因为它保证了流畅的用户体验。</p>
+</div>
+</section>
+
+<!-- ========== CH8 ========== -->
+<section id="ch8">
+<span class="section-tag">CH8 &middot; 消融与讨论</span>
+<h2>消融分析与组件贡献</h2>
+
+<p>论文对FAST-AR的三个组件进行了系统消融，验证每个模块的独立贡献和协同效应。</p>
+
+<h3>组件独立贡献</h3>
+<p>从Table 1可以提取各组件的独立贡献：</p>
+<ul style="color:var(--ink-soft);font-size:15px;line-height:1.85;margin-bottom:14px;margin-left:20px">
+<li><strong>TempCache-Quant</strong>：KV缓存压缩至16.2%密度，91.4%召回率，3.2&times;加速</li>
+<li><strong>AnnSA-Quant</strong>：自注意力稀疏化至28%密度，92.6%召回率，2.8&times;加速</li>
+<li><strong>AnnCA-LSH</strong>：交叉注意力稀疏化至33.1%密度，94.2%召回率，1.2&times;加速</li>
+</ul>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig10_ablation.webp" alt="Ablation results">
+<div class="figure-caption">Figure 10：消融实验结果，展示各组件独立和组合时的质量-效率权衡</div>
+</div>
+
+<h3>LSH vs 量化</h3>
+<p>两种ANN策略（LSH和量化）的表现非常接近，各有微弱优势。TempCache-Quant略优于LSH（91.4% vs 90.2%召回率），AnnSA-Quant也略优于LSH（92.6% vs 92.4%）。这说明FAST-AR的核心思想不依赖于特定的ANN实现，而在于ANN框架本身。在实践中，量化方法在高维空间中可能有微弱优势，因为PQ编码保留了更多的子空间结构信息。</p>
+
+<div class="figure">
+<img src="assets/_smart/Figure_8_shows_attention_p12.webp" alt="World model scaling" onerror="this.style.display='none'">
+<img src="assets/_precise_v2/fig8_scaling2.webp" alt="World model qualitative" onerror="this.style.display='none'">
+<img src="assets/_precise/Table_3_TempCache-Quant_on_p13.webp" alt="Table 3" onerror="this.style.display='none'">
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：三组件的非对称贡献结构</div>
+<p>三个组件的贡献呈非对称结构：TempCache提供最大的单组件加速（3.2&times;），因为它直接压缩了KV缓存的大小，影响所有后续的注意力计算；AnnSA提供次大的加速（2.8&times;），因为自注意力是计算最密集的部分；AnnCA提供较小但显著的加速（1.2&times;），因为cross-attention在总计算中的比例较小。然而，三者组合时加速并非简单相加（3.2+2.8+1.2=7.2），而是达到10.8&times;，说明存在协同效应——TempCache的KV压缩使得AnnSA和AnnCA的操作空间更小，进一步提升了它们的效率。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">工程洞察：即插即用的免训练优势</div>
+<p>FAST-AR不需要任何模型修改、重训练或微调。它直接作用于预训练模型的推理过程，修改的仅是注意力的输入（缓存的K, V）而非模型权重。这意味着它可以无缝应用于任何现有的自回归视频扩散模型——从Rolling Forcing到LongVie2到未来的模型——只需替换注意力计算的wrapper即可。这种即插即用性大幅降低了技术采用的门槛。</p>
+</div>
+
+<!-- Code block 3: Full FAST-AR integration -->
+<div class="code-block" data-label="FAST-AR 完整集成示例">
+<span class="trust">可信度: 中 — 简化示例</span>
+<pre><code><span class="kw">import</span> torch
+<span class="kw">from</span> faiss <span class="kw">import</span> IndexLSH, IndexPQ
+<span class="kw">from</span> flashinfer <span class="kw">import</span> sparse_attention
+
+<span class="kw">class</span> <span class="fn">FASTAttentionWrapper</span>:
+    <span class="str">"""FAST-AR: 替换标准attention的即插即用wrapper"""</span>
+
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, original_attn, config):
+        self.original = original_attn
+        self.tempcache = <span class="fn">TempCache</span>(
+            threshold=config.sim_threshold,
+            method=config.ann_method  <span class="com"># "lsh" or "quant"</span>
+        )
+        self.ann_ca = <span class="fn">AnnCA</span>(config.d_model, config.n_buckets)
+        self.ann_sa = <span class="fn">AnnSA</span>(config.d_model, config.n_buckets)
+        self.frame_idx = <span class="num">0</span>
+
+    <span class="kw">def</span> <span class="fn">forward</span>(self, q, k, v, is_cross_attn=<span class="kw">False</span>):
+        <span class="com"># 1. TempCache: 压缩KV缓存</span>
+        k, v, bias = self.tempcache.<span class="fn">compress</span>(q, k, v)
+
+        <span class="kw">if</span> is_cross_attn:
+            <span class="com"># 2a. AnnCA: 筛选相关prompt tokens</span>
+            keep_idx = self.ann_ca.<span class="fn">prune</span>(q, k)
+            k, v = k[keep_idx], v[keep_idx]
+            <span class="com"># 标准注意力（已减少key数量）</span>
+            out = self.original(q, k, v)
+        <span class="kw">else</span>:
+            <span class="com"># 2b. AnnSA: 桶化稀疏自注意力</span>
+            buckets = self.ann_sa.<span class="fn">assign_buckets</span>(q, k)
+            out = <span class="fn">sparse_attention</span>(
+                q, k, v, buckets, bias
+            )
+
+        self.frame_idx += <span class="num">1</span>
+        <span class="kw">return</span> out
+
+<span class="com"># 使用方式：替换DiT中的attention</span>
+model.attn = <span class="fn">FASTAttentionWrapper</span>(
+    model.attn,
+    FASTConfig(ann_method=<span class="str">"quant"</span>, n_buckets=<span class="num">64</span>)
+)
+<span class="com"># 正常推理即可，无需任何训练</span>
+video = model.<span class="fn">generate</span>(prompt, num_frames=<span class="num">3000</span>)</code></pre>
+</div>
+
+<div class="insight">
+<div class="insight-title">工程洞察：稀疏注意力在前30%去噪步的禁用策略</div>
+<p>实验中发现，稀疏注意力在前30%的去噪步中应被禁用。原因是扩散模型在早期去噪步中构建全局结构，此时注意力模式尚未稳定，稀疏化可能破坏全局一致性。在后期去噪步中，注意力模式已稳定且高度稀疏，是应用稀疏化的理想时机。这种时间自适应策略体现了对扩散推理动态过程的深刻理解。</p>
+</div>
+</section>
+
+<!-- ========== SUMMARY ========== -->
+<section id="summary">
+<span class="section-tag">总结</span>
+<h2>FAST-AR 的核心贡献与未来展望</h2>
+
+<div class="summary-box">
+<h3>核心贡献</h3>
+<p>FAST-AR提出了一个<strong>统一、免训练的注意力加速框架</strong>，针对自回归视频扩散模型中的三种注意力冗余源——跨帧重复Key、缓慢演化的语义Q/K、浪费的Cross-Attention——分别设计了TempCache、AnnSA和AnnCA三个互补模块。三个模块均基于近似最近邻搜索，使用FAISS的LSH或量化索引实现轻量级推理时匹配，兼容FlashInfer的块稀疏注意力核。</p>
+</div>
+
+<div class="stats-grid">
+<div class="stat-card"><div class="num">10.8&times;</div><div class="label">端到端加速</div></div>
+<div class="stat-card"><div class="num">83.99</div><div class="label">VBench（Dense: 84.08）</div></div>
+<div class="stat-card"><div class="num">恒定</div><div class="label">FPS与峰值显存</div></div>
+<div class="stat-card"><div class="num">0</div><div class="label">额外训练参数</div></div>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：ANN搜索范式在视频生成中的广阔前景</div>
+<p>FAST-AR首次将ANN搜索范式系统化地应用于自回归视频扩散。这一范式转换的深远意义在于：它将"注意力计算"从一个O(N^2)的密集矩阵乘法问题重新定义为O(N log N)的近似检索问题。随着FAISS等ANN库的持续优化和硬件加速（如GPU上的HNSW），这种范式的效率优势将进一步放大。未来的工作可以探索更高级的ANN索引结构（如基于图的HNSW）在视频扩散中的应用。</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：从视频扩散到通用流式生成的推广</div>
+<p>FAST-AR虽然在视频扩散上验证，但其核心思想——利用时序对应压缩缓存、利用语义聚类稀疏注意力——适用于任何具有渐进式缓存增长的自回归生成模型。音频流生成、长文档自回归翻译、连续决策的world model都面临类似的KV缓存膨胀问题。FAST-AR提供了一个通用的、免训练的加速范式，可以推广到这些领域。</p>
+</div>
+</section>
+
+<!-- ========== RESEARCH QUESTIONS ========== -->
+<section id="ch9">
+<span class="section-tag">科研问题</span>
+<h2>五个开放科研问题</h2>
+
+<div class="rq-card">
+<span class="rq-tag">RQ1</span>
+<h4>ANN精度与生成质量的Pareto前沿</h4>
+<p><strong>理论分析：</strong>FAST-AR使用LSH/8-bit量化作为ANN策略，精度与速度之间存在trade-off。更精确的ANN（如HNSW、IVF-PQ）可能进一步提升注意力召回率，但引入更大的索引构建开销。</p>
+<p><strong>调查方向：</strong>系统探索不同ANN索引结构（LSH、PQ、HNSW、IVF）在视频扩散注意力中的Pareto前沿；研究自适应精度分配——在不同层/时间步使用不同精度的ANN；探索学习型哈希函数替代随机投影的效果。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">RQ2</span>
+<h4>训练感知的稀疏注意力架构</h4>
+<p><strong>理论分析：</strong>FAST-AR是完全免训练的，在预训练模型上直接应用。但如果在训练阶段就引入稀疏注意力的归纳偏置，模型可能学会更高效地利用稀疏模式，从而在推理时实现更大的加速。</p>
+<p><strong>调查方向：</strong>设计训练时的稀疏注意力正则化，鼓励模型学习稀疏友好的Q/K分布；研究混合训练策略——前期稠密训练建立基础能力，后期逐步引入稀疏约束；探索是否可以通过微调（而非全量训练）让现有模型适应FAST-AR的稀疏模式。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">RQ3</span>
+<h4>跨模态注意力压缩的统一理论</h4>
+<p><strong>理论分析：</strong>FAST-AR分别处理了self-attention和cross-attention的稀疏化，但两者共享ANN框架。一个自然的问题是：是否存在一个统一的理论框架，将Q-K相似性的时空结构与注意力稀疏性联系起来？</p>
+<p><strong>调查方向：</strong>建立Q/K特征的低维流形结构与注意力稀疏性之间的理论联系；研究信息论视角下的最优压缩率——给定视频的时空冗余，理论上KV缓存能压缩到什么程度；探索是否存在与视频内容复杂度自适应的压缩策略。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">RQ4</span>
+<h4>实时交互式世界模型的注意力架构</h4>
+<p><strong>理论分析：</strong>FAST-AR使得3000帧（2分钟）视频在单GPU上以恒定FPS生成。但对于交互式世界模型（如游戏引擎），需要亚帧级延迟和对用户输入的即时响应。当前架构是否已满足这一需求？</p>
+<p><strong>调查方向：</strong>测量FAST-AR在不同延迟约束下的可行帧率范围；设计预测性KV缓存预取策略——提前预测用户可能的输入方向并预压缩相关区域的缓存；探索FAST-AR与模型蒸馏的结合——先用FAST-AR压缩注意力，再蒸馏到更小的模型中。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">RQ5</span>
+<h4>注意力稀疏性的自适应动态调度</h4>
+<p><strong>理论分析：</strong>FAST-AR在实验中发现稀疏注意力应在前30%去噪步禁用。这暗示扩散推理的不同阶段具有不同的注意力稀疏特征。一个更精细的动态调度策略可能进一步提升效率。</p>
+<p><strong>调查方向：</strong>研究注意力稀疏度随去噪步的动态变化规律，设计基于稀疏度的自适应调度器；探索注意力密度预测模型——用轻量级网络预测下一层/时间步的最优稀疏度；研究不同内容区域（静态背景 vs 快速运动前景）是否需要不同的稀疏策略。</p>
+</div>
+
+</section>
+
+</div>
+
+<footer>
+<p>FAST-AR: Fast Autoregressive Video Diffusion and World Models with Temporal Cache Compression and Sparse Attention</p>
+<p>Dvir Samuel, Issar Tzachor, Matan Levy, Michael Green, Gal Chechik, Rami Ben-Ari</p>
+<p>ICML 2026 &middot; <a href="https://arxiv.org/abs/2602.01801" target="_blank">arXiv:2602.01801</a></p>
+</footer>
+
+</body>
+</html>

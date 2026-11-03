@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LongLive: 实时交互式长视频生成 | 论文精读</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- MathJax 3.x with three-layer CDN fallback and skipHtmlTags -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true
+  },
+  chtml: { scale: 1.05 },
+  startup: { typeset: true },
+  options: {
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+  }
+};
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js" onerror="this.remove();document.write('<script src=\"https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js\"><\/script>')"></script>
+<script>
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    if (!window.MathJax || !window.MathJax.startup || !window.MathJax.startup.promise) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+      document.head.appendChild(s);
+    }
+  }, 5000);
+});
+</script>
+
+<style>
+:root {
+  --lav-50:#faf5ff;--lav-100:#f3e8ff;--lav-200:#e9d5ff;--lav-300:#d8b4fe;
+  --lav-400:#c084fc;--lav-500:#a855f7;--lav-600:#9333ea;--lav-700:#7e22ce;
+  --coral-100:#ffe4e6;--coral-200:#fecdd3;--coral-300:#fda4af;--coral-400:#fb7185;--coral-500:#f43f5e;
+  --mint-100:#d1fae5;--mint-200:#a7f3d0;--mint-300:#6ee7b7;--mint-400:#34d399;--mint-500:#10b981;
+  --warm-100:#fef3c7;--warm-200:#fde68a;--amber-500:#f59e0b;
+  --ink:#1e1b4b;--ink-soft:#4c4b5e;--ink-muted:#787887;
+  --paper:#ffffff;--paper-warm:#faf8f5;--paper-cream:#fdf6e3;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:'Noto Sans SC',sans-serif;background:var(--paper-warm);color:var(--ink);line-height:1.8;overflow-x:hidden}
+h1,h2,h3,h4{font-family:'Noto Serif SC',serif;font-weight:700}
+
+/* Navigation */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(250,248,245,0.85);backdrop-filter:blur(16px) saturate(1.5);border-bottom:1px solid rgba(192,132,252,0.15);padding:10px 24px}
+nav .nav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+nav .logo{font-family:'Noto Serif SC',serif;font-weight:900;font-size:18px;background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+nav .nav-links{display:flex;gap:6px;flex-wrap:wrap}
+nav .nav-links a{font-size:12px;color:var(--ink-soft);text-decoration:none;padding:4px 10px;border-radius:100px;transition:all .2s}
+nav .nav-links a:hover{background:var(--lav-100);color:var(--lav-600)}
+
+/* Hero */
+.hero{position:relative;min-height:96vh;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:120px 24px 80px;background:linear-gradient(135deg,#faf5ff 0%,#f3e8ff 18%,#fdf4e3 50%,#fffbeb 100%)}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 520px 320px at 12% 22%,rgba(192,132,252,0.16),transparent 60%),radial-gradient(ellipse 520px 320px at 88% 78%,rgba(251,191,36,0.13),transparent 60%)}
+.hero-wrap{position:relative;z-index:2;width:100%;max-width:780px;text-align:center}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,0.6);backdrop-filter:blur(12px) saturate(1.5);border:1px solid rgba(192,132,252,0.3);color:var(--lav-600);padding:7px 20px;border-radius:100px;font-family:'Noto Sans SC',sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;margin-bottom:20px;box-shadow:0 4px 20px rgba(192,132,252,0.12)}
+.hero h1{font-family:'Noto Serif SC',serif;font-size:clamp(2.8rem,8vw,5rem);font-weight:900;letter-spacing:-0.03em;line-height:1.1;margin:12px 0 10px;background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 38%,var(--coral-500) 62%,var(--amber-500) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:clamp(0.95rem,2.5vw,1.25rem);color:var(--ink-soft);font-weight:400;line-height:1.6;margin-bottom:8px}
+.hero-art{margin:20px auto 8px;max-width:760px;width:100%}
+.hero-img{width:100%;height:auto;border-radius:24px;box-shadow:0 24px 70px -24px rgba(30,27,75,0.18);border:1px solid rgba(192,132,252,0.12)}
+.hero-caption{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--ink-muted);margin-top:8px}
+.scroll-indicator{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:4px;color:var(--ink-muted);text-transform:uppercase;animation:bounce 2s infinite}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+
+/* Content */
+.content{max-width:820px;margin:0 auto;padding:60px 24px}
+section{margin-bottom:80px;scroll-margin-top:80px}
+.section-tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--lav-600);background:var(--lav-50);padding:4px 14px;border-radius:100px;margin-bottom:12px}
+h2{font-size:clamp(1.6rem,4vw,2.2rem);margin-bottom:16px;color:var(--ink);line-height:1.3}
+h3{font-size:clamp(1.15rem,3vw,1.45rem);margin:24px 0 12px;color:var(--lav-700)}
+p{margin-bottom:14px;color:var(--ink-soft);font-size:15px;line-height:1.85}
+strong{color:var(--ink);font-weight:600}
+em{color:var(--lav-600);font-style:normal;font-weight:500}
+
+/* Formula */
+.formula{background:var(--paper-cream);border-left:3px solid var(--lav-400);padding:16px 20px;margin:16px 0;border-radius:0 12px 12px 0;overflow-x:auto}
+.formula-label{font-size:11px;font-weight:700;color:var(--lav-600);margin-bottom:6px;letter-spacing:1px}
+
+/* Insight box (mint green) */
+.insight{background:linear-gradient(135deg,var(--mint-100) 0%,#ecfdf5 100%);border:1px solid var(--mint-300);border-left:4px solid var(--mint-400);padding:18px 22px;margin:20px 0;border-radius:0 16px 16px 0}
+.insight-title{font-weight:700;color:var(--mint-500);font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.insight-title::before{content:'';display:inline-block;width:16px;height:16px;background:var(--mint-400);border-radius:50%;flex-shrink:0}
+.insight p{color:var(--ink-soft);font-size:14px;margin:0}
+
+/* Deep insight (lavender) */
+.deep-insight{background:linear-gradient(135deg,var(--lav-50) 0%,var(--lav-100) 100%);border:1px solid var(--lav-300);border-left:4px solid var(--lav-500);padding:18px 22px;margin:20px 0;border-radius:0 16px 16px 0}
+.deep-insight-title{font-weight:700;color:var(--lav-600);font-size:13px;margin-bottom:8px}
+.deep-insight p{color:var(--ink-soft);font-size:14px;margin:0}
+
+/* Code block */
+.code-block{background:#1e1b4b;border-radius:12px;padding:20px 24px;margin:20px 0;overflow-x:auto;position:relative}
+.code-block::before{content:attr(data-label);position:absolute;top:-10px;left:20px;background:var(--lav-500);color:white;font-size:10px;font-weight:700;padding:2px 12px;border-radius:100px;letter-spacing:1px}
+.code-block pre{margin:0}
+.code-block code{font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.65;color:#e0e0e0}
+.code-block .kw{color:#c084fc}
+.code-block .str{color:#6ee7b7}
+.code-block .com{color:#787887}
+.code-block .fn{color:#fbbf24}
+.code-block .num{color:#fb7185}
+
+/* Figure */
+.figure{margin:24px 0;text-align:center}
+.figure img{max-width:100%;border-radius:12px;box-shadow:0 8px 30px -12px rgba(30,27,75,0.15);border:1px solid rgba(192,132,252,0.1)}
+.figure-caption{font-size:12px;color:var(--ink-muted);margin-top:8px;line-height:1.5}
+
+/* Table */
+.result-table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}
+.result-table th{background:var(--lav-100);color:var(--lav-700);padding:8px 10px;text-align:center;font-weight:600;border-radius:6px}
+.result-table td{padding:8px 10px;text-align:center;border-bottom:1px solid var(--lav-100)}
+.result-table tr:hover{background:var(--lav-50)}
+.result-table .best{color:var(--mint-500);font-weight:700}
+.result-table .ours{background:var(--mint-50,#ecfdf5)}
+
+/* Research question */
+.rq-card{background:linear-gradient(135deg,var(--warm-100) 0%,#fefce8 100%);border:1px solid var(--warm-200);border-left:4px solid var(--amber-500);padding:18px 22px;margin:16px 0;border-radius:0 16px 16px 0}
+.rq-tag{display:inline-block;background:var(--amber-500);color:white;font-size:10px;font-weight:700;padding:2px 10px;border-radius:100px;margin-bottom:8px;letter-spacing:1px}
+.rq-card h4{font-size:15px;color:var(--ink);margin-bottom:8px}
+.rq-card p{font-size:14px;margin:0}
+
+/* Compare cards */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:20px 0}
+.compare-card{padding:16px;border-radius:12px;border:1px solid}
+.compare-card.bad{border-color:var(--coral-300);background:var(--coral-100)}
+.compare-card.mid{border-color:var(--warm-200);background:var(--warm-100)}
+.compare-card.good{border-color:var(--mint-300);background:var(--mint-100)}
+.compare-card h4{font-size:13px;margin-bottom:8px}
+.compare-card p{font-size:12px;margin:0;line-height:1.6}
+
+/* SVG container */
+.svg-container{margin:24px 0;text-align:center;overflow-x:auto}
+.svg-container svg{max-width:100%;height:auto}
+.svg-caption{font-size:12px;color:var(--ink-muted);margin-top:6px}
+
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0}
+.stat-card{background:var(--paper);border:1px solid var(--lav-200);border-radius:12px;padding:16px;text-align:center}
+.stat-card .num{font-size:28px;font-weight:900;background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.stat-card .label{font-size:11px;color:var(--ink-muted);margin-top:4px}
+
+/* Summary */
+.summary-box{background:linear-gradient(135deg,var(--lav-50),var(--coral-100));border:1px solid var(--lav-200);border-radius:16px;padding:24px;margin:20px 0}
+.summary-box h3{color:var(--lav-700);margin-top:0}
+
+/* Links */
+a{color:var(--lav-600);text-decoration:none}
+a:hover{text-decoration:underline}
+
+footer{text-align:center;padding:40px 24px;background:var(--ink);color:var(--ink-muted);font-size:12px}
+footer a{color:var(--lav-400);text-decoration:none}
+
+@media(max-width:640px){
+  .compare-grid{grid-template-columns:1fr}
+  nav .nav-links{display:none}
+}
+</style>
+</head>
+<body>
+
+<nav>
+<div class="nav-inner">
+<span class="logo">LongLive</span>
+<div class="nav-links"><a href="../index.html">« 合辑</a>
+<a href="#ch1">双重困境</a>
+<a href="#ch2">KV-Recache</a>
+<a href="#ch3">Streaming Tuning</a>
+<a href="#ch4">短窗口+Sink</a>
+<a href="#ch5">代码解析</a>
+<a href="#ch6">实验结果</a>
+<a href="#ch7">消融研究</a>
+<a href="#ch8">局限与未来</a>
+<a href="#ch9">科研问题</a>
+</div>
+</div>
+</nav>
+
+<!-- ========== HERO ========== -->
+<div class="hero" id="hero">
+<div class="hero-wrap">
+<div class="hero-badge">arXiv 2025 &middot; Preprint</div>
+<h1>LongLive</h1>
+<p class="hero-sub">KV-Recache &times; Streaming Long Tuning &times; Frame Sink &middot; 实时交互式长视频生成 &middot; 240秒 &middot; 20.7 FPS</p>
+<div class="hero-art">
+<img src="assets/cover.webp" alt="LongLive Cover" class="hero-img">
+</div>
+<p class="hero-caption">水彩写意风格 &middot; 流动的胶片卷轴象征实时交互式长视频生成，光晕涟漪代表KV-Recache语义刷新，中心汇聚的帧流象征Streaming Long Tuning训练-推理对齐</p>
+</div>
+<div class="scroll-indicator">Scroll to Read</div>
+</div>
+
+<div class="content">
+
+<!-- ========== CH1 ========== -->
+<section id="ch1">
+<span class="section-tag">CH1 &middot; 问题分析</span>
+<h2>长视频生成的双重困境：效率与质量</h2>
+
+<p>长视频生成是推进创意、教育和影视应用的关键技术。然而，现有方法在<strong>效率</strong>和<strong>质量</strong>两个维度上都面临根本性挑战。扩散模型和Diffusion-Forcing模型能生成高质量短视频，但<strong>双向注意力</strong>机制使其无法利用KV Cache，推理效率极低。因果注意力AR模型支持KV Cache加速推理，但在长视频上质量严重退化。</p>
+
+<h3>困境一：效率困境</h3>
+
+<p>双向注意力模型（如Wan2.1）在生成180秒视频时需要处理<strong>超过100万token</strong>。以SkyReels-V2为例，生成60秒视频在H100上需要约<strong>50分钟</strong>，完全无法满足实时交互需求。双向注意力阻止了KV Cache技术的使用，导致大量冗余计算和不可接受的延迟。</p>
+
+<h3>困境二：质量困境</h3>
+
+<p>现有因果AR模型（如Self-Forcing、MAGI-1）通常采用<em>train-short-test-long</em>策略——仅在短片段上训练，推理时生成长视频。由于缺乏对自生成退化上下文的训练暴露，小误差逐步累积，导致内容漂移和时序一致性断裂。</p>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：交互式场景加剧双重困境</div>
+<p>在交互式设置中，用户在生成过程中实时输入新prompt进行语义切换。这不仅要求视觉风格、运动连续性和场景布局的平滑过渡，还要求模型能快速遵循新指令。Prompt切换时旧prompt信息残留在KV Cache中，导致新prompt被忽略或延迟响应，进一步加剧了质量困境。</p>
+</div>
+
+<!-- SVG 1: 效率-质量权衡象限图 -->
+<div class="svg-container">
+<svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="glq1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#d1fae5" stop-opacity="0.3"/><stop offset="100%" stop-color="#d1fae5" stop-opacity="0.8"/></linearGradient>
+<linearGradient id="glq2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fb7185" stop-opacity="0.2"/><stop offset="100%" stop-color="#fb7185" stop-opacity="0.5"/></linearGradient>
+<marker id="arrA" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#787887"/></marker>
+</defs>
+<!-- Axes -->
+<line x1="80" y1="300" x2="700" y2="300" stroke="#787887" stroke-width="1.5" marker-end="url(#arrA)"/>
+<line x1="80" y1="300" x2="80" y2="20" stroke="#787887" stroke-width="1.5" marker-end="url(#arrA)"/>
+<text x="390" y="340" text-anchor="middle" font-size="12" fill="#4c4b5e" font-family="Noto Sans SC">推理速度 (FPS) &rarr;</text>
+<text x="30" y="160" text-anchor="middle" font-size="12" fill="#4c4b5e" font-family="Noto Sans SC" transform="rotate(-90,30,160)">长视频质量 &rarr;</text>
+<!-- Quadrant labels -->
+<text x="540" y="55" text-anchor="middle" font-size="13" font-weight="700" fill="#10b981" font-family="Noto Sans SC">理想象限</text>
+<text x="540" y="72" text-anchor="middle" font-size="10" fill="#10b981">高速 + 高质量</text>
+<rect x="480" y="40" width="200" height="50" rx="8" fill="url(#glq1)" stroke="#34d399" stroke-dasharray="4,3"/>
+<text x="180" y="55" text-anchor="middle" font-size="13" font-weight="700" fill="#f43f5e" font-family="Noto Sans SC">困境界</text>
+<rect x="100" y="40" width="200" height="50" rx="8" fill="url(#glq2)" stroke="#fb7185" stroke-dasharray="4,3"/>
+<!-- Method points -->
+<circle cx="150" cy="80" r="6" fill="#f43f5e"/><text x="150" y="70" text-anchor="middle" font-size="10" fill="#f43f5e" font-weight="600">Wan2.1</text>
+<text x="150" y="98" text-anchor="middle" font-size="9" fill="#787887">0.78 FPS</text>
+<circle cx="160" cy="160" r="6" fill="#fb7185"/><text x="160" y="150" text-anchor="middle" font-size="10" fill="#fb7185" font-weight="600">SkyReels-V2</text>
+<text x="160" y="178" text-anchor="middle" font-size="9" fill="#787887">0.49 FPS</text>
+<circle cx="175" cy="200" r="6" fill="#f59e0b"/><text x="175" y="190" text-anchor="middle" font-size="10" fill="#f59e0b" font-weight="600">MAGI-1</text>
+<text x="175" y="218" text-anchor="middle" font-size="9" fill="#787887">0.19 FPS</text>
+<circle cx="440" cy="180" r="6" fill="#c084fc"/><text x="440" y="170" text-anchor="middle" font-size="10" fill="#9333ea" font-weight="600">Self-Forcing</text>
+<text x="440" y="198" text-anchor="middle" font-size="9" fill="#787887">17.0 FPS</text>
+<circle cx="420" cy="210" r="6" fill="#fbbf24"/><text x="420" y="228" text-anchor="middle" font-size="10" fill="#f59e0b" font-weight="600">CausVid</text>
+<text x="420" y="200" text-anchor="middle" font-size="9" fill="#787887">17.0 FPS</text>
+<circle cx="590" cy="70" r="10" fill="#10b981" stroke="white" stroke-width="2"/><text x="590" y="95" text-anchor="middle" font-size="12" fill="#10b981" font-weight="700">LongLive</text>
+<text x="590" y="110" text-anchor="middle" font-size="10" fill="#10b981">20.7 FPS &middot; 240s</text>
+<!-- Arrow pointing to LongLive -->
+<path d="M550,85 L580,75" stroke="#10b981" stroke-width="2" marker-end="url(#arrA)"/>
+</svg>
+</div>
+<div class="svg-caption">图示：视频生成方法的效率-质量权衡象限图 — LongLive同时实现高速推理和高质量长视频生成</div>
+
+<div class="compare-grid">
+<div class="compare-card bad">
+<h4>Diffusion模型</h4>
+<p>双向注意力，高质量但<strong>极慢</strong>。Wan2.1: 0.78 FPS，SkyReels-V2: 60秒需50分钟。无法利用KV Cache</p>
+</div>
+<div class="compare-card mid">
+<h4>现有AR模型</h4>
+<p>支持KV Cache加速，但<strong>train-short-test-long</strong>策略导致长视频质量退化。Self-Forcing: 5秒训练视野</p>
+</div>
+<div class="compare-card good">
+<h4>LongLive</h4>
+<p>因果注意力+KV Cache，<strong>20.7 FPS实时推理</strong>。KV-Recache+Streaming Tuning保证240秒高质量生成</p>
+</div>
+</div>
+
+<div class="insight">
+<div class="insight-title">架构洞察：效率与质量并非不可兼得</div>
+<p>LongLive的核心发现是：通过精心设计的训练策略（Streaming Long Tuning）和推理优化（短窗口注意力+Frame Sink），因果AR模型可以同时实现高速推理和高质量长视频生成。关键在于<strong>训练-推理一致性</strong>——用train-long-test-long替代train-short-test-long，使模型在训练时就暴露于自生成的退化上下文。</p>
+</div>
+</section>
+
+<!-- ========== CH2 ========== -->
+<section id="ch2">
+<span class="section-tag">CH2 &middot; 核心方法</span>
+<h2>KV-Recache — 交互式Prompt切换的关键</h2>
+
+<p>在交互式长视频生成中，用户可能在生成过程中随时输入新prompt来引导叙事方向。这要求模型在prompt切换时既能<strong>平滑过渡</strong>（保持视觉连续性），又能<strong>快速遵循新指令</strong>（语义对齐）。然而，简单的KV Cache策略无法同时满足这两个需求。</p>
+
+<h3>为什么Prompt切换如此困难？</h3>
+
+<p>在DiT架构中，cross-attention和self-attention层交替工作。生成过程中，旧prompt的信息通过cross-attention层反复注入，并通过self-attention层前向传播，被<strong>写入运行中的KV Cache</strong>。当prompt切换时，Cache中仍携带旧prompt的残余语义，导致新prompt被忽略或延迟响应。</p>
+
+<h3>三种KV Cache策略对比</h3>
+
+<div class="compare-grid">
+<div class="compare-card bad">
+<h4>(a) 无KV Cache</h4>
+<p>切换时清空整个Cache。新prompt立即生效，但过渡<strong>突兀且视觉不连贯</strong>。Background Consistency: 92.75</p>
+</div>
+<div class="compare-card mid">
+<h4>(b) 保留KV Cache</h4>
+<p>切换时保留完整Cache不变。过渡平滑，但<strong>新prompt不被遵循</strong>（延迟或忽略）。CLIP Score: 25.92</p>
+</div>
+<div class="compare-card good">
+<h4>(c) KV-Recache</h4>
+<p>用已生成帧+新prompt<strong>重新计算</strong>KV Cache。平滑过渡+完全遵循新prompt。CLIP Score: 27.87</p>
+</div>
+</div>
+
+<h3>KV-Recache机制详解</h3>
+
+<p>KV-Recache的核心思想是：在prompt切换边界，不丢弃Cache也不原封不动保留，而是用<strong>已生成的视频帧</strong>作为视觉上下文，搭配<strong>新prompt</strong>通过cross-attention层重新构建KV Cache。这样既保留了运动和视觉线索（时间连续性），又清除了旧prompt的语义残余。</p>
+
+<div class="formula">
+<div class="formula-label">KV-Recache 操作</div>
+$$\text{KV}_{\text{new}} = \text{CrossAttn}(\text{Encode}(v_{1:t}), \text{Embed}(p_{\text{new}}))$$
+</div>
+
+<p>其中 $v_{1:t}$ 是已生成的视频帧序列，$p_{\text{new}}$ 是新prompt。此操作在prompt切换时<strong>仅执行一次</strong>，额外时间开销约6%（10秒视频含一次切换）。</p>
+
+<!-- SVG 2: KV-Recache三态对比 -->
+<div class="svg-container">
+<svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="arrB" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#787887"/></marker>
+</defs>
+<!-- Title -->
+<text x="360" y="25" text-anchor="middle" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">KV-Recache 三态对比</text>
+
+<!-- State (a): No KV cache -->
+<text x="120" y="55" text-anchor="middle" font-size="11" font-weight="700" fill="#f43f5e" font-family="Noto Sans SC">(a) 无KV Cache</text>
+<rect x="20" y="65" width="200" height="50" rx="6" fill="#ffe4e6" stroke="#fda4af"/>
+<rect x="30" y="73" width="40" height="34" rx="4" fill="#a855f7" opacity="0.5"/><text x="50" y="94" text-anchor="middle" font-size="9" fill="white">P1</text>
+<rect x="78" y="73" width="40" height="34" rx="4" fill="#a855f7" opacity="0.7"/><text x="98" y="94" text-anchor="middle" font-size="9" fill="white">P1</text>
+<text x="133" y="94" font-size="14" fill="#787887">|</text>
+<rect x="148" y="73" width="35" height="34" rx="4" fill="#fb7185"/><text x="165" y="94" text-anchor="middle" font-size="9" fill="white">P2</text>
+<rect x="191" y="73" width="22" height="34" rx="4" fill="#fb7185" opacity="0.7"/><text x="202" y="94" text-anchor="middle" font-size="8" fill="white">?</text>
+<text x="120" y="130" text-anchor="middle" font-size="10" fill="#f43f5e">突兀过渡，视觉不连贯</text>
+
+<!-- State (b): With KV cache -->
+<text x="360" y="55" text-anchor="middle" font-size="11" font-weight="700" fill="#f59e0b" font-family="Noto Sans SC">(b) 保留KV Cache</text>
+<rect x="260" y="65" width="200" height="50" rx="6" fill="#fef3c7" stroke="#fde68a"/>
+<rect x="270" y="73" width="40" height="34" rx="4" fill="#a855f7" opacity="0.5"/><text x="290" y="94" text-anchor="middle" font-size="9" fill="white">P1</text>
+<rect x="318" y="73" width="40" height="34" rx="4" fill="#a855f7" opacity="0.7"/><text x="338" y="94" text-anchor="middle" font-size="9" fill="white">P1</text>
+<text x="373" y="94" font-size="14" fill="#787887">|</text>
+<rect x="388" y="73" width="35" height="34" rx="4" fill="#a855f7" opacity="0.3"/><text x="405" y="94" text-anchor="middle" font-size="9" fill="#787887">P1?</text>
+<rect x="431" y="73" width="22" height="34" rx="4" fill="#a855f7" opacity="0.2"/>
+<text x="360" y="130" text-anchor="middle" font-size="10" fill="#f59e0b">平滑但新prompt被忽略</text>
+
+<!-- State (c): KV recache -->
+<text x="600" y="55" text-anchor="middle" font-size="11" font-weight="700" fill="#10b981" font-family="Noto Sans SC">(c) KV-Recache</text>
+<rect x="500" y="65" width="200" height="50" rx="6" fill="#d1fae5" stroke="#6ee7b7"/>
+<rect x="510" y="73" width="40" height="34" rx="4" fill="#a855f7" opacity="0.5"/><text x="530" y="94" text-anchor="middle" font-size="9" fill="white">P1</text>
+<rect x="558" y="73" width="40" height="34" rx="4" fill="#a855f7" opacity="0.7"/><text x="578" y="94" text-anchor="middle" font-size="9" fill="white">P1</text>
+<text x="613" y="94" font-size="14" fill="#10b981">|</text>
+<rect x="628" y="73" width="35" height="34" rx="4" fill="#34d399"/><text x="645" y="94" text-anchor="middle" font-size="9" fill="white">P2</text>
+<rect x="671" y="73" width="22" height="34" rx="4" fill="#34d399" opacity="0.7"/><text x="682" y="94" text-anchor="middle" font-size="8" fill="white">P2</text>
+<text x="600" y="130" text-anchor="middle" font-size="10" fill="#10b981">平滑+完全遵循新prompt</text>
+
+<!-- Recache operation illustration -->
+<text x="360" y="170" text-anchor="middle" font-size="12" font-weight="700" fill="#9333ea" font-family="Noto Sans SC">KV-Recache 操作流程</text>
+<rect x="80" y="185" width="560" height="80" rx="10" fill="#f3e8ff" stroke="#d8b4fe" stroke-dasharray="4,3"/>
+<text x="140" y="210" text-anchor="middle" font-size="10" fill="#9333ea" font-family="Noto Sans SC">已生成帧</text>
+<rect x="100" y="218" width="80" height="28" rx="5" fill="#a855f7" opacity="0.6"/><text x="140" y="236" text-anchor="middle" font-size="9" fill="white">v_{1:t}</rect>
+<text x="260" y="230" font-size="14" fill="#9333ea">+</text>
+<text x="330" y="210" text-anchor="middle" font-size="10" fill="#9333ea" font-family="Noto Sans SC">新Prompt</text>
+<rect x="290" y="218" width="80" height="28" rx="5" fill="#34d399"/><text x="330" y="236" text-anchor="middle" font-size="9" fill="white">p_new</text>
+<text x="410" y="230" font-size="14" fill="#9333ea">&rarr;</text>
+<text x="500" y="210" text-anchor="middle" font-size="10" fill="#10b981" font-family="Noto Sans SC">Cross-Attention</text>
+<rect x="450" y="218" width="100" height="28" rx="5" fill="#10b981" opacity="0.7"/><text x="500" y="236" text-anchor="middle" font-size="9" fill="white">KV_new</text>
+<text x="590" y="230" font-size="14" fill="#10b981">&rarr;</text>
+<text x="640" y="230" text-anchor="middle" font-size="10" fill="#10b981" font-weight="600">刷新Cache</text>
+
+<!-- Bottom note -->
+<text x="360" y="300" text-anchor="middle" font-size="10" fill="#787887" font-family="Noto Sans SC">训练时集成recache操作：当训练样本含prompt切换时执行recache，确保train-inference对齐</text>
+</svg>
+</div>
+<div class="svg-caption">图示：KV-Recache三态对比 — 无缓存（突兀）、保留缓存（不遵循）、重缓存（平滑+遵循）</div>
+
+<div class="formula">
+<div class="formula-label">训练-推理一致性保证</div>
+$$\text{训练}: v_{1:t} \xrightarrow{\text{recache}} \text{KV}_{\text{new}} \xrightarrow{\text{rollout}} v_{t+1:t+k} \xrightarrow{\text{DMD监督}}$$
+$$\text{推理}: v_{1:t} \xrightarrow{\text{recache}} \text{KV}_{\text{new}} \xrightarrow{\text{rollout}} v_{t+1:t+k} \xrightarrow{\text{输出}}$$
+</div>
+
+<div class="insight">
+<div class="insight-title">设计Rationale：为什么只recache一次就够了</div>
+<p>论文的一个关键观察是：虽然训练时仅包含一次prompt切换，但推理时的<strong>多次切换</strong>通过在每个切换边界执行单次recache来处理。每次recache都用最近的W帧已生成视频+新prompt重建Cache，模型因此能在任意切换点实现平滑语义转换。实验表明recache的额外成本极小（约6%时间开销），且随切换次数线性增长，不会成为瓶颈。</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">跨论文连接：与MAGI-1的手动窗口调整对比</div>
+<p>MAGI-1在prompt切换时需要<strong>手动调整KV Cache窗口</strong>的不同步骤，增加了使用复杂度。LongLive的KV-Recache则完全自动化——在切换边界自动执行recache，无需用户干预。这种设计哲学的差异反映了"自动化交互"与"手动配置"之间的取舍，LongLive选择了前者以支持真正的实时交互式生成。</p>
+</div>
+</section>
+
+<!-- ========== CH3 ========== -->
+<section id="ch3">
+<span class="section-tag">CH3 &middot; 核心方法</span>
+<h2>Streaming Long Tuning — 训练-推理对齐</h2>
+
+<p>现有因果AR视频模型仅在短片段上训练（如Self-Forcing的5秒教师视野），推理时通过滚动固定长度上下文窗口生成长视频。随着rollout继续，小预测误差累积，窗口内的上下文变得越来越退化。由于训练时从未见过这种<strong>自生成的、逐步退化的</strong>长程上下文，<em>train-short-test-long</em>策略导致内容漂移和一致性断裂。</p>
+
+<h3>Naive Long Tuning的两个挑战</h3>
+
+<p>直接在长视频上训练面临两个实际困难：</p>
+
+<p><strong>挑战一：教师监督不正确</strong> — 教师模型本身在短片段上训练，无法可靠地对整个长序列提供端到端监督。</p>
+
+<p><strong>挑战二：OOM</strong> — 对长序列进行朴素的反向展开和反向传播极易导致内存溢出，且计算浪费严重。</p>
+
+<h3>Streaming Long Tuning方案</h3>
+
+<p>LongLive引入流式长调优策略，在长视频上训练的同时保持内存和监督的局部性和可靠性。</p>
+
+<div class="formula">
+<div class="formula-label">Streaming Long Tuning 训练循环</div>
+$$\text{Iter } 1: z_0 \xrightarrow{G_\theta} v_{1:T} \xrightarrow{\text{DMD}} \mathcal{L}_{\text{clip}}$$
+$$\text{Iter } 2: \underbrace{v_{1:T}}_{\text{detach}} \xrightarrow{G_\theta} v_{T+1:2T} \xrightarrow{\text{DMD}} \mathcal{L}_{\text{clip}}$$
+$$\text{Iter } n: \underbrace{v_{1:(n-1)T}}_{\text{detach}} \xrightarrow{G_\theta} v_{(n-1)T+1:nT} \xrightarrow{\text{DMD}} \mathcal{L}_{\text{clip}}$$
+</div>
+
+<p>关键设计：</p>
+<p><strong>1. 滚动5秒片段</strong>：每次迭代用KV Cache中存储的历史生成下一个5秒片段。</p>
+<p><strong>2. Detach历史帧</strong>：已生成的帧作为因果上下文，但梯度仅计算当前片段。</p>
+<p><strong>3. DMD监督</strong>：教师模型仅对当前5秒片段提供监督（在其能力范围内）。</p>
+<p><strong>4. 重启策略</strong>：视频达到预设最大长度后，获取新batch从头开始。</p>
+
+<!-- SVG 3: Streaming Long Tuning Pipeline -->
+<div class="svg-container">
+<svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="gsl1" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#a855f7" stop-opacity="0.2"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0.7"/></linearGradient>
+<linearGradient id="gsl2" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#34d399" stop-opacity="0.5"/><stop offset="100%" stop-color="#34d399" stop-opacity="0.9"/></linearGradient>
+<marker id="arrC" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#787887"/></marker>
+</defs>
+<!-- Title -->
+<text x="360" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">Streaming Long Tuning 流水线</text>
+
+<!-- Iteration 1 -->
+<text x="20" y="55" font-size="11" font-weight="600" fill="#9333ea" font-family="Noto Sans SC">Iter 1:</text>
+<rect x="80" y="40" width="120" height="35" rx="6" fill="url(#gsl2)"/>
+<text x="140" y="62" text-anchor="middle" font-size="10" fill="white" font-weight="600">v_{1:5s} (生成)</text>
+<text x="215" y="62" font-size="10" fill="#787887">&rarr;</text>
+<rect x="230" y="40" width="100" height="35" rx="6" fill="#fbbf24" opacity="0.7"/>
+<text x="280" y="62" text-anchor="middle" font-size="10" fill="white" font-weight="600">DMD监督</text>
+<text x="345" y="62" font-size="10" fill="#787887">&rarr;</text>
+<text x="380" y="62" font-size="10" fill="#9333ea" font-weight="600">更新 \theta</text>
+
+<!-- Iteration 2 -->
+<text x="20" y="105" font-size="11" font-weight="600" fill="#9333ea" font-family="Noto Sans SC">Iter 2:</text>
+<rect x="80" y="90" width="60" height="35" rx="6" fill="#e9d5ff" stroke="#d8b4fe" stroke-dasharray="3,2"/>
+<text x="110" y="112" text-anchor="middle" font-size="9" fill="#9333ea">detach</text>
+<text x="150" y="112" font-size="10" fill="#787887">+</text>
+<rect x="165" y="90" width="120" height="35" rx="6" fill="url(#gsl2)"/>
+<text x="225" y="112" text-anchor="middle" font-size="10" fill="white" font-weight="600">v_{6:10s} (生成)</text>
+<text x="300" y="112" font-size="10" fill="#787887">&rarr;</text>
+<rect x="315" y="90" width="100" height="35" rx="6" fill="#fbbf24" opacity="0.7"/>
+<text x="365" y="112" text-anchor="middle" font-size="10" fill="white" font-weight="600">DMD监督</text>
+<text x="430" y="112" font-size="10" fill="#787887">&rarr;</text>
+<text x="465" y="112" font-size="10" fill="#9333ea" font-weight="600">更新 \theta</text>
+
+<!-- Iteration 3 -->
+<text x="20" y="155" font-size="11" font-weight="600" fill="#9333ea" font-family="Noto Sans SC">Iter 3:</text>
+<rect x="80" y="140" width="120" height="35" rx="6" fill="#e9d5ff" stroke="#d8b4fe" stroke-dasharray="3,2"/>
+<text x="140" y="162" text-anchor="middle" font-size="9" fill="#9333ea">detach v_{1:10s}</text>
+<text x="215" y="162" font-size="10" fill="#787887">+</text>
+<rect x="230" y="140" width="120" height="35" rx="6" fill="url(#gsl2)"/>
+<text x="290" y="162" text-anchor="middle" font-size="10" fill="white" font-weight="600">v_{11:15s} (生成)</text>
+<text x="365" y="162" font-size="10" fill="#787887">&rarr;</text>
+<rect x="380" y="140" width="100" height="35" rx="6" fill="#fbbf24" opacity="0.7"/>
+<text x="430" y="162" text-anchor="middle" font-size="10" fill="white" font-weight="600">DMD监督</text>
+
+<!-- Iteration n -->
+<text x="20" y="205" font-size="11" font-weight="600" fill="#9333ea" font-family="Noto Sans SC">Iter n:</text>
+<rect x="80" y="190" width="180" height="35" rx="6" fill="#e9d5ff" stroke="#d8b4fe" stroke-dasharray="3,2"/>
+<text x="170" y="212" text-anchor="middle" font-size="9" fill="#9333ea">detach v_{1:(n-1)*5s}</text>
+<text x="275" y="212" font-size="10" fill="#787887">+</text>
+<rect x="290" y="190" width="120" height="35" rx="6" fill="url(#gsl2)"/>
+<text x="350" y="212" text-anchor="middle" font-size="10" fill="white" font-weight="600">v_{..:60s} (生成)</text>
+<text x="425" y="212" font-size="10" fill="#787887">&rarr;</text>
+<rect x="440" y="190" width="100" height="35" rx="6" fill="#fbbf24" opacity="0.7"/>
+<text x="490" y="212" text-anchor="middle" font-size="10" fill="white" font-weight="600">DMD监督</text>
+
+<!-- Annotations -->
+<rect x="20" y="240" width="680" height="45" rx="8" fill="#d1fae5" stroke="#6ee7b7" stroke-dasharray="4,3"/>
+<text x="360" y="258" text-anchor="middle" font-size="10" fill="#10b981" font-weight="600" font-family="Noto Sans SC">关键设计：detach历史帧（虚线框）+ 仅对当前5s片段计算梯度（实线框）</text>
+<text x="360" y="276" text-anchor="middle" font-size="10" fill="#4c4b5e" font-family="Noto Sans SC">内存使用 = O(5s)，避免OOM &middot; 训练流程完全镜像推理rollout &middot; 每个clip由教师提供可靠监督</text>
+</svg>
+</div>
+<div class="svg-caption">图示：Streaming Long Tuning流水线 — 滚动生成5秒片段，detach历史帧，梯度仅计算当前clip</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">数学直觉：为什么detach是关键</div>
+<p>如果不detach历史帧，梯度会通过整个60秒序列反向传播，不仅导致OOM，更重要的是<strong>教师监督变得不正确</strong>——教师仅在5秒片段上训练，无法为60秒序列的中间帧提供有意义的梯度信号。Detach操作使历史帧成为"常量因果上下文"，教师对每个5秒片段的监督都是可靠的（在其能力范围内），而所有片段的局部监督<strong>汇总为全局指导</strong>。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">跨论文连接：Self-Forcing的train-long-test-long先驱</div>
+<p>LongLive的Streaming Long Tuning与Self-Forcing++的Extended DMD共享同一个核心思想：<strong>train-long-test-long</strong>。两者都让模型在训练时暴露于自生成的长rollout。但实现方式不同：Self-Forcing++使用滑动窗口采样+反向噪声初始化；LongLive使用滚动5秒片段+DMD监督。LongLive的方法更简洁，额外集成了KV-Recache和短窗口注意力，训练总成本仅32 GPU-days。</p>
+</div>
+</section>
+
+<!-- ========== CH4 ========== -->
+<section id="ch4">
+<span class="section-tag">CH4 &middot; 架构设计</span>
+<h2>短窗口注意力 + Frame Sink — 效率优化</h2>
+
+<p>在长视频生成中，密集因果注意力的计算成本随序列长度<strong>二次增长</strong>，使得朴素推理在长视频上不可行。论文从视频生成中<strong>时间局部性</strong>的证据出发——相邻帧对预测下一帧的贡献更大——采用局部窗口注意力来降低复杂度。</p>
+
+<h3>短窗口注意力的质量-效率权衡</h3>
+
+<p>限制注意力到固定时间窗口将复杂度从 $O(L)$ 降低到 $O(W)$，其中 $L$ 是序列长度，$W$ 是窗口大小。但窗口大小引入了权衡：</p>
+
+<div class="formula">
+<div class="formula-label">注意力复杂度</div>
+$$\text{密集注意力}: O(L^2 \cdot d) \quad \text{vs} \quad \text{窗口注意力}: O(W \cdot L \cdot d)$$
+$$\text{其中 } W \ll L, \text{ 如 } W = 9 \text{ latent frames} \approx 2.25 \text{秒}$$
+</div>
+
+<p>大窗口保留更多时序上下文，产生更强的长程一致性，但延迟和内存更高。小窗口提高效率但一致性下降——远距离但关键的线索从感受野中消失。</p>
+
+<h3>Frame Sink：全局锚点帧</h3>
+
+<p>论文发现：单独的短窗口注意力确实会降低长程一致性。但加入<strong>Frame Sink</strong>机制后，一致性可以恢复到大窗口水平，同时保持小窗口的效率优势。</p>
+
+<p>Frame Sink的核心设计：</p>
+<p><strong>1. 固定第一帧chunk</strong>作为全局Sink Token。</p>
+<p><strong>2. 永不驱逐</strong>Sink Token，永久保留在KV Cache中。</p>
+<p><strong>3. 全局可参与</strong>：Sink Token被拼接到每个attention层的Key和Value上，使其在局部窗口注意力下仍可被全局访问。</p>
+<p><strong>4. 滚动窗口</strong>Cache的其余部分正常淘汰（FIFO）。</p>
+
+<div class="formula">
+<div class="formula-label">Frame Sink 注意力</div>
+$$\text{Attention}(Q, [K_{\text{sink}}; K_{\text{window}}], [V_{\text{sink}}; V_{\text{window}}])$$
+$$\text{其中 } |K_{\text{sink}}| = S \text{ (固定)}, \quad |K_{\text{window}}| = W \text{ (滚动)}$$
+</div>
+
+<!-- SVG 4: Frame Sink 机制图 -->
+<div class="svg-container">
+<svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="gfs1" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#fbbf24" stop-opacity="0.6"/><stop offset="100%" stop-color="#fbbf24" stop-opacity="0.9"/></linearGradient>
+<linearGradient id="gfs2" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#a855f7" stop-opacity="0.4"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0.8"/></linearGradient>
+<marker id="arrD" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#787887"/></marker>
+</defs>
+<!-- Title -->
+<text x="360" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">Frame Sink 机制：短窗口 + 全局锚点</text>
+
+<!-- Dense attention (reference) -->
+<text x="20" y="55" font-size="10" fill="#787887" font-family="Noto Sans SC">密集注意力 (参考):</text>
+<rect x="20" y="60" width="680" height="25" rx="4" fill="#f3e8ff"/>
+<g font-size="8" fill="#9333ea" font-family="JetBrains Mono">
+<rect x="25" y="63" width="22" height="19" rx="2" fill="#d8b4fe"/><text x="36" y="76" text-anchor="middle">f1</text>
+<rect x="50" y="63" width="22" height="19" rx="2" fill="#d8b4fe"/><text x="61" y="76" text-anchor="middle">f2</text>
+<rect x="75" y="63" width="22" height="19" rx="2" fill="#d8b4fe"/><text x="86" y="76" text-anchor="middle">f3</text>
+<rect x="100" y="63" width="22" height="19" rx="2" fill="#d8b4fe"/><text x="111" y="76" text-anchor="middle">f4</text>
+<rect x="125" y="63" width="22" height="19" rx="2" fill="#d8b4fe"/><text x="136" y="76" text-anchor="middle">f5</text>
+<rect x="150" y="63" width="22" height="19" rx="2" fill="#d8b4fe"/><text x="161" y="76" text-anchor="middle">f6</text>
+<rect x="175" y="63" width="22" height="19" rx="2" fill="#d8b4fe"/><text x="186" y="76" text-anchor="middle">f7</text>
+<rect x="200" y="63" width="22" height="19" rx="2" fill="#d8b4fe"/><text x="211" y="76" text-anchor="middle">f8</text>
+<rect x="225" y="63" width="22" height="19" rx="2" fill="#d8b4fe"/><text x="236" y="76" text-anchor="middle">f9</text>
+<rect x="250" y="63" width="22" height="19" rx="2" fill="#d8b4fe"/><text x="261" y="76" text-anchor="middle">f10</text>
+<text x="290" y="76" fill="#787887">...</text>
+<rect x="310" y="63" width="22" height="19" rx="2" fill="#d8b4fe"/><text x="321" y="76" text-anchor="middle">f20</text>
+<rect x="335" y="63" width="22" height="19" rx="2" fill="#d8b4fe"/><text x="346" y="76" text-anchor="middle">f21</text>
+</g>
+<text x="600" y="76" font-size="10" fill="#787887">O(L&sup2;) &middot; 慢</text>
+
+<!-- Short window attention -->
+<text x="20" y="115" font-size="10" fill="#f43f5e" font-family="Noto Sans SC">短窗口 (Window 12):</text>
+<rect x="20" y="120" width="680" height="25" rx="4" fill="#ffe4e6" opacity="0.5"/>
+<rect x="20" y="120" width="680" height="25" rx="4" fill="none" stroke="#fda4af" stroke-dasharray="3,2"/>
+<g font-size="8" fill="#787887" font-family="JetBrains Mono">
+<rect x="25" y="123" width="22" height="19" rx="2" fill="#e9d5ff" opacity="0.3"/><text x="36" y="136" text-anchor="middle">f1</text>
+<rect x="50" y="123" width="22" height="19" rx="2" fill="#e9d5ff" opacity="0.3"/><text x="61" y="136" text-anchor="middle">f2</text>
+<text x="85" y="136" fill="#787887">...</text>
+<rect x="100" y="123" width="22" height="19" rx="2" fill="#e9d5ff" opacity="0.3"/><text x="111" y="136" text-anchor="middle">f10</text>
+<rect x="125" y="123" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="136" y="136" text-anchor="middle" fill="white">f11</text>
+<rect x="150" y="123" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="161" y="136" text-anchor="middle" fill="white">f12</text>
+<rect x="175" y="123" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="186" y="136" text-anchor="middle" fill="white">f13</text>
+<rect x="200" y="123" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="211" y="136" text-anchor="middle" fill="white">f14</text>
+<rect x="225" y="123" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="236" y="136" text-anchor="middle" fill="white">f15</text>
+<rect x="250" y="123" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="261" y="136" text-anchor="middle" fill="white">f16</text>
+<rect x="275" y="123" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="286" y="136" text-anchor="middle" fill="white">f17</text>
+<rect x="300" y="123" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="311" y="136" text-anchor="middle" fill="white">f18</text>
+<rect x="325" y="123" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="336" y="136" text-anchor="middle" fill="white">f19</text>
+<rect x="350" y="123" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="361" y="136" text-anchor="middle" fill="white">f20</text>
+<rect x="375" y="123" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="386" y="136" text-anchor="middle" fill="white">f21</text>
+</g>
+<text x="600" y="136" font-size="10" fill="#f43f5e">一致性下降</text>
+
+<!-- Short window + Frame Sink -->
+<text x="20" y="175" font-size="10" fill="#10b981" font-family="Noto Sans SC">Window 9 + Sink 3 (推荐):</text>
+<rect x="20" y="180" width="680" height="25" rx="4" fill="#d1fae5" opacity="0.4"/>
+<g font-size="8" font-family="JetBrains Mono">
+<!-- Sink tokens (permanent) -->
+<rect x="25" y="183" width="28" height="19" rx="2" fill="url(#gfs1)" stroke="#f59e0b" stroke-width="1.5"/><text x="39" y="196" text-anchor="middle" fill="white" font-weight="600">f1</text>
+<rect x="56" y="183" width="28" height="19" rx="2" fill="url(#gfs1)" stroke="#f59e0b" stroke-width="1.5"/><text x="70" y="196" text-anchor="middle" fill="white" font-weight="600">f2</text>
+<rect x="87" y="183" width="28" height="19" rx="2" fill="url(#gfs1)" stroke="#f59e0b" stroke-width="1.5"/><text x="101" y="196" text-anchor="middle" fill="white" font-weight="600">f3</text>
+<!-- Evicted frames -->
+<rect x="125" y="183" width="22" height="19" rx="2" fill="#e9d5ff" opacity="0.2"/><text x="136" y="196" text-anchor="middle" fill="#b4a7d6" font-size="7">f4</text>
+<rect x="150" y="183" width="22" height="19" rx="2" fill="#e9d5ff" opacity="0.2"/><text x="161" y="196" text-anchor="middle" fill="#b4a7d6" font-size="7">f5</text>
+<text x="188" y="196" fill="#b4a7d6" font-size="9">...</text>
+<!-- Rolling window (current) -->
+<rect x="210" y="183" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="221" y="196" text-anchor="middle" fill="white">f13</text>
+<rect x="235" y="183" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="246" y="196" text-anchor="middle" fill="white">f14</text>
+<rect x="260" y="183" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="271" y="196" text-anchor="middle" fill="white">f15</text>
+<rect x="285" y="183" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="296" y="196" text-anchor="middle" fill="white">f16</text>
+<rect x="310" y="183" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="321" y="196" text-anchor="middle" fill="white">f17</text>
+<rect x="335" y="183" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="346" y="196" text-anchor="middle" fill="white">f18</text>
+<rect x="360" y="183" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="371" y="196" text-anchor="middle" fill="white">f19</text>
+<rect x="385" y="183" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="396" y="196" text-anchor="middle" fill="white">f20</text>
+<rect x="410" y="183" width="22" height="19" rx="2" fill="url(#gfs2)"/><text x="421" y="196" text-anchor="middle" fill="white">f21</text>
+</g>
+<!-- Labels -->
+<rect x="460" y="183" width="80" height="19" rx="4" fill="#f59e0b" opacity="0.2"/><text x="500" y="196" text-anchor="middle" font-size="9" fill="#f59e0b" font-weight="600" font-family="Noto Sans SC">Sink (永不驱逐)</text>
+<rect x="550" y="183" width="80" height="19" rx="4" fill="#a855f7" opacity="0.2"/><text x="590" y="196" text-anchor="middle" font-size="9" fill="#9333ea" font-weight="600" font-family="Noto Sans SC">Window (滚动)</text>
+<text x="650" y="196" font-size="10" fill="#10b981" font-weight="600">W=21!</text>
+
+<!-- Bottom comparison -->
+<rect x="20" y="220" width="680" height="45" rx="8" fill="#f3e8ff" stroke="#d8b4fe"/>
+<text x="360" y="238" text-anchor="middle" font-size="10" fill="#9333ea" font-weight="600" font-family="Noto Sans SC">Window 9 + Sink 3 = Window 21 的一致性，计算降低28%，内存降低17%</text>
+<text x="360" y="256" text-anchor="middle" font-size="10" fill="#4c4b5e" font-family="Noto Sans SC">Sink Token 作为全局锚点维护身份和场景语义，允许使用更短的滚动窗口而不损失一致性</text>
+</svg>
+</div>
+<div class="svg-caption">图示：Frame Sink机制 — 固定前3帧chunk为Sink Token（金色），滚动窗口（紫色），效果等价于Window 21</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">跨论文连接：从LLM的Attention Sink到视频的Frame Sink</div>
+<p>LLM研究中发现<strong>Attention Sink</strong>现象——模型倾向于将不成比例的注意力分配给初始token，即使这些token语义上不重要。LongLive将此洞察迁移到视频生成：将第一帧chunk固定为Sink Token，作为永久的全局锚点。与Self-Forcing++不使用sink而依赖扩展训练不同，LongLive通过<strong>Streaming Long Tuning + Frame Sink</strong>的组合，在更小的训练预算（32 GPU-days vs Self-Forcing++的25x扩展）下实现了可比的长视频质量。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">设计Rationale：为什么Streaming Tuning是Sink生效的前提</div>
+<p>论文发现了一个关键的顺序依赖：单独使用attention sink不能防止长rollout崩溃，但<strong>先通过Streaming Long Tuning解决崩溃问题后，sink变得有效</strong>。这是因为未经过长视频训练的模型在长rollout中会产严重退化，sink token无法挽救已经崩溃的生成。只有在模型学会处理自生成退化上下文后，sink才能作为稳定的全局锚点发挥作用。</p>
+</div>
+</section>
+
+<!-- ========== CH5 ========== -->
+<section id="ch5">
+<span class="section-tag">CH5 &middot; 代码实现</span>
+<h2>代码实现解析</h2>
+
+<p>LongLive基于Wan2.1-T2V-1.3B构建，使用Self-Forcing DMD pipeline初始化为因果注意力模型。以下代码实现基于论文方法描述和<a href="https://github.com/NVlabs/LongLive" target="_blank">官方代码仓库</a>分析。</p>
+
+<h3>1. KV-Recache 实现</h3>
+
+<div class="code-block" data-label="KV-Recache 实现 — 基于论文 Section 3.1">
+<pre><code><span class="kw">def</span> <span class="fn">kv_recache</span>(self, generated_frames, new_prompt, kv_cache):
+    <span class="str">"""KV-Recache: 在prompt切换边界重建KV Cache
+    
+    Args:
+        generated_frames: 已生成的视频帧 [B, T, C, H, W]
+        new_prompt: 新的文本prompt
+        kv_cache: 当前KV Cache
+    Returns:
+        recached_kv: 用新prompt重建的KV Cache
+    """</span>
+    <span class="com"># Step 1: 编码已生成帧为视觉上下文</span>
+    visual_context = self.visual_encoder(generated_frames)
+    
+    <span class="com"># Step 2: 编码新prompt为文本嵌入</span>
+    text_embedding = self.text_encoder(new_prompt)
+    
+    <span class="com"># Step 3: 通过cross-attention重建KV Cache</span>
+    <span class="com"># 核心：视觉上下文保留运动/视觉线索</span>
+    <span class="com">#       新prompt覆盖旧语义</span>
+    recached_kv = []
+    <span class="kw">for</span> block_idx, block <span class="kw">in</span> <span class="fn">enumerate</span>(self.transformer_blocks):
+        <span class="com"># Cross-attention: visual_context × text_embedding</span>
+        new_k = block.cross_attn.k_proj(
+            torch.cat([visual_context, text_embedding], dim=<span class="num">1</span>)
+        )
+        new_v = block.cross_attn.v_proj(
+            torch.cat([visual_context, text_embedding], dim=<span class="num">1</span>)
+        )
+        recached_kv.append({<span class="str">"k"</span>: new_k, <span class="str">"v"</span>: new_v})
+    
+    <span class="kw">return</span> recached_kv</code></pre>
+</div>
+
+<p><strong>可信度</strong>：示意性实现。基于论文Section 3.1的描述和DiT架构的cross-attention机制推导，具体实现细节参考官方代码。</p>
+
+<h3>2. Streaming Long Tuning 训练循环</h3>
+
+<div class="code-block" data-label="Streaming Long Tuning — 基于论文 Section 3.2 + Algorithm 1">
+<pre><code><span class="kw">def</span> <span class="fn">streaming_long_tuning</span>(self, prompts, max_length=<span class="num">60</span>, clip_len=<span class="num">5</span>):
+    <span class="str">"""Streaming Long Tuning: 在长视频上训练
+    
+    关键：每次迭代生成下一个5s clip，detach历史帧
+    """</span>
+    kv_cache = self.init_kv_cache()
+    total_loss = <span class="num">0</span>
+    
+    <span class="com"># 第一次迭代：从零生成第一个clip</span>
+    clip_1 = self.generate_clip(
+        prompt=prompts[<span class="num">0</span>], kv_cache=kv_cache, duration=clip_len
+    )
+    loss_1 = self.compute_dmd_loss(clip_1, prompt=prompts[<span class="num">0</span>])
+    total_loss += loss_1
+    
+    <span class="com"># 后续迭代：基于历史KV Cache滚动生成</span>
+    current_length = clip_len
+    prompt_idx = <span class="num">0</span>
+    
+    <span class="kw">while</span> current_length <span class="lt">&lt;</span> max_length:
+        <span class="com"># 检查是否需要prompt切换</span>
+        <span class="kw">if</span> self.should_switch_prompt(current_length):
+            prompt_idx += <span class="num">1</span>
+            <span class="com"># KV-Recache: 用已生成帧+新prompt重建Cache</span>
+            kv_cache = self.kv_recache(
+                self.generated_history, prompts[prompt_idx], kv_cache
+            )
+        
+        <span class="com"># Detach历史帧：梯度不回传到之前生成的帧</span>
+        <span class="kw">with</span> torch.no_grad():
+            self.detach_kv_cache(kv_cache)  <span class="com"># 关键操作</span>
+        
+        <span class="com"># 生成下一个clip（保留梯度）</span>
+        next_clip = self.generate_clip(
+            prompt=prompts[prompt_idx],
+            kv_cache=kv_cache,
+            duration=clip_len
+        )
+        
+        <span class="com"># DMD监督：教师仅对当前clip提供监督</span>
+        clip_loss = self.compute_dmd_loss(
+            next_clip, prompt=prompts[prompt_idx]
+        )
+        total_loss += clip_loss
+        current_length += clip_len
+    
+    <span class="kw">return</span> total_loss</code></pre>
+</div>
+
+<p><strong>可信度</strong>：示意性实现。基于论文Section 3.2的Streaming Long Tuning描述和Algorithm 1推导。</p>
+
+<h3>3. Frame Sink 注意力实现</h3>
+
+<div class="code-block" data-label="Frame Sink Attention — 基于论文 Section 3.3">
+<pre><code><span class="kw">class</span> <span class="fn">FrameSinkAttention</span>:
+    <span class="str">"""短窗口注意力 + Frame Sink
+    
+    将第一帧chunk作为全局Sink Token，永不驱逐。
+    滚动窗口Cache的其余部分正常FIFO淘汰。
+    """</span>
+    
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, window_size=<span class="num">9</span>, sink_frames=<span class="num">3</span>):
+        self.window_size = window_size  <span class="com"># 滚动窗口大小</span>
+        self.sink_frames = sink_frames  <span class="com"># Sink帧数(第一帧chunk)</span>
+        self.sink_kv = <span class="kw">None</span>  <span class="com"># 全局Sink KV (永不驱逐)</span>
+        self.window_kv = <span class="kw">None</span>  <span class="com"># 滚动窗口KV</span>
+    
+    <span class="kw">def</span> <span class="fn">update_and_attend</span>(self, query, new_kv, frame_idx):
+        <span class="str">"""更新KV Cache并执行注意力计算"""</span>
+        
+        <span class="com"># 初始化：前sink_frames帧作为Sink Token</span>
+        <span class="kw">if</span> frame_idx <span class="lt">&lt;</span> self.sink_frames:
+            <span class="kw">if</span> self.sink_kv <span class="kw">is None</span>:
+                self.sink_kv = new_kv
+            <span class="kw">else</span>:
+                self.sink_kv = torch.cat(
+                    [self.sink_kv, new_kv], dim=<span class="num">1</span>
+                )
+            <span class="kw">return</span> standard_attention(query, self.sink_kv)
+        
+        <span class="com"># 后续帧：维护滚动窗口</span>
+        <span class="kw">if</span> self.window_kv <span class="kw">is None</span>:
+            self.window_kv = new_kv
+        <span class="kw">else</span>:
+            self.window_kv = torch.cat(
+                [self.window_kv, new_kv], dim=<span class="num">1</span>
+            )
+            <span class="com"># FIFO淘汰：保持窗口大小</span>
+            <span class="kw">if</span> self.window_kv.shape[<span class="num">1</span>] > self.window_size:
+                self.window_kv = self.window_kv[:, -self.window_size:]
+        
+        <span class="com"># 拼接Sink + Window，全局可参与</span>
+        combined_k = torch.cat(
+            [self.sink_kv[<span class="str">"k"</span>], self.window_kv[<span class="str">"k"</span>]], dim=<span class="num">1</span>
+        )
+        combined_v = torch.cat(
+            [self.sink_kv[<span class="str">"v"</span>], self.window_kv[<span class="str">"v"</span>]], dim=<span class="num">1</span>
+        )
+        
+        <span class="kw">return</span> standard_attention(query, combined_k, combined_v)</code></pre>
+</div>
+
+<p><strong>可信度</strong>：示意性实现。基于论文Section 3.3的Frame Sink描述推导，展示了Sink Token的固定和滚动窗口的FIFO淘汰逻辑。</p>
+
+<div class="insight">
+<div class="insight-title">架构洞察：KV大小恒定 = O(W+T+S)</div>
+<p>论文指出每步的resident KV大小为 $O(W+T+S)$，其中 $W$ 是上下文窗口、$T$ 是监督clip长度、$S$ 是Sink Token数。这个大小<strong>不随总视频长度增长</strong>，从而避免了OOM。这是Streaming Long Tuning能在60秒甚至240秒视频上训练的关键——内存使用被clip时长限制，而非整个视频长度。</p>
+</div>
+</section>
+
+<!-- ========== CH6 ========== -->
+<section id="ch6">
+<span class="section-tag">CH6 &middot; 实验结果</span>
+<h2>实验结果</h2>
+
+<p>LongLive基于Wan2.1-T2V-1.3B构建，产生832x480分辨率、16 FPS的5秒片段。首先使用Self-Forcing DMD pipeline将预训练模型适配为few-step因果注意力模型，然后执行Streaming Long Tuning（60秒序列含一次prompt切换）。训练在64块H100 GPU上耗时约<strong>12小时</strong>（32 GPU-days）。</p>
+
+<h3>短视频VBench评估（Table 1）</h3>
+
+<div class="figure">
+<img src="assets/table1_baselines.webp" alt="Table 1: Short video VBench comparison">
+<div class="figure-caption">Table 1 — 与相关基线的短视频VBench比较。FPS基于单块H100 GPU</div>
+</div>
+
+<div class="result-table">
+<table>
+<tr><th>模型</th><th>参数量</th><th>分辨率</th><th>FPS &uarr;</th><th>Total &uarr;</th><th>Quality &uarr;</th><th>Semantic &uarr;</th></tr>
+<tr><td>Wan2.1 (原始)</td><td>1.3B</td><td>832x480</td><td>0.78</td><td>84.26</td><td>85.30</td><td>80.09</td></tr>
+<tr><td>SkyReels-V2</td><td>1.3B</td><td>960x540</td><td>0.49</td><td>82.67</td><td>84.70</td><td>74.53</td></tr>
+<tr><td>CausVid</td><td>1.3B</td><td>832x480</td><td>17.0</td><td>81.20</td><td>84.05</td><td>69.80</td></tr>
+<tr><td>Self-Forcing (chunk)</td><td>1.3B</td><td>832x480</td><td>17.0</td><td>84.31</td><td>85.07</td><td>81.28</td></tr>
+<tr><td>Self-Forcing (frame)</td><td>1.3B</td><td>832x480</td><td>8.9</td><td>84.26</td><td>85.25</td><td>80.30</td></tr>
+<tr class="ours"><td class="best">LongLive</td><td class="best">1.3B</td><td class="best">832x480</td><td class="best">20.7</td><td class="best">84.87</td><td class="best">86.97</td><td>76.47</td></tr>
+</table>
+</div>
+
+<p>在5秒短视频上，LongLive以<strong>84.87 Total分</strong>和<strong>86.97 Quality分</strong>取得最佳成绩，同时以<strong>20.7 FPS</strong>的速度成为所有方法中最快的。这证明LongLive的优化策略不会损害短视频生成能力。</p>
+
+<h3>交互式长视频评估（Table 2）</h3>
+
+<div class="figure">
+<img src="assets/table2_interactive.webp" alt="Table 2: Interactive long video evaluation">
+<div class="figure-caption">Table 2 — 交互式长视频评估：Quality Score报告整个60秒序列，CLIP Score按10秒片段报告</div>
+</div>
+
+<div class="result-table">
+<table>
+<tr><th>方法</th><th>Quality &uarr;</th><th>0-10s</th><th>10-20s</th><th>20-30s</th><th>30-40s</th><th>40-50s</th><th>50-60s</th></tr>
+<tr><td>SkyReels-V2</td><td>80.49</td><td>20.96</td><td>22.51</td><td>25.78</td><td>18.45</td><td>19.57</td><td>19.61</td></tr>
+<tr><td>Self-Forcing</td><td>82.46</td><td>28.46</td><td>24.89</td><td>23.53</td><td>22.96</td><td>23.07</td><td>23.19</td></tr>
+<tr class="ours"><td class="best">LongLive</td><td class="best">84.38</td><td class="best">28.85</td><td class="best">25.68</td><td class="best">24.64</td><td class="best">24.23</td><td class="best">24.32</td><td class="best">24.32</td></tr>
+</table>
+</div>
+
+<p>在交互式60秒视频评估中，LongLive在Quality Score和所有时间段的CLIP Score上均取得最佳成绩。CLIP Score随时间<strong>稳定在24-28</strong>，展示了出色的长程一致性。</p>
+
+<h3>长视频VBench-Long评估（Table 3）</h3>
+
+<div class="figure">
+<img src="assets/table3_long_video.webp" alt="Table 3: Long video VBench-Long evaluation">
+<div class="figure-caption">Table 3 — 单prompt 30秒长视频VBench-Long评估</div>
+</div>
+
+<div class="result-table">
+<table>
+<tr><th>模型</th><th>Total &uarr;</th><th>Quality &uarr;</th><th>Semantic &uarr;</th><th>FPS &uarr;</th></tr>
+<tr><td>SkyReels-V2</td><td>75.29</td><td>80.77</td><td>53.37</td><td>0.49</td></tr>
+<tr><td>FramePack</td><td>81.95</td><td>83.61</td><td>75.32</td><td>0.92</td></tr>
+<tr><td>Self-Forcing</td><td>81.59</td><td>83.82</td><td>72.70</td><td>17.0</td></tr>
+<tr class="ours"><td class="best">LongLive</td><td class="best">83.52</td><td class="best">85.44</td><td class="best">75.82</td><td class="best">20.7</td></tr>
+</table>
+</div>
+
+<p>在30秒单prompt长视频上，LongLive同样取得SOTA性能，同时保持最快的推理速度。</p>
+
+<div class="stats-grid">
+<div class="stat-card"><div class="num">20.7</div><div class="label">FPS (单H100)<br>实时推理</div></div>
+<div class="stat-card"><div class="num">240s</div><div class="label">最大视频长度<br>单GPU支持</div></div>
+<div class="stat-card"><div class="num">32</div><div class="label">GPU-Days<br>训练成本</div></div>
+<div class="stat-card"><div class="num">41&times;</div><div class="label">速度提升<br>vs SkyReels-V2</div></div>
+</div>
+
+<div class="figure">
+<img src="assets/fig6_qualitative.webp" alt="Qualitative comparison">
+<div class="figure-caption">Figure 6 — 交互式长视频生成的定性对比。LongLive展示了强prompt遵循、平滑过渡和高长程一致性</div>
+</div>
+
+<div class="insight">
+<div class="insight-title">关键发现：长视频训练不仅提升质量，还是高效推理的前提</div>
+<p>论文发现了一个重要洞察：Streaming Long Tuning不仅是提升长视频生成质量所必需的，还是短窗口注意力和Frame Sink等高效推理策略<strong>能够生效的前提条件</strong>。未经长视频训练的模型在使用短窗口时会立即崩溃；经过训练后，模型学会了处理退化上下文，短窗口+Sink的组合才能真正发挥作用。</p>
+</div>
+</section>
+
+<!-- ========== CH7 ========== -->
+<section id="ch7">
+<span class="section-tag">CH7 &middot; 消融研究</span>
+<h2>消融研究</h2>
+
+<h3>KV-Recache 消融（Table 4）</h3>
+
+<p>在10秒视频（5秒处一次prompt切换）设置下，比较三种KV Cache策略：</p>
+
+<div class="figure">
+<img src="assets/table4_kv_recache.webp" alt="Table 4: KV recache ablation">
+<div class="figure-caption">Table 4 — KV-Recache消融。KV-Recache在一致性和CLIP Score上均取得最佳表现</div>
+</div>
+
+<div class="result-table">
+<table>
+<tr><th>方法</th><th>Background Consistency &uarr;</th><th>Subject Consistency &uarr;</th><th>CLIP Score &uarr;</th></tr>
+<tr><td>No KV cache (清空Cache)</td><td>92.75</td><td>89.59</td><td>28.95</td></tr>
+<tr><td>KV cache (保留Cache)</td><td>94.77</td><td>93.69</td><td>25.92</td></tr>
+<tr class="ours"><td class="best">KV recache (重缓存)</td><td class="best">94.81</td><td class="best">94.04</td><td class="best">27.87</td></tr>
+</table>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：KV-Recache的"两全其美"效果</div>
+<p>消融结果揭示了一个清晰的权衡：<strong>无KV Cache</strong>方案的CLIP Score最高（28.95），因为新prompt立即生效，但一致性最差（92.75/89.59）因为视觉突变。<strong>保留KV Cache</strong>方案的一致性高（94.77/93.69），但CLIP Score最低（25.92）因为新prompt被忽略。<strong>KV-Recache</strong>同时获得高一致性（94.81/94.04）和较高CLIP Score（27.87），成功实现了"平滑过渡+新prompt遵循"的两全。</p>
+</div>
+
+<h3>短窗口注意力 + Frame Sink 消融（Figure 7）</h3>
+
+<div class="figure">
+<img src="assets/fig7_ablation_window.webp" alt="Figure 7: Window attention ablation">
+<div class="figure-caption">Figure 7 — 短窗口大小和Frame Sink的消融。更小的窗口降低一致性，Frame Sink缓解了这一下降</div>
+</div>
+
+<p>在10秒生成设置下，变化局部注意力窗口从3到27个latent frames：</p>
+
+<!-- SVG 5: 方法演化时间线 -->
+<div class="svg-container">
+<svg viewBox="0 0 720 200" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="gwa1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#a855f7" stop-opacity="0.1"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0.5"/></linearGradient>
+<linearGradient id="gwa2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#10b981" stop-opacity="0.2"/><stop offset="100%" stop-color="#10b981" stop-opacity="0.7"/></linearGradient>
+</defs>
+<!-- Axes -->
+<line x1="60" y1="160" x2="700" y2="160" stroke="#787887" stroke-width="1"/>
+<line x1="60" y1="30" x2="60" y2="160" stroke="#787887" stroke-width="1"/>
+<text x="380" y="190" text-anchor="middle" font-size="10" fill="#787887" font-family="Noto Sans SC">窗口大小 (latent frames)</text>
+<text x="30" y="95" text-anchor="middle" font-size="10" fill="#787887" font-family="Noto Sans SC" transform="rotate(-90,30,95)">长程一致性</text>
+<!-- Without Frame Sink -->
+<text x="520" y="30" font-size="10" fill="#9333ea" font-weight="600" font-family="Noto Sans SC">w/o Frame Sink</text>
+<circle cx="100" cy="130" r="4" fill="#a855f7"/>
+<circle cx="160" cy="110" r="4" fill="#a855f7"/>
+<circle cx="220" cy="95" r="4" fill="#a855f7"/>
+<circle cx="300" cy="80" r="4" fill="#a855f7"/>
+<circle cx="400" cy="68" r="4" fill="#a855f7"/>
+<circle cx="500" cy="60" r="4" fill="#a855f7"/>
+<circle cx="600" cy="55" r="4" fill="#a855f7"/>
+<path d="M100,130 L160,110 L220,95 L300,80 L400,68 L500,60 L600,55" fill="none" stroke="#a855f7" stroke-width="2"/>
+<!-- With Frame Sink (Window 9 + Sink 3 = effective 12) -->
+<text x="520" y="50" font-size="10" fill="#10b981" font-weight="600" font-family="Noto Sans SC">w/ Frame Sink</text>
+<circle cx="220" cy="52" r="6" fill="#10b981" stroke="white" stroke-width="2"/>
+<text x="220" y="44" text-anchor="middle" font-size="9" fill="#10b981" font-weight="600">W=9+S3=12</text>
+<!-- Saturation region -->
+<rect x="400" y="45" width="240" height="25" rx="4" fill="url(#gwa1)" stroke="#d8b4fe" stroke-dasharray="3,2"/>
+<text x="520" y="75" text-anchor="middle" font-size="9" fill="#9333ea">饱和区间 (~24帧)</text>
+<!-- Annotations -->
+<text x="100" y="150" text-anchor="middle" font-size="8" fill="#787887">W=3</text>
+<text x="220" y="110" text-anchor="middle" font-size="8" fill="#787887">W=9</text>
+<text x="300" y="95" text-anchor="middle" font-size="8" fill="#787887">W=12</text>
+<text x="400" y="84" text-anchor="middle" font-size="8" fill="#787887">W=15</text>
+<text x="600" y="70" text-anchor="middle" font-size="8" fill="#787887">W=27</text>
+<!-- Key insight arrow -->
+<line x1="220" y1="56" x2="220" y2="78" stroke="#10b981" stroke-width="1.5" stroke-dasharray="3,2"/>
+<text x="220" y="90" text-anchor="middle" font-size="9" fill="#10b981" font-weight="600">= W21一致性!</text>
+</svg>
+</div>
+<div class="svg-caption">图示：窗口大小与长程一致性关系 — Window 9 + Sink 3 达到 Window 21 的一致性水平</div>
+
+<p><strong>关键发现</strong>：一致性随窗口增大而提升，约在24帧窗口处饱和。但<strong>Window 9 + Sink 3（有效窗口12）的一致性接近Window 21</strong>，同时保持了短窗口的效率优势。这表明Frame Sink机制可以将所需窗口大小<strong>减半以上</strong>而不损失质量。</p>
+
+<div class="insight">
+<div class="insight-title">设计Rationale：为什么不是Window 3 + Sink 3</div>
+<p>消融显示Window 3的一致性最低（即使加Sink），说明<strong>最低限度的局部上下文是必要的</strong>。Sink Token提供的是"全局身份锚点"而非"局部运动信息"。运动连续性仍然需要足够的局部帧来建模。Window 9（约2.25秒的局部上下文）恰好提供了足够的运动建模能力，而Sink负责更长程的一致性。</p>
+</div>
+</section>
+
+<!-- ========== CH8 ========== -->
+<section id="ch8">
+<span class="section-tag">CH8 &middot; 批判评估</span>
+<h2>局限与未来方向</h2>
+
+<h3>当前局限</h3>
+
+<p><strong>1. Semantic Score偏低</strong>：LongLive的短视频Semantic Score（76.47）低于Self-Forcing（81.28/80.30）。这可能源于短窗口注意力限制了对远距离语义信息的访问。</p>
+
+<p><strong>2. INT8量化的质量损失</strong>：虽然INT8量化将KV Cache从2.7GB压缩到1.4GB（2倍压缩），但仍存在边际质量损失。在对质量要求极高的场景中，这可能是不可接受的。</p>
+
+<p><strong>3. 训练数据构造依赖</strong>：Switch-prompt数据集需要通过Qwen2-72B-Instruct生成follow-up prompts，增加了数据准备的复杂度和外部依赖。</p>
+
+<p><strong>4. 单GPU内存限制</strong>：虽然支持240秒视频生成，但更长的视频仍受限于单GPU内存。未来需要探索分布式或offloading策略。</p>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：效率-质量-交互性的三角权衡</div>
+<p>LongLive在效率（20.7 FPS）和交互性（KV-Recache）上取得了显著进步，但质量上的权衡仍然存在。特别是与Wan2.1原始双向模型相比，因果化和窗口化不可避免地损失了部分全局建模能力。未来工作需要在<strong>不牺牲效率和交互性的前提下</strong>恢复这些能力，可能的方向包括：自适应窗口大小、基于重要性的稀疏注意力、或轻量级全局记忆模块。</p>
+</div>
+
+<h3>未来方向</h3>
+
+<p><strong>1. 分布式长视频训练</strong>：当前Streaming Long Tuning在单GPU上训练，视频长度受内存限制。探索pipeline或tensor parallelism可支持更长的训练序列。</p>
+
+<p><strong>2. 自适应窗口大小</strong>：当前窗口大小固定。根据视频内容动态调整窗口（如快速运动场景用大窗口，静态场景用小窗口）可能进一步优化效率-质量权衡。</p>
+
+<p><strong>3. 多模态交互</strong>：当前仅支持文本prompt切换。扩展到语音、手势或草图等多模态输入将使交互更加自然。</p>
+
+<p><strong>4. 更大模型扩展</strong>：LongLive的1.3B参数模型在质量上仍有提升空间。将方法扩展到7B+参数模型可能带来显著的质量提升。</p>
+</section>
+
+<!-- ========== CH9 ========== -->
+<section id="ch9">
+<span class="section-tag">CH9 &middot; 科研探索</span>
+<h2>自主科研问题</h2>
+
+<div class="rq-card">
+<span class="rq-tag">问题 1</span>
+<h4>KV-Recache能否推广到多模态prompt切换？</h4>
+<p>当前KV-Recache仅处理文本prompt切换。如果用户在生成过程中提供参考图像、音频片段或草图，recache操作需要如何调整？<strong>研究方向</strong>：探索cross-attention层对多模态输入的联合编码，以及不同模态在recache时的权重分配策略。这可能涉及模态特定的KV Cache刷新率——视觉信息可能需要更频繁的更新，而音频信息可以跨更长时间段保持稳定。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">问题 2</span>
+<h4>Streaming Long Tuning的最优clip长度是多少？</h4>
+<p>论文固定clip长度为5秒（与教师视野一致）。但如果clip长度可以变化呢？<strong>理论分析</strong>：短clip提供更密集的监督信号但增加迭代次数；长clip减少迭代但教师监督可靠性下降。可能存在一个<strong>课程学习策略</strong>——训练初期使用短clip快速收敛，后期使用长clip学习更长范围的依赖。这与Self-Forcing++的Extended DMD中窗口大小的讨论形成呼应。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">问题 3</span>
+<h4>Frame Sink的最佳数量S如何确定？</h4>
+<p>论文使用第一帧chunk（约3个latent frames）作为Sink Token。但最佳Sink数量可能与视频内容、长度和分辨率相关。<strong>研究方向</strong>：(1) 基于信息论的分析——Sink Token需要携带多少"全局身份信息"才能有效锚定长程一致性？(2) 动态Sink策略——在训练过程中逐步增加Sink数量（类似课程学习）。(3) 参考LLM中Attention Sink的研究——是否存在"最小有效Sink"的理论下界？</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">问题 4</span>
+<h4>KV-Recache与Frame Sink的交互效应是什么？</h4>
+<p>KV-Recache在prompt切换时重建Cache，而Frame Sink的Sink Token永不驱逐。当prompt切换发生在视频中间时，<strong>旧的Sink Token是否应该保留</strong>？如果保留，旧prompt的视觉信息可能干扰新prompt；如果重置，会丢失全局锚点。论文提到recache"从最近W帧重建"，但Sink Token的处理细节需要进一步探索。这可能涉及<strong>条件性Sink重置</strong>——仅当新prompt的语义与旧prompt差异超过阈值时才重置Sink。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">问题 5</span>
+<h4>如何量化和缓解长视频生成中的"语义漂移"？</h4>
+<p>论文的CLIP Score随时间从28.85降至24.32（0-10s vs 50-60s），表明存在渐进的<strong>语义漂移</strong>。虽然LongLive通过KV-Recache和Frame Sink缓解了这一问题，但漂移仍然存在。<strong>研究方向</strong>：(1) 建立语义漂移的定量度量——不仅是CLIP Score，还包括主题一致性、风格稳定性和叙事连贯性。(2) 引入"语义检查点"机制——定期（如每30秒）用prompt重新校准生成方向。(3) 参考Self-Forcing++的GRPO方法，设计针对长程一致性的奖励函数。</p>
+</div>
+</section>
+
+<!-- ========== Summary ========== -->
+<section id="summary">
+<span class="section-tag">总结</span>
+<h2>核心贡献与技术意义</h2>
+
+<div class="summary-box">
+<h3>核心贡献</h3>
+<p><strong>1. 问题诊断</strong>：系统性分析了长视频生成的双重困境（效率+质量），以及交互式场景如何加剧这些挑战。</p>
+<p><strong>2. KV-Recache</strong>：提出在prompt切换边界用已生成帧+新prompt重建KV Cache的机制，实现平滑过渡+完全遵循新prompt，额外成本仅约6%。</p>
+<p><strong>3. Streaming Long Tuning</strong>：设计滚动5秒片段+DMD监督+detach历史帧的训练策略，实现train-long-test-long对齐，避免OOM。</p>
+<p><strong>4. Frame Sink</strong>：引入第一帧chunk作为永不驱逐的全局锚点，使Window 9+Sink 3达到Window 21的一致性，计算降低28%，内存降低17%。</p>
+<p><strong>5. 实用性</strong>：仅32 GPU-days训练成本，单H100上20.7 FPS实时推理，支持240秒视频生成。</p>
+</div>
+
+<div class="figure">
+<img src="assets/fig1_workflow.webp" alt="LongLive workflow">
+<div class="figure-caption">Figure 1 — LongLive工作流总览：接受顺序用户prompt输入，实时生成对应视频，支持长达240秒的交互式长视频</div>
+</div>
+
+<div class="figure">
+<img src="assets/fig2_framework.webp" alt="LongLive framework">
+<div class="figure-caption">Figure 2 — LongLive框架：(左) 短窗口注意力+Frame Sink处理顺序prompt；(右) KV-Recache在prompt切换时刷新Cache</div>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">跨论文连接：因果AR长视频生成的技术路线图</div>
+<p>将LongLive置于更广阔的技术图景中：CausVid最早尝试将双向DiT蒸馏为因果AR模型，但存在训练-推理不匹配；Self-Forcing通过KV Cache对齐消除了过曝光，但局限于5秒训练视野；Self-Forcing++通过Extended DMD将训练扩展到100秒+，实现255秒生成；LongLive则从<strong>交互性</strong>出发，通过KV-Recache支持实时prompt切换，通过Streaming Long Tuning+Frame Sink实现240秒高质量生成。这些工作共同勾勒出因果AR视频生成从"能生成"到"能长生成"再到"能交互式长生成"的技术演进路径。</p>
+</div>
+</section>
+
+</div>
+
+<footer>
+<p>LongLive: Real-Time Interactive Long Video Generation &middot; arXiv:2509.22622v2 &middot; 2025</p>
+<p style="margin-top:6px">论文博客 &middot; 基于论文方法描述和官方代码分析 &middot; 所有公式和实验数据均经PDF原文验证</p>
+<p style="margin-top:6px"><a href="https://github.com/NVlabs/LongLive" target="_blank">GitHub: NVlabs/LongLive</a></p>
+</footer>
+
+</body>
+</html>

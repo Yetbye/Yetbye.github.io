@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deep Forcing: 免训练长视频生成 | 论文精读</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- MathJax 3.x with three-layer CDN fallback and skipHtmlTags -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true
+  },
+  chtml: { scale: 1.05 },
+  startup: { typeset: true },
+  options: {
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+  }
+};
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js" onerror="this.remove();document.write('<script src=\"https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js\"><\/script>')"></script>
+<script>
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    if (!window.MathJax || !window.MathJax.startup || !window.MathJax.startup.promise) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+      document.head.appendChild(s);
+    }
+  }, 5000);
+});
+</script>
+
+<style>
+:root {
+  --lav-50:#faf5ff;--lav-100:#f3e8ff;--lav-200:#e9d5ff;--lav-300:#d8b4fe;
+  --lav-400:#c084fc;--lav-500:#a855f7;--lav-600:#9333ea;--lav-700:#7e22ce;
+  --coral-100:#ffe4e6;--coral-200:#fecdd3;--coral-300:#fda4af;--coral-400:#fb7185;--coral-500:#f43f5e;
+  --mint-100:#d1fae5;--mint-200:#a7f3d0;--mint-300:#6ee7b7;--mint-400:#34d399;--mint-500:#10b981;
+  --warm-100:#fef3c7;--warm-200:#fde68a;--amber-500:#f59e0b;
+  --ink:#1e1b4b;--ink-soft:#4c4b5e;--ink-muted:#787887;
+  --paper:#ffffff;--paper-warm:#faf8f5;--paper-cream:#fdf6e3;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:'Noto Sans SC',sans-serif;background:var(--paper-warm);color:var(--ink);line-height:1.8;overflow-x:hidden}
+h1,h2,h3,h4{font-family:'Noto Serif SC',serif;font-weight:700}
+
+/* Navigation */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(250,248,245,0.85);backdrop-filter:blur(16px) saturate(1.5);border-bottom:1px solid rgba(192,132,252,0.15);padding:10px 24px}
+nav .nav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+nav .logo{font-family:'Noto Serif SC',serif;font-weight:900;font-size:18px;background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+nav .nav-links{display:flex;gap:6px;flex-wrap:wrap}
+nav .nav-links a{font-size:12px;color:var(--ink-soft);text-decoration:none;padding:4px 10px;border-radius:100px;transition:all .2s}
+nav .nav-links a:hover{background:var(--lav-100);color:var(--lav-600)}
+
+/* Hero */
+.hero{position:relative;min-height:auto;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:120px 24px 80px;background:linear-gradient(135deg,#faf5ff 0%,#f3e8ff 18%,#fdf4e3 50%,#fffbeb 100%)}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 520px 320px at 12% 22%,rgba(192,132,252,0.16),transparent 60%),radial-gradient(ellipse 520px 320px at 88% 78%,rgba(251,191,36,0.13),transparent 60%)}
+.hero-wrap{position:relative;z-index:2;width:100%;max-width:780px;text-align:center}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,0.6);backdrop-filter:blur(12px) saturate(1.5);border:1px solid rgba(192,132,252,0.3);color:var(--lav-600);padding:7px 20px;border-radius:100px;font-family:'Noto Sans SC',sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;margin-bottom:20px;box-shadow:0 4px 20px rgba(192,132,252,0.12)}
+.hero h1{font-family:'Noto Serif SC',serif;font-size:clamp(2.8rem,8vw,5rem);font-weight:900;letter-spacing:-0.03em;line-height:1.1;margin:12px 0 10px;background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 38%,var(--coral-500) 62%,var(--amber-500) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:clamp(0.95rem,2.5vw,1.25rem);color:var(--ink-soft);font-weight:400;line-height:1.6;margin-bottom:8px}
+.hero-art{margin:20px auto 8px;max-width:760px;width:100%}
+.hero-img{width:100%;height:auto;border-radius:24px;box-shadow:0 24px 70px -24px rgba(30,27,75,0.18);border:1px solid rgba(192,132,252,0.12)}
+.hero-caption{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--ink-muted);margin-top:8px}
+.scroll-indicator{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:4px;color:var(--ink-muted);text-transform:uppercase;animation:bounce 2s infinite}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+
+/* Content */
+.content{max-width:820px;margin:0 auto;padding:60px 24px}
+section{margin-bottom:80px;scroll-margin-top:80px}
+.section-tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--lav-600);background:var(--lav-50);padding:4px 14px;border-radius:100px;margin-bottom:12px}
+h2{font-size:clamp(1.6rem,4vw,2.2rem);margin-bottom:16px;color:var(--ink);line-height:1.3}
+h3{font-size:clamp(1.15rem,3vw,1.45rem);margin:24px 0 12px;color:var(--lav-700)}
+p{margin-bottom:14px;color:var(--ink-soft);font-size:15px;line-height:1.85}
+strong{color:var(--ink);font-weight:600}
+em{color:var(--lav-600);font-style:normal;font-weight:500}
+
+/* Formula */
+.formula{background:var(--paper-cream);border-left:3px solid var(--lav-400);padding:16px 20px;margin:16px 0;border-radius:0 12px 12px 0;overflow-x:auto}
+.formula-label{font-size:11px;font-weight:700;color:var(--lav-600);margin-bottom:6px;letter-spacing:1px}
+
+/* Insight box (mint green) */
+.insight{background:linear-gradient(135deg,var(--mint-100) 0%,#ecfdf5 100%);border:1px solid var(--mint-300);border-left:4px solid var(--mint-400);padding:18px 22px;margin:20px 0;border-radius:0 16px 16px 0}
+.insight-title{font-weight:700;color:var(--mint-500);font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.insight-title::before{content:'';display:inline-block;width:16px;height:16px;background:var(--mint-400);border-radius:50%;flex-shrink:0}
+.insight p{color:var(--ink-soft);font-size:14px;margin:0}
+
+/* Deep insight (lavender) */
+.deep-insight{background:linear-gradient(135deg,var(--lav-50) 0%,var(--lav-100) 100%);border:1px solid var(--lav-300);border-left:4px solid var(--lav-500);padding:18px 22px;margin:20px 0;border-radius:0 16px 16px 0}
+.deep-insight-title{font-weight:700;color:var(--lav-600);font-size:13px;margin-bottom:8px}
+.deep-insight p{color:var(--ink-soft);font-size:14px;margin:0}
+
+/* Code block */
+.code-block{background:#1e1b4b;border-radius:12px;padding:20px 24px;margin:20px 0;overflow-x:auto;position:relative}
+.code-block::before{content:attr(data-label);position:absolute;top:-10px;left:20px;background:var(--lav-500);color:white;font-size:10px;font-weight:700;padding:2px 12px;border-radius:100px;letter-spacing:1px}
+.code-block .trust{position:absolute;top:-10px;right:20px;background:var(--mint-500);color:white;font-size:10px;font-weight:700;padding:2px 12px;border-radius:100px;letter-spacing:1px}
+.code-block pre{margin:0}
+.code-block code{font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.65;color:#e0e0e0}
+.code-block .kw{color:#c084fc}
+.code-block .str{color:#6ee7b7}
+.code-block .com{color:#787887}
+.code-block .fn{color:#fbbf24}
+.code-block .num{color:#fb7185}
+
+/* Figure */
+.figure{margin:24px 0;text-align:center}
+.figure img{max-width:100%;border-radius:12px;box-shadow:0 8px 30px -12px rgba(30,27,75,0.15);border:1px solid rgba(192,132,252,0.1)}
+.figure-caption{font-size:12px;color:var(--ink-muted);margin-top:8px;line-height:1.5}
+
+/* Table */
+.result-table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}
+.result-table th{background:var(--lav-100);color:var(--lav-700);padding:8px 10px;text-align:center;font-weight:600;border-radius:6px}
+.result-table td{padding:8px 10px;text-align:center;border-bottom:1px solid var(--lav-100)}
+.result-table tr:hover{background:var(--lav-50)}
+.result-table .best{color:var(--mint-500);font-weight:700}
+.result-table .ours{background:var(--mint-50,#ecfdf5)}
+
+/* Research question */
+.rq-card{background:linear-gradient(135deg,var(--warm-100) 0%,#fefce8 100%);border:1px solid var(--warm-200);border-left:4px solid var(--amber-500);padding:18px 22px;margin:16px 0;border-radius:0 16px 16px 0}
+.rq-tag{display:inline-block;background:var(--amber-500);color:white;font-size:10px;font-weight:700;padding:2px 10px;border-radius:100px;margin-bottom:8px;letter-spacing:1px}
+.rq-card h4{font-size:15px;color:var(--ink);margin-bottom:8px}
+.rq-card p{font-size:14px;margin:0}
+
+/* Compare cards */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:20px 0}
+.compare-card{padding:16px;border-radius:12px;border:1px solid}
+.compare-card.bad{border-color:var(--coral-300);background:var(--coral-100)}
+.compare-card.mid{border-color:var(--warm-200);background:var(--warm-100)}
+.compare-card.good{border-color:var(--mint-300);background:var(--mint-100)}
+.compare-card h4{font-size:13px;margin-bottom:8px}
+.compare-card p{font-size:12px;margin:0;line-height:1.6}
+
+/* SVG container */
+.svg-container{margin:24px 0;text-align:center;overflow-x:auto}
+.svg-container svg{max-width:100%;height:auto}
+.svg-caption{font-size:12px;color:var(--ink-muted);margin-top:6px}
+
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0}
+.stat-card{background:var(--paper);border:1px solid var(--lav-200);border-radius:12px;padding:16px;text-align:center}
+.stat-card .num{font-size:28px;font-weight:900;background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.stat-card .label{font-size:11px;color:var(--ink-muted);margin-top:4px}
+
+/* Summary */
+.summary-box{background:linear-gradient(135deg,var(--lav-50),var(--coral-100));border:1px solid var(--lav-200);border-radius:16px;padding:24px;margin:20px 0}
+.summary-box h3{color:var(--lav-700);margin-top:0}
+
+/* Links */
+a{color:var(--lav-600);text-decoration:none}
+a:hover{text-decoration:underline}
+
+footer{text-align:center;padding:40px 24px;background:var(--ink);color:var(--ink-muted);font-size:12px}
+footer a{color:var(--lav-400);text-decoration:none}
+
+@media(max-width:640px){
+  .compare-grid{grid-template-columns:1fr}
+  nav .nav-links{display:none}
+}
+
+/* === FORMAT FIXES v1 === */
+/* Stats grid 必须并行4列 */
+.stats-grid,.stats-row,.hero-stats,.stat-grid{
+  display:grid !important;
+  grid-template-columns:repeat(4,1fr) !important;
+  gap:12px !important;
+  max-width:720px !important;
+  margin:24px auto !important;
+}
+.stat-card,.stat-item,.stat-box{
+  text-align:center !important;
+  padding:16px !important;
+}
+/* figure 居中对齐 */
+.figure,.fig,.img-wrap{margin:24px auto !important;text-align:center !important}
+.figure img,.fig img,.img-wrap img,.figure figure img{display:block;margin:0 auto !important;max-width:100% !important}
+/* SVG 居中 */
+.svg-wrap,.svg-container{text-align:center !important;margin:24px auto !important}
+.svg-wrap svg,.svg-container svg{display:block;margin:0 auto !important;max-width:100% !important}
+/* hero 不要太大 */
+.hero{min-height:auto !important;padding:100px 24px 60px !important}
+/* 减少过度效果 - 移除非必要动画 */
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+.scroll-indicator{animation:bounce 2s infinite}
+/* 确保关键交互保留hover效果 */
+a:hover,button:hover,input:focus{transition:all .2s !important}
+
+</style>
+</head>
+<body>
+
+<nav>
+<div class="nav-inner">
+<span class="logo">Deep Forcing</span>
+<div class="nav-links"><a href="../index.html">« 合辑</a>
+<a href="#ch1">问题背景</a>
+<a href="#ch2">Deep Sink</a>
+<a href="#ch3">RoPE调整</a>
+<a href="#ch4">参与式压缩</a>
+<a href="#ch5">算法整合</a>
+<a href="#ch6">代码实现</a>
+<a href="#ch7">实验结果</a>
+<a href="#ch8">消融分析</a>
+<a href="#ch9">科研问题</a>
+</div>
+</div>
+</nav>
+
+<!-- ========== HERO ========== -->
+<div class="hero" id="hero">
+<div class="hero-wrap">
+<div class="hero-badge">arXiv 2512.05081 &middot; KAIST AI &middot; CVPR 2025</div>
+<h1>Deep Forcing</h1>
+<p class="hero-sub">Deep Sink &times; Participative Compression &middot; 免训练长视频生成 &middot; 5秒训练 &rarr; 60秒+生成 &middot; 15.75 FPS实时推理</p>
+<div class="hero-art">
+<img src="assets/cover.webp" alt="Deep Forcing Cover" class="hero-img">
+</div>
+<p class="hero-caption">水墨写意风格 &middot; 深邃漩涡象征Deep Sink的深层注意力锚定，金色光束代表Participative Compression的智能token选择，流动帧序列表征免训练长视频生成</p>
+</div>
+<div class="scroll-indicator">Scroll to Read</div>
+</div>
+
+<div class="content">
+
+<!-- ========== CH1 ========== -->
+<section id="ch1">
+<span class="section-tag">CH1 &middot; 问题分析</span>
+<h2>自回归长视频生成的根本困境：误差累积</h2>
+
+<p>自回归视频扩散模型（如Self Forcing）已经能够实现<strong>实时帧流式生成</strong>，在世界模型和交互式应用中展现出巨大潜力。然而，当生成时长远超训练时长（如从5秒外推到60秒）时，一个根本性问题浮现：<strong>误差累积</strong>。每一帧都依赖于之前生成的、可能不完美的帧，小误差逐步级联，导致色彩漂移、纹理模糊、细节消失。</p>
+
+<h3>现有方案的局限</h3>
+
+<p>训练型方案（Rolling Forcing、LongLive）通过模型蒸馏或微调来适应长视频生成，但代价高昂且引入运动约束。推理时的StreamingLLM式浅层attention sink（仅保留前几帧）在视频扩散模型中效果不佳——论文发现<strong>大多数注意力头对中间帧也分配了大量权重</strong>，远超传统认知。</p>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig1_teaser.webp" alt="Deep Forcing comparison">
+<div class="figure-caption">Figure 1：Deep Forcing（免训练）与训练型基线（Rolling Forcing、LongLive）的质量对比，实现分钟级视频生成</div>
+</div>
+
+<div class="stats-grid">
+<div class="stat-card"><div class="num">12&times;</div><div class="label">外推倍率（5s &rarr; 60s+）</div></div>
+<div class="stat-card"><div class="num">15.75</div><div class="label">FPS 实时推理</div></div>
+<div class="stat-card"><div class="num">57.56</div><div class="label">Dynamic Degree（最高）</div></div>
+<div class="stat-card"><div class="num">0</div><div class="label">额外训练参数</div></div>
+</div>
+
+<!-- SVG 1: 误差累积机制示意 -->
+<div class="svg-container">
+<svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="errGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#d1fae5"/><stop offset="100%" stop-color="#fb7185"/></linearGradient>
+<marker id="arr1" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#787887"/></marker>
+</defs>
+<text x="360" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">自回归视频生成的误差累积机制</text>
+<!-- Timeline -->
+<line x1="60" y1="140" x2="680" y2="140" stroke="#e9d5ff" stroke-width="3"/>
+<!-- Frame nodes -->
+<circle cx="100" cy="140" r="22" fill="#10b981" opacity="0.9"/><text x="100" y="145" text-anchor="middle" font-size="10" fill="white" font-weight="700">F1</text>
+<circle cx="180" cy="140" r="22" fill="#34d399" opacity="0.85"/><text x="180" y="145" text-anchor="middle" font-size="10" fill="white" font-weight="700">F2</text>
+<circle cx="260" cy="140" r="22" fill="#a7f3d0" opacity="0.8"/><text x="260" y="145" text-anchor="middle" font-size="10" fill="#1e1b4b" font-weight="700">F3</text>
+<circle cx="340" cy="140" r="22" fill="#fde68a" opacity="0.8"/><text x="340" y="145" text-anchor="middle" font-size="10" fill="#1e1b4b" font-weight="700">F4</text>
+<circle cx="420" cy="140" r="22" fill="#fda4af" opacity="0.8"/><text x="420" y="145" text-anchor="middle" font-size="10" fill="#1e1b4b" font-weight="700">F5</text>
+<circle cx="500" cy="140" r="22" fill="#fb7185" opacity="0.85"/><text x="500" y="145" text-anchor="middle" font-size="10" fill="white" font-weight="700">F6</text>
+<circle cx="580" cy="140" r="22" fill="#f43f5e" opacity="0.9"/><text x="580" y="145" text-anchor="middle" font-size="10" fill="white" font-weight="700">F7</text>
+<text x="640" y="145" font-size="14" fill="#787887">...</text>
+<!-- Error accumulation arrows -->
+<path d="M122,130 Q150,80 158,130" stroke="#f43f5e" stroke-width="1.5" fill="none" stroke-dasharray="3,2"/>
+<path d="M202,128 Q230,75 238,128" stroke="#f43f5e" stroke-width="1.5" fill="none" stroke-dasharray="3,2"/>
+<path d="M282,125 Q310,65 318,125" stroke="#f43f5e" stroke-width="2" fill="none" stroke-dasharray="3,2"/>
+<path d="M362,120 Q390,55 398,120" stroke="#f43f5e" stroke-width="2" fill="none" stroke-dasharray="3,2"/>
+<path d="M442,118 Q470,50 478,118" stroke="#f43f5e" stroke-width="2.5" fill="none"/>
+<path d="M522,115 Q550,45 558,115" stroke="#f43f5e" stroke-width="2.5" fill="none"/>
+<!-- Error labels -->
+<text x="140" y="62" text-anchor="middle" font-size="9" fill="#f43f5e">&epsilon;1</text>
+<text x="220" y="58" text-anchor="middle" font-size="9" fill="#f43f5e">&epsilon;2</text>
+<text x="300" y="48" text-anchor="middle" font-size="10" fill="#f43f5e" font-weight="600">&epsilon;3</text>
+<text x="380" y="38" text-anchor="middle" font-size="10" fill="#f43f5e" font-weight="600">&epsilon;4</text>
+<text x="460" y="33" text-anchor="middle" font-size="11" fill="#f43f5e" font-weight="700">&epsilon;5</text>
+<text x="540" y="28" text-anchor="middle" font-size="11" fill="#f43f5e" font-weight="700">&epsilon;6</text>
+<!-- Quality degradation bar -->
+<rect x="100" y="180" width="500" height="12" rx="6" fill="url(#errGrad)" opacity="0.6"/>
+<text x="100" y="208" font-size="10" fill="#10b981" font-weight="600">高质量</text>
+<text x="560" y="208" font-size="10" fill="#f43f5e" font-weight="600">严重退化</text>
+<text x="360" y="235" text-anchor="middle" font-size="11" fill="#4c4b5e" font-family="Noto Sans SC">每帧误差 &epsilon; 累积：色彩饱和 &rarr; 纹理模糊 &rarr; 细节消失</text>
+<!-- Self Forcing KV cache -->
+<rect x="80" y="255" width="560" height="30" rx="8" fill="#f3e8ff" stroke="#d8b4fe" stroke-dasharray="4,3"/>
+<text x="360" y="275" text-anchor="middle" font-size="10" fill="#9333ea" font-family="Noto Sans SC">Self Forcing KV Cache: FIFO淘汰策略 &mdash; 最早帧被无差别丢弃，丢失关键上下文</text>
+</svg>
+</div>
+<div class="svg-caption">图示：自回归视频生成中误差逐步累积的过程，以及Self Forcing的FIFO淘汰策略问题</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：train-short-test-long是根本瓶颈</div>
+<p>Self Forcing在5秒视频上训练，推理时生成60秒甚至更长。模型从未见过自生成的退化上下文，导致推理时的误差模式与训练时的学习分布不匹配。这种train-short-test-long的不一致性是误差累积的根本原因。Deep Forcing的突破在于：不改变训练，而是通过<strong>智能KV缓存管理</strong>在推理时控制误差传播。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">工程洞察：免训练方案的巨大优势</div>
+<p>训练型方案（Rolling Forcing需要蒸馏、LongLive需要32 GPU-days微调）成本高昂且引入运动约束。Deep Forcing在预训练的Self Forcing上直接推理，不需要任何额外训练，既节省成本又保留了原始模型的动态运动生成能力。这解释了为什么Deep Forcing的Dynamic Degree（57.56）远超训练型方法（Rolling Forcing: 30.71, LongLive: 45.55）。</p>
+</div>
+</section>
+
+<!-- ========== CH2 ========== -->
+<section id="ch2">
+<span class="section-tag">CH2 &middot; 核心机制一</span>
+<h2>Deep Sink — 深层注意力锚定</h2>
+
+<p>在LLM领域，StreamingLLM发现模型倾向于将大量注意力分配给初始token（称为attention sink），仅保留这些token即可维持滑动窗口推理的稳定性。然而，当将这一机制简单移植到视频扩散模型时，效果远不如预期。</p>
+
+<h3>关键发现：不仅仅是初始帧</h3>
+
+<p>论文对预训练Self Forcing的注意力分布进行了系统分析。如Figure 4所示，以最后一帧生成时的query-averaged attention为例，不同层和注意力头表现出截然不同的模式：</p>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig4_attention.webp" alt="Attention distribution">
+<div class="figure-caption">Figure 4：注意力权重在早期帧上的分布。L1H1和L5H10展示了不同注意力头的差异化行为</div>
+</div>
+
+<p>关键观察：大多数注意力头不仅关注最初几帧，还对<strong>序列中间部分</strong>分配了可比的注意力权重。这意味着传统StreamingLLM式的浅层sink（仅保留3帧）远远不够。</p>
+
+<h3>Deep Sink的核心设计</h3>
+
+<p>基于上述发现，Deep Sink提出：<strong>将滑动窗口的大约一半（40-60%）分配给持久化的sink token</strong>。实验表明，当sink帧数从0增加到10以上时，美学漂移（Aesthetic Drift）显著下降，整体一致性（Overall Consistency）稳步提升。</p>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig5_ablation.webp" alt="Top-C visualization">
+<div class="figure-caption">Figure 7：Top-C token选择的可视化。黄色高亮区域为被选中的语义关键区域</div>
+</div>
+
+<div class="compare-grid">
+<div class="compare-card bad">
+<h4>无Sink（Sink=0）</h4>
+<p>帧230即出现明显退化，帧690质量完全崩溃。<strong>误差无约束累积</strong></p>
+</div>
+<div class="compare-card mid">
+<h4>浅层Sink（Sink=3-4）</h4>
+<p>退化延迟但仍可见。参考LongLive/Rolling Forcing方案，<strong>不足以支撑60秒生成</strong></p>
+</div>
+<div class="compare-card good">
+<h4>Deep Sink（Sink=10-15）</h4>
+<p>退化被大幅抑制。40-60%窗口作为锚定。<strong>中间帧是关键锚点</strong></p>
+</div>
+</div>
+
+<div class="formula">
+<div class="formula-label">Deep Sink KV 分区</div>
+$$K = \left[ K_{\text{sink}} \parallel K_{\text{tail}} \right], \quad V = \left[ V_{\text{sink}} \parallel V_{\text{tail}} \right]$$
+</div>
+
+<!-- SVG 2: Deep Sink 滑动窗口示意 -->
+<div class="svg-container">
+<svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+<text x="360" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">Deep Sink 滑动窗口结构</text>
+<!-- Window frame -->
+<rect x="40" y="45" width="640" height="80" rx="10" fill="#faf5ff" stroke="#d8b4fe" stroke-width="2"/>
+<!-- Sink region -->
+<rect x="50" y="55" width="260" height="60" rx="6" fill="#a855f7" opacity="0.2" stroke="#9333ea" stroke-width="1.5"/>
+<text x="180" y="75" text-anchor="middle" font-size="12" font-weight="700" fill="#7e22ce" font-family="Noto Sans SC">Deep Sink (40-60%)</text>
+<text x="180" y="95" text-anchor="middle" font-size="10" fill="#9333ea">持久化锚定帧 &middot; 恒定保留</text>
+<!-- Compressed region -->
+<rect x="320" y="55" width="160" height="60" rx="6" fill="#fbbf24" opacity="0.2" stroke="#f59e0b" stroke-width="1.5"/>
+<text x="400" y="75" text-anchor="middle" font-size="12" font-weight="700" fill="#b45309" font-family="Noto Sans SC">Top-C 压缩</text>
+<text x="400" y="95" text-anchor="middle" font-size="10" fill="#b45309">重要token保留</text>
+<!-- Recent region -->
+<rect x="490" y="55" width="180" height="60" rx="6" fill="#10b981" opacity="0.2" stroke="#10b981" stroke-width="1.5"/>
+<text x="580" y="75" text-anchor="middle" font-size="12" font-weight="700" fill="#047857" font-family="Noto Sans SC">Recent (R=4)</text>
+<text x="580" y="95" text-anchor="middle" font-size="10" fill="#047857">近期帧 &middot; 不压缩</text>
+<!-- Evicted indication -->
+<text x="360" y="150" text-anchor="middle" font-size="11" fill="#787887" font-family="Noto Sans SC">KV Cache = [Sink | Top-C | Recent] &rarr; 固定预算 N=16</text>
+<!-- Arrows showing comparison -->
+<rect x="40" y="170" width="300" height="50" rx="8" fill="#ffe4e6" stroke="#fda4af"/>
+<text x="190" y="190" text-anchor="middle" font-size="11" font-weight="600" fill="#f43f5e" font-family="Noto Sans SC">Self Forcing: FIFO 淘汰</text>
+<text x="190" y="208" text-anchor="middle" font-size="10" fill="#9f1239">丢弃最早帧，丢失全局语义</text>
+<rect x="380" y="170" width="300" height="50" rx="8" fill="#d1fae5" stroke="#6ee7b7"/>
+<text x="530" y="190" text-anchor="middle" font-size="11" font-weight="600" fill="#047857" font-family="Noto Sans SC">Deep Forcing: 选择性淘汰</text>
+<text x="530" y="208" text-anchor="middle" font-size="10" fill="#047857">保留Sink + 重要token，精准淘汰冗余</text>
+<!-- VS -->
+<text x="360" y="200" text-anchor="middle" font-size="14" font-weight="900" fill="#787887">VS</text>
+<text x="360" y="250" text-anchor="middle" font-size="10" fill="#787887" font-family="Noto Sans SC">Deep Sink通过深层锚定维持全局语义连贯性，避免信息漂移</text>
+</svg>
+</div>
+<div class="svg-caption">图示：Deep Sink的滑动窗口结构 vs Self Forcing的FIFO淘汰策略</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：中间帧是"沉默的锚点"</div>
+<p>传统attention sink理论认为只有初始token承担锚定角色。Deep Forcing的发现挑战了这一认知：视频扩散模型中，<strong>中间帧承载了与初始帧可比的注意力权重</strong>。这些中间帧可能编码了场景布局、主体外观和运动轨迹的中期记忆，丢失它们会导致全局语义漂移。这解释了为什么仅保留3帧的LongLive方案在60秒生成中仍然出现退化。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">设计洞察：Sink比例的"甜蜜区"</div>
+<p>论文通过系统消融确定了最佳sink比例。Sink=0时质量崩溃最快；Sink=4-9时改善明显但不充分；Sink=10-15（40-60%）达到最佳平衡；Sink=18则出现<strong>过度锚定</strong>——早期帧被过度保留，导致重复生成（类似LLM中的degeneration）。这一非单调关系表明存在最优分配策略。</p>
+</div>
+</section>
+
+<!-- ========== CH3 ========== -->
+<section id="ch3">
+<span class="section-tag">CH3 &middot; 核心机制二</span>
+<h2>Temporal RoPE Adjustment — 修复时序断层</h2>
+
+<p>在3D视频DiT架构中，RoPE（Rotary Position Embedding）分别编码时间、高度和宽度维度。当Deep Sink将远古帧（如t=1）和当前帧（如t=200）放在同一上下文窗口中时，两者的时间维度RoPE编码存在<strong>巨大差距</strong>，导致三个严重问题：</p>
+
+<div class="compare-grid">
+<div class="compare-card bad">
+<h4>闪烁（Flickering）</h4>
+<p>sink帧和当前帧之间的时间位置差距导致注意力模式不稳定，生成帧出现闪烁</p>
+</div>
+<div class="compare-card bad">
+<h4>保真度退化</h4>
+<p>模型被迫在极大时间跨度上计算注意力，空间信息被时间噪声淹没</p>
+</div>
+<div class="compare-card bad">
+<h4>回滚（Roll-back）</h4>
+<p>生成重新退回到sink中锚定的早期帧，出现内容重复</p>
+</div>
+</div>
+
+<h3>RoPE对齐策略</h3>
+
+<p>Deep Sink的RoPE调整只修改<strong>时间维度</strong>，保持空间编码不变。核心思想是：将sink token的时间索引向当前时间线"旋转对齐"，消除时间断层。</p>
+
+<div class="formula">
+<div class="formula-label">时间间隙计算</div>
+$$\Delta_{\text{sink}} = s_{\text{tail}} - s_{\text{sink}}$$
+</div>
+
+<div class="formula">
+<div class="formula-label">RoPE 时间旋转</div>
+$$K^{(\text{time})}_{\text{sink}} \leftarrow K^{(\text{time})}_{\text{sink}} \odot \exp\left(i \omega_t \Delta_{\text{sink}}\right)$$
+</div>
+
+<p>其中 $\omega_t$ 是RoPE时间频率向量，$\odot$ 表示逐元素乘法。这个复数相位旋转操作将sink的key对齐到与tail连续的时间线上，使得注意力计算不再受到时间断层干扰。</p>
+
+<!-- SVG 3: RoPE时间对齐示意 -->
+<div class="svg-container">
+<svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="arr3" markerWidth="6" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#787887"/></marker>
+</defs>
+<text x="360" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">Temporal RoPE Adjustment 机制</text>
+<!-- Before adjustment -->
+<text x="360" y="55" text-anchor="middle" font-size="11" font-weight="600" fill="#f43f5e" font-family="Noto Sans SC">调整前：时间断层</text>
+<line x1="80" y1="80" x2="640" y2="80" stroke="#e9d5ff" stroke-width="2"/>
+<!-- Sink tokens -->
+<rect x="80" y="90" width="60" height="30" rx="4" fill="#a855f7" opacity="0.3" stroke="#9333ea"/>
+<text x="110" y="110" text-anchor="middle" font-size="9" fill="#7e22ce">t=1</text>
+<rect x="150" y="90" width="60" height="30" rx="4" fill="#a855f7" opacity="0.4" stroke="#9333ea"/>
+<text x="180" y="110" text-anchor="middle" font-size="9" fill="#7e22ce">t=5</text>
+<rect x="220" y="90" width="60" height="30" rx="4" fill="#a855f7" opacity="0.5" stroke="#9333ea"/>
+<text x="250" y="110" text-anchor="middle" font-size="9" fill="#7e22ce">t=10</text>
+<!-- Gap -->
+<line x1="290" y1="105" x2="370" y2="105" stroke="#f43f5e" stroke-width="2" stroke-dasharray="4,3"/>
+<text x="330" y="100" text-anchor="middle" font-size="10" fill="#f43f5e" font-weight="700">&Delta; 巨大时间差</text>
+<!-- Tail tokens -->
+<rect x="380" y="90" width="60" height="30" rx="4" fill="#10b981" opacity="0.5" stroke="#10b981"/>
+<text x="410" y="110" text-anchor="middle" font-size="9" fill="#047857">t=195</text>
+<rect x="450" y="90" width="60" height="30" rx="4" fill="#10b981" opacity="0.7" stroke="#10b981"/>
+<text x="480" y="110" text-anchor="middle" font-size="9" fill="#047857">t=200</text>
+<rect x="520" y="90" width="60" height="30" rx="4" fill="#10b981" opacity="0.9" stroke="#10b981"/>
+<text x="550" y="110" text-anchor="middle" font-size="9" fill="#047857">t=205</text>
+<text x="620" y="110" font-size="10" fill="#787887">...</text>
+<!-- After adjustment -->
+<text x="360" y="175" text-anchor="middle" font-size="11" font-weight="600" fill="#10b981" font-family="Noto Sans SC">调整后：时间对齐</text>
+<line x1="80" y1="200" x2="640" y2="200" stroke="#d1fae5" stroke-width="2"/>
+<!-- Rotated sink tokens -->
+<rect x="200" y="210" width="60" height="30" rx="4" fill="#a855f7" opacity="0.3" stroke="#9333ea" stroke-dasharray="3,2"/>
+<text x="230" y="230" text-anchor="middle" font-size="9" fill="#7e22ce">t~195</text>
+<rect x="270" y="210" width="60" height="30" rx="4" fill="#a855f7" opacity="0.4" stroke="#9333ea" stroke-dasharray="3,2"/>
+<text x="300" y="230" text-anchor="middle" font-size="9" fill="#7e22ce">t~200</text>
+<rect x="340" y="210" width="60" height="30" rx="4" fill="#a855f7" opacity="0.5" stroke="#9333ea" stroke-dasharray="3,2"/>
+<text x="370" y="230" text-anchor="middle" font-size="9" fill="#7e22ce">t~205</text>
+<!-- Seamless transition -->
+<rect x="410" y="210" width="60" height="30" rx="4" fill="#10b981" opacity="0.5" stroke="#10b981"/>
+<text x="440" y="230" text-anchor="middle" font-size="9" fill="#047857">t=195</text>
+<rect x="480" y="210" width="60" height="30" rx="4" fill="#10b981" opacity="0.7" stroke="#10b981"/>
+<text x="510" y="230" text-anchor="middle" font-size="9" fill="#047857">t=200</text>
+<rect x="550" y="210" width="60" height="30" rx="4" fill="#10b981" opacity="0.9" stroke="#10b981"/>
+<text x="580" y="230" text-anchor="middle" font-size="9" fill="#047857">t=205</text>
+<!-- Rotation arrow -->
+<path d="M260,125 Q310,155 260,205" stroke="#a855f7" stroke-width="2" fill="none" marker-end="url(#arr3)" stroke-dasharray="4,2"/>
+<text x="220" y="168" font-size="10" fill="#9333ea" font-weight="600">RoPE旋转对齐</text>
+<text x="360" y="275" text-anchor="middle" font-size="10" fill="#4c4b5e" font-family="Noto Sans SC">sink token的时间索引被旋转到当前时间线附近，空间索引保持不变</text>
+<text x="360" y="295" text-anchor="middle" font-size="10" fill="#787887" font-family="Noto Sans SC">虚线框表示调整后的sink token位置 &middot; 实线框表示原始tail token位置</text>
+</svg>
+</div>
+<div class="svg-caption">图示：Temporal RoPE Adjustment &mdash; 将sink token的时间索引旋转对齐到当前时间线</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：仅旋转时间维度的设计智慧</div>
+<p>一个朴素的做法是重新计算所有token的完整3D RoPE，但这会破坏空间结构信息。Deep Sink的精妙之处在于<strong>仅修改时间维度</strong>：sink token的物体形状、空间布局信息（height/width RoPE）完全保持不变，只有时间"标签"被重新标注。这类似于在视频编辑中"改变时间戳但保留画面内容"，既解决了时序断层又避免了空间信息损失。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">理论洞察：复数相位旋转的几何直觉</div>
+<p>RoPE将位置信息编码为复数空间中的旋转角。当两个token的时间位置差为$\Delta$时，它们的注意力得分会被$\exp(i\omega_t\Delta)$调制。通过主动补偿这个相位差，sink token"看起来"就像出现在最近的时间线上，从而使注意力计算在时间维度上保持连续性。这与相对位置编码的数学本质完美对齐。</p>
+</div>
+</section>
+
+<!-- ========== CH4 ========== -->
+<section id="ch4">
+<span class="section-tag">CH4 &middot; 核心机制三</span>
+<h2>Participative Compression — 参与式KV压缩</h2>
+
+<p>Deep Sink虽然大幅缓解了保真度退化，但在分钟级生成中仍然不足。当从5秒训练外推到12倍以上长度时，KV缓存不断增长，注意力被稀释到越来越多不相关的token上，引入<strong>复合噪声</strong>。Participative Compression（PC）通过重要性感知的token选择来解决这一问题。</p>
+
+<h3>核心思想：让token"竞争上岗"</h3>
+
+<p>与Self Forcing的FIFO（先入先出）淘汰不同，PC以<strong>token级别</strong>操作：基于候选token对近期query的注意力贡献，只保留最重要的Top-C个token，安全丢弃冗余和退化的历史。</p>
+
+<div class="formula">
+<div class="formula-label">重要性评分（公式7）</div>
+$$\phi_j = \sum_{r=1}^{R} q_r^{\top} k_j$$
+</div>
+
+<p>其中 $q_r$ 是第 $r$ 个近期query，$k_j$ 是第 $j$ 个候选key。$\phi_j$ 越高表示该token对当前生成越重要。</p>
+
+<div class="formula">
+<div class="formula-label">Top-C 选择与压缩缓存构建（公式8-9）</div>
+$$K_{\text{top}} = \text{Top-C}(\phi)$$
+$$K_{\text{compressed}} = \left[ K_{\text{sink}} \parallel K_{\text{top}} \parallel K_{\text{rct}} \right]$$
+</div>
+
+<h3>三区分区设计</h3>
+
+<p>PC将KV缓存分为三个区域，各有明确职责：</p>
+
+<div class="compare-grid">
+<div class="compare-card good">
+<h4>Sink区（S=10帧）</h4>
+<p>始终保留，提供<strong>全局语义锚定</strong>。不参与压缩，通过RoPE对齐与当前帧保持连续</p>
+</div>
+<div class="compare-card mid">
+<h4>候选区（Candidate）</h4>
+<p>中间token池，通过重要性评分竞争保留。<strong>被压缩的核心目标</strong>，保留Top-C个最重要token</p>
+</div>
+<div class="compare-card good">
+<h4>近期区（R=4帧）</h4>
+<p>最新生成的帧，<strong>绝对不压缩</strong>。保持局部运动连贯性和最新的视觉上下文</p>
+</div>
+</div>
+
+<!-- SVG 4: Participative Compression 流程 -->
+<div class="svg-container">
+<svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg">
+<text x="360" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">Participative Compression 压缩流程</text>
+<!-- Step 1: Full cache -->
+<text x="120" y="52" text-anchor="middle" font-size="11" font-weight="600" fill="#9333ea" font-family="Noto Sans SC">Step 1: 满缓存 M=21帧</text>
+<rect x="30" y="60" width="660" height="40" rx="6" fill="#faf5ff" stroke="#d8b4fe"/>
+<!-- Sink tokens -->
+<rect x="40" y="66" width="140" height="28" rx="4" fill="#a855f7" opacity="0.3"/><text x="110" y="84" text-anchor="middle" font-size="9" fill="#7e22ce" font-weight="600">Sink (10帧)</text>
+<!-- Candidate tokens -->
+<rect x="190" y="66" width="280" height="28" rx="4" fill="#fbbf24" opacity="0.3"/><text x="330" y="84" text-anchor="middle" font-size="9" fill="#b45309" font-weight="600">Candidate (7帧) &mdash; 压缩目标</text>
+<!-- Recent tokens -->
+<rect x="480" y="66" width="200" height="28" rx="4" fill="#10b981" opacity="0.3"/><text x="580" y="84" text-anchor="middle" font-size="9" fill="#047857" font-weight="600">Recent (4帧)</text>
+
+<!-- Step 2: Compute attention -->
+<text x="360" y="128" text-anchor="middle" font-size="11" font-weight="600" fill="#f59e0b" font-family="Noto Sans SC">Step 2: 计算重要性评分</text>
+<rect x="120" y="138" width="480" height="50" rx="8" fill="#fef3c7" stroke="#fde68a" stroke-dasharray="4,3"/>
+<text x="200" y="158" text-anchor="middle" font-size="10" fill="#b45309">Q_rct (Recent查询)</text>
+<text x="310" y="168" font-size="14" fill="#b45309" font-weight="700">&times;</text>
+<text x="390" y="158" text-anchor="middle" font-size="10" fill="#b45309">K_cand (候选Key)</text>
+<text x="490" y="168" font-size="14" fill="#b45309" font-weight="700">&rarr;</text>
+<text x="570" y="158" text-anchor="middle" font-size="10" fill="#b45309" font-weight="700">&phi; (重要性)</text>
+
+<!-- Step 3: Top-C Selection -->
+<text x="360" y="218" text-anchor="middle" font-size="11" font-weight="600" fill="#10b981" font-family="Noto Sans SC">Step 3: Top-C 选择 C=2</text>
+<rect x="190" y="228" width="280" height="35" rx="6" fill="#d1fae5" stroke="#6ee7b7"/>
+<!-- Highlighted top tokens -->
+<rect x="200" y="233" width="38" height="25" rx="3" fill="#10b981" opacity="0.8"/><text x="219" y="250" text-anchor="middle" font-size="8" fill="white">Top1</text>
+<rect x="260" y="233" width="38" height="25" rx="3" fill="#10b981" opacity="0.6"/><text x="279" y="250" text-anchor="middle" font-size="8" fill="white">Top2</text>
+<text x="340" y="250" text-anchor="middle" font-size="10" fill="#787887">其余 &rarr; 淘汰</text>
+<text x="440" y="250" text-anchor="middle" font-size="10" fill="#047857" font-weight="600">Top-C = 2</text>
+
+<!-- Step 4: Compressed cache -->
+<text x="360" y="295" text-anchor="middle" font-size="11" font-weight="600" fill="#9333ea" font-family="Noto Sans SC">Step 4: 组装压缩缓存 N=16</text>
+<rect x="100" y="305" width="520" height="35" rx="6" fill="#f3e8ff" stroke="#d8b4fe"/>
+<rect x="110" y="310" width="140" height="25" rx="4" fill="#a855f7" opacity="0.4"/><text x="180" y="327" text-anchor="middle" font-size="9" fill="#7e22ce" font-weight="600">Sink (10)</text>
+<rect x="260" y="310" width="80" height="25" rx="4" fill="#10b981" opacity="0.5"/><text x="300" y="327" text-anchor="middle" font-size="9" fill="#047857" font-weight="600">Top-C (2)</text>
+<rect x="350" y="310" width="140" height="25" rx="4" fill="#34d399" opacity="0.3"/><text x="420" y="327" text-anchor="middle" font-size="9" fill="#047857" font-weight="600">Recent (4)</text>
+<text x="560" y="327" text-anchor="middle" font-size="10" fill="#9333ea" font-weight="700">N=16</text>
+<text x="360" y="365" text-anchor="middle" font-size="10" fill="#4c4b5e" font-family="Noto Sans SC">仅在滑动窗口满且第一个去噪步骤(t=T)时执行 &middot; 后续步骤复用相同选择</text>
+</svg>
+</div>
+<div class="svg-caption">图示：Participative Compression的完整压缩流程 &mdash; 从满缓存到精简的三区结构</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：去噪query不是纯噪声</div>
+<p>一个反直觉的发现是：在初始去噪步（t=1000）使用的query虽然含有大量噪声，但<strong>仍然携带有意义的语义信号</strong>。论文通过对比实验证明，基于去噪query的Top-C选择远优于随机高斯选择。原因有二：(1) Self Forcing的4步蒸馏使模型能快速收敛到有意义的注意力模式；(2) 逐层独立的KV缓存允许每层基于其特定上下文选择语义关键token。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">效率洞察：稀疏激活的计算优势</div>
+<p>PC的计算开销远低于直觉预期，因为它只在两个条件同时满足时激活：(1) 滑动窗口完全填满；(2) 在第一个去噪时间步（t=T=1000）。压缩后的缓存只有16帧而非21帧，后续帧生成的注意力成本反而降低。论文Table 6显示，Deep Forcing的吞吐量（15.75 FPS）与Self Forcing（15.78 FPS）几乎相同，证明压缩开销被注意力节省完全抵消。</p>
+</div>
+
+<div class="code-block" data-label="Participative Compression 伪代码" data-trust="可信度: 高">
+<span class="trust">可信度: 高</span>
+<pre><code><span class="kw">def</span> <span class="fn">participative_compression</span>(KV, S, R, C, t, T):
+    <span class="com"># 仅在窗口满且第一步去噪时执行</span>
+    <span class="kw">if</span> len(KV) < MAX_WINDOW <span class="kw">or</span> t != T:
+        <span class="kw">return</span> KV
+
+    <span class="com"># 三区分区</span>
+    K_sink = KV[<span class="num">0</span>:S]            <span class="com"># 锚定区</span>
+    K_cand = KV[S:-R]           <span class="com"># 候选区</span>
+    K_rct  = KV[-R:]            <span class="com"># 近期区</span>
+    Q_rct  = get_recent_queries(R)
+
+    <span class="com"># 计算重要性评分 (Eq.7)</span>
+    phi = Q_rct.T @ K_cand      <span class="com"># [R, cand] -> [cand]</span>
+    phi = phi.<span class="fn">sum</span>(dim=<span class="num">0</span>)        <span class="com"># 聚合所有近期query</span>
+
+    <span class="com"># Top-C 选择 (Eq.8)</span>
+    top_indices = phi.<span class="fn">topk</span>(C).indices
+    K_top = K_cand[top_indices]
+
+    <span class="com"># Temporal RoPE Unification (Eq.11)</span>
+    K_top = <span class="fn">adjust_temporal_rope</span>(K_top)
+
+    <span class="com"># 组装压缩缓存 (Eq.9)</span>
+    <span class="kw">return</span> <span class="fn">cat</span>([K_sink, K_top, K_rct])  <span class="com"># N tokens</span></code></pre>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：位置槽位的语义一致性</div>
+<p>论文Figure 13的token选择频率热图揭示了一个有趣现象：高频率被选中的位置集中在sink边界附近（位置15,600），而非固定帧。这是因为压缩过程中token被不断淘汰和替换，但<strong>位置槽位</strong>始终承载着连接已建立上下文（sink）和当前生成（recent）的桥梁角色。这表明模型学习了一种位置偏好的语义注意力模式。</p>
+</div>
+</section>
+
+<!-- ========== CH5 ========== -->
+<section id="ch5">
+<span class="section-tag">CH5 &middot; 系统整合</span>
+<h2>Deep Forcing 完整算法</h2>
+
+<p>Deep Forcing将Deep Sink和Participative Compression整合为一个统一的免训练推理框架。整个系统在预训练Self Forcing之上运行，通过精心设计的KV缓存管理策略实现12倍以上的长度外推。</p>
+
+<h3>系统工作流程</h3>
+
+<p>对于每一帧的生成，Deep Forcing执行以下流程：(1) 如果缓存未满，直接进行标准的自回归去噪；(2) 当缓存满时，在第一个去噪步骤执行PC压缩；(3) Deep Sink的RoPE对齐在每一步注意力计算前执行。</p>
+
+<div class="formula">
+<div class="formula-label">Deep Forcing 完整流程</div>
+$$x^i_{t_{j-1}} = \Psi\left(G_\theta(x^i_{t_j}, t_j, \text{KV}_{\text{compressed}}), t_{j-1}\right)$$
+$$\text{其中 } \text{KV}_{\text{compressed}} = \text{PC}(\text{RoPE-Align}(\text{KV}_{\text{window}}))$$
+</div>
+
+<!-- SVG 5: 完整系统架构 -->
+<div class="svg-container">
+<svg viewBox="0 0 720 400" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="sysGrad1" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#a855f7" stop-opacity="0.15"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0.4"/></linearGradient>
+<linearGradient id="sysGrad2" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#10b981" stop-opacity="0.15"/><stop offset="100%" stop-color="#10b981" stop-opacity="0.4"/></linearGradient>
+<marker id="arr5" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#787887"/></marker>
+</defs>
+<text x="360" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">Deep Forcing 系统架构</text>
+
+<!-- Self Forcing base -->
+<rect x="140" y="40" width="440" height="50" rx="10" fill="url(#sysGrad1)" stroke="#9333ea" stroke-width="2"/>
+<text x="360" y="60" text-anchor="middle" font-size="12" font-weight="700" fill="#7e22ce" font-family="Noto Sans SC">Pre-trained Self Forcing (Causal DiT)</text>
+<text x="360" y="78" text-anchor="middle" font-size="10" fill="#9333ea">4步去噪 &middot; VAE编解码 &middot; 3D RoPE &middot; 因果注意力</text>
+
+<!-- Arrow down -->
+<path d="M360,90 L360,110" stroke="#787887" stroke-width="2" marker-end="url(#arr5)"/>
+
+<!-- Deep Forcing layer -->
+<rect x="40" y="115" width="640" height="250" rx="12" fill="#faf5ff" stroke="#d8b4fe" stroke-width="1.5" stroke-dasharray="6,3"/>
+<text x="360" y="138" text-anchor="middle" font-size="12" font-weight="700" fill="#9333ea" font-family="Noto Sans SC">Deep Forcing 推理层（免训练）</text>
+
+<!-- Deep Sink module -->
+<rect x="60" y="150" width="280" height="90" rx="8" fill="#e9d5ff" stroke="#a855f7"/>
+<text x="200" y="172" text-anchor="middle" font-size="11" font-weight="700" fill="#7e22ce" font-family="Noto Sans SC">Deep Sink</text>
+<text x="200" y="190" text-anchor="middle" font-size="9" fill="#9333ea">1. 保留40-60%窗口作为Sink</text>
+<text x="200" y="205" text-anchor="middle" font-size="9" fill="#9333ea">2. Temporal RoPE对齐</text>
+<text x="200" y="220" text-anchor="middle" font-size="9" fill="#9333ea">3. 稳定全局注意力分布</text>
+
+<!-- PC module -->
+<rect x="380" y="150" width="280" height="90" rx="8" fill="#d1fae5" stroke="#10b981"/>
+<text x="520" y="172" text-anchor="middle" font-size="11" font-weight="700" fill="#047857" font-family="Noto Sans SC">Participative Compression</text>
+<text x="520" y="190" text-anchor="middle" font-size="9" fill="#10b981">1. 计算候选token重要性评分</text>
+<text x="520" y="205" text-anchor="middle" font-size="9" fill="#10b981">2. Top-C 选择语义关键token</text>
+<text x="520" y="220" text-anchor="middle" font-size="9" fill="#10b981">3. 压缩KV Cache至N=16</text>
+
+<!-- Combined output -->
+<rect x="120" y="260" width="480" height="45" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+<text x="360" y="280" text-anchor="middle" font-size="11" font-weight="700" fill="#b45309" font-family="Noto Sans SC">压缩KV Cache = [Sink(10) | Top-C(2) | Recent(4)]</text>
+<text x="360" y="298" text-anchor="middle" font-size="10" fill="#b45309">固定预算16帧 &middot; 零额外训练 &middot; 15.75 FPS</text>
+
+<!-- Output -->
+<path d="M360,305 L360,330" stroke="#787887" stroke-width="2" marker-end="url(#arr5)"/>
+<rect x="160" y="335" width="400" height="35" rx="8" fill="url(#sysGrad2)" stroke="#10b981"/>
+<text x="360" y="357" text-anchor="middle" font-size="11" font-weight="700" fill="#047857" font-family="Noto Sans SC">60秒+ 高质量长视频生成 &middot; 12&times; 外推 &middot; 实时流式输出</text>
+</svg>
+</div>
+<div class="svg-caption">图示：Deep Forcing完整系统架构 &mdash; 在预训练Self Forcing上通过Deep Sink和PC实现免训练长视频生成</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：两个组件的互补关系</div>
+<p>Deep Sink和Participative Compression解决的是误差累积的不同层面。Deep Sink通过深层锚定<strong>稳定全局注意力分布</strong>，防止注意力漂移；PC通过重要性选择<strong>消除冗余噪声</strong>，减少注意力稀释。消融实验（Table 4）清楚地展示了这种互补性：DS将Dynamic Degree从36.62提升到48.58，再加PC进一步提升到57.56。两者缺一不可。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">架构洞察：免训练的可移植性</div>
+<p>Deep Forcing的设计哲学是"不改模型，改推理"。这意味着任何基于Self Forcing架构训练的视频扩散模型都可以直接应用Deep Forcing，无需重新训练。这种可移植性在工程上极具价值：当底层模型升级时（如更大规模、更高质量的Self Forcing），Deep Forcing的效果也会自然提升。</p>
+</div>
+</section>
+
+<!-- ========== CH6 ========== -->
+<section id="ch6">
+<span class="section-tag">CH6 &middot; 算法实现</span>
+<h2>核心算法实现详解</h2>
+
+<p>本节深入分析Deep Forcing的关键实现细节，包括完整的参与式压缩算法和RoPE调整的具体实现。</p>
+
+<h3>完整PC+DS算法</h3>
+
+<div class="code-block" data-label="Algorithm 1: Deep Forcing 完整算法" data-trust="可信度: 高">
+<span class="trust">可信度: 高</span>
+<pre><code><span class="kw">class</span> <span class="fn">DeepForcingKVManager</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, sink_size=<span class="num">10</span>, budget=<span class="num">16</span>,
+                 recent=<span class="num">4</span>, max_window=<span class="num">21</span>):
+        self.S = sink_size       <span class="com"># Deep Sink 帧数</span>
+        self.N = budget          <span class="com"># 压缩后总预算</span>
+        self.R = recent          <span class="com"># 保留的近期帧数</span>
+        self.C = budget - sink_size - recent  <span class="com"># Top-C = 2</span>
+        self.M = max_window      <span class="com"># 最大窗口长度</span>
+
+    <span class="kw">def</span> <span class="fn">compress</span>(self, K, V, Q, timestep, T):
+        <span class="com"># 条件检查: 窗口满 且 第一个去噪步</span>
+        <span class="kw">if</span> len(K) < self.M <span class="kw">or</span> timestep != T:
+            <span class="kw">return</span> K, V
+
+        <span class="com"># 1. 三区分区</span>
+        K_sink, V_sink = K[:self.S], V[:self.S]
+        K_cand, V_cand = K[self.S:-self.R], V[self.S:-self.R]
+        K_rct,  V_rct  = K[-self.R:], V[-self.R:]
+        Q_rct = Q[-self.R:]
+
+        <span class="com"># 2. Temporal RoPE 对齐 (Deep Sink)</span>
+        delta_sink = self.S - <span class="num">0</span>  <span class="com"># tail首帧 - sink末帧</span>
+        K_sink = <span class="fn">apply_temporal_rope</span>(
+            K_sink, delta_sink, omega_t)
+
+        <span class="com"># 3. 重要性评分 (Participative Compression)</span>
+        phi = (Q_rct @ K_cand.T).<span class="fn">sum</span>(dim=<span class="num">0</span>)
+        top_idx = phi.<span class="fn">topk</span>(self.C).indices
+        K_top = K_cand[top_idx]
+        V_top = V_cand[top_idx]
+
+        <span class="com"># 4. Top-C RoPE统一</span>
+        K_top = <span class="fn">apply_temporal_rope_unification</span>(K_top)
+
+        <span class="com"># 5. 组装压缩缓存</span>
+        K_new = <span class="fn">cat</span>([K_sink, K_top, K_rct])
+        V_new = <span class="fn">cat</span>([V_sink, V_top, V_rct])
+        <span class="kw">return</span> K_new, V_new
+
+    <span class="kw">def</span> <span class="fn">apply_temporal_rope</span>(self, K, delta, omega):
+        <span class="com"># 仅旋转时间维度，保持空间不变</span>
+        phase = exp(<span class="num">1j</span> * omega * delta)
+        K[..., :time_dim] *= phase
+        <span class="kw">return</span> K</code></pre>
+</div>
+
+<h3>4步去噪与KV缓存交互</h3>
+
+<div class="code-block" data-label="Self Forcing 去噪循环（集成Deep Forcing）" data-trust="可信度: 高">
+<span class="trust">可信度: 高</span>
+<pre><code><span class="com"># Self Forcing 4步去噪 + Deep Forcing KV管理</span>
+<span class="kw">def</span> <span class="fn">generate_frame</span>(model, kv_manager, KV, timesteps):
+    <span class="com"># timesteps = [0, 250, 500, 750, 1000]</span>
+    x_t = randn(<span class="num">1</span>, C, H, W)  <span class="com"># 纯噪声起点</span>
+
+    <span class="kw">for</span> j <span class="kw">in</span> <span class="fn">reversed</span>(<span class="fn">range</span>(len(timesteps))):
+        t = timesteps[j]
+
+        <span class="com"># Deep Forcing: 仅在第一步(t=1000)压缩</span>
+        KV_compressed = kv_manager.<span class="fn">compress</span>(
+            KV.k, KV.v, model.query, t, T=<span class="num">1000</span>
+        )
+
+        <span class="com"># 去噪预测</span>
+        x_clean = model.<span class="fn">predict</span>(x_t, t, KV_compressed)
+
+        <span class="com"># 前向扩散到更低噪声水平</span>
+        <span class="kw">if</span> j > <span class="num">0</span>:
+            x_t = forward_diffusion(x_clean, timesteps[j-<span class="num">1</span>])
+
+    <span class="com"># 更新KV缓存（生成帧的KV加入缓存）</span>
+    new_kv = model.<span class="fn">encode_frame</span>(x_clean)
+    KV = <span class="fn">append_and_evict</span>(KV, new_kv)
+
+    <span class="kw">return</span> x_clean, KV</code></pre>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">实现洞察：单次压缩覆盖全去噪过程</div>
+<p>PC仅在第一个去噪步骤（t=1000）执行压缩，选定的token在后续所有去噪步骤中保持不变。论文Figure 11验证了这一设计：不同去噪时间步（1000, 750, 500, 250）的注意力模式高度一致，证明t=1000时选出的token在整个去噪过程中都是语义关键的。这不仅节省了计算，还避免了去噪过程中token选择的不稳定性。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">工程洞察：超参数选择的实证依据</div>
+<p>论文采用S=10, N=16, R=4的配置。S=10对应25帧窗口的40%，处于论文发现的最优范围（40-60%）。R=4确保局部运动连贯性。N=16在内存和质量之间取得平衡。这些超参数对不同场景具有鲁棒性，论文在128个MovieGen prompt上验证了其泛化能力。</p>
+</div>
+</section>
+
+<!-- ========== CH7 ========== -->
+<section id="ch7">
+<span class="section-tag">CH7 &middot; 实验结果</span>
+<h2>全面超越训练型方法</h2>
+
+<p>Deep Forcing在VBench-Long基准、用户研究和VLM评估三个维度上进行了全面评估，结果令人瞩目：一个免训练方法在多个指标上超越了需要昂贵训练的基线。</p>
+
+<h3>VBench-Long 定量评估</h3>
+
+<table class="result-table">
+<tr>
+<th>方法</th>
+<th>训练方式</th>
+<th>FPS &uarr;</th>
+<th>Dynamic Degree &uarr;</th>
+<th>Overall Consistency &uarr;</th>
+<th>Imaging Quality &uarr;</th>
+<th>Aesthetic Quality &uarr;</th>
+</tr>
+<tr>
+<td>CausVid</td>
+<td>训练型(无Sink)</td>
+<td>15.78</td>
+<td>46.44</td>
+<td>18.78</td>
+<td>65.84</td>
+<td>59.42</td>
+</tr>
+<tr>
+<td>Self Forcing</td>
+<td>训练型(无Sink)</td>
+<td>15.78</td>
+<td>31.98</td>
+<td>18.63</td>
+<td>66.33</td>
+<td>56.45</td>
+</tr>
+<tr>
+<td>Rolling Forcing</td>
+<td>训练型(有Sink)</td>
+<td>15.79</td>
+<td>31.35</td>
+<td>20.64</td>
+<td>70.25</td>
+<td>59.75</td>
+</tr>
+<tr>
+<td>LongLive</td>
+<td>训练型(有Sink)</td>
+<td>18.16</td>
+<td>43.49</td>
+<td>20.29</td>
+<td>69.11</td>
+<td>61.29</td>
+</tr>
+<tr class="ours">
+<td><strong>Deep Forcing</strong></td>
+<td><strong>免训练</strong></td>
+<td class="best">15.75</td>
+<td class="best"><strong>57.19</strong></td>
+<td class="best"><strong>20.38</strong></td>
+<td class="best"><strong>69.27</strong></td>
+<td>59.86</td>
+</tr>
+</table>
+
+<p>60秒视频生成结果表明：Deep Forcing在Dynamic Degree上以<strong>57.19</strong>大幅领先所有基线（最高训练型方法LongLive仅43.49），同时在Overall Consistency和Imaging Quality上也达到最优或次优。</p>
+
+<h3>用户研究结果</h3>
+
+<table class="result-table">
+<tr><th>对比方法</th><th>色彩一致性</th><th>动态运动</th><th>主体一致性</th><th>整体质量</th></tr>
+<tr><td>vs CausVid</td><td class="best">98.9%</td><td class="best">95.8%</td><td class="best">96.8%</td><td class="best">100%</td></tr>
+<tr><td>vs Self Forcing</td><td class="best">85.9%</td><td class="best">86.9%</td><td class="best">84.8%</td><td class="best">87.9%</td></tr>
+<tr><td>vs LongLive</td><td class="best">71.2%</td><td class="best">83.5%</td><td class="best">72.2%</td><td class="best">72.2%</td></tr>
+<tr><td>vs Rolling Forcing</td><td class="best">76.7%</td><td class="best">76.7%</td><td class="best">80.0%</td><td class="best">78.9%</td></tr>
+</table>
+
+<p>24名参与者的2AFC用户研究显示，Deep Forcing在所有维度上都获得了显著偏好，尤其在vs CausVid的对比中达到了100%的整体质量偏好率。</p>
+
+<!-- SVG 6: 方法对比雷达图概念 -->
+<div class="svg-container">
+<svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg">
+<text x="360" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#1e1b4b" font-family="Noto Sans SC">60秒视频生成方法性能对比</text>
+<!-- Bar chart for Dynamic Degree -->
+<text x="360" y="50" text-anchor="middle" font-size="11" font-weight="600" fill="#4c4b5e" font-family="Noto Sans SC">Dynamic Degree (越高越好)</text>
+<!-- Self Forcing -->
+<rect x="100" y="70" width="64" height="24" rx="4" fill="#e9d5ff" stroke="#d8b4fe"/>
+<text x="96" y="86" text-anchor="end" font-size="10" fill="#4c4b5e">Self Forcing</text>
+<rect x="100" y="70" width="40" height="24" rx="4" fill="#c084fc"/>
+<text x="146" y="86" font-size="10" fill="#4c4b5e" font-weight="600">31.98</text>
+<!-- CausVid -->
+<rect x="100" y="102" width="64" height="24" rx="4" fill="#e9d5ff" stroke="#d8b4fe"/>
+<text x="96" y="118" text-anchor="end" font-size="10" fill="#4c4b5e">CausVid</text>
+<rect x="100" y="102" width="93" height="24" rx="4" fill="#fbbf24" opacity="0.7"/>
+<text x="199" y="118" font-size="10" fill="#4c4b5e" font-weight="600">46.44</text>
+<!-- Rolling Forcing -->
+<rect x="100" y="134" width="64" height="24" rx="4" fill="#e9d5ff" stroke="#d8b4fe"/>
+<text x="96" y="150" text-anchor="end" font-size="10" fill="#4c4b5e">Rolling Forcing</text>
+<rect x="100" y="134" width="63" height="24" rx="4" fill="#fb7185" opacity="0.6"/>
+<text x="169" y="150" font-size="10" fill="#4c4b5e" font-weight="600">31.35</text>
+<!-- LongLive -->
+<rect x="100" y="166" width="64" height="24" rx="4" fill="#e9d5ff" stroke="#d8b4fe"/>
+<text x="96" y="182" text-anchor="end" font-size="10" fill="#4c4b5e">LongLive</text>
+<rect x="100" y="166" width="87" height="24" rx="4" fill="#f59e0b" opacity="0.6"/>
+<text x="193" y="182" font-size="10" fill="#4c4b5e" font-weight="600">43.49</text>
+<!-- Deep Forcing -->
+<rect x="100" y="198" width="64" height="24" rx="4" fill="#d1fae5" stroke="#6ee7b7"/>
+<text x="96" y="214" text-anchor="end" font-size="10" fill="#047857" font-weight="700">Deep Forcing</text>
+<rect x="100" y="198" width="115" height="24" rx="4" fill="#10b981"/>
+<text x="221" y="214" font-size="10" fill="#047857" font-weight="700">57.19 ★</text>
+
+<!-- Right side: Key findings -->
+<rect x="380" y="60" width="300" height="170" rx="12" fill="#faf5ff" stroke="#d8b4fe"/>
+<text x="530" y="82" text-anchor="middle" font-size="11" font-weight="700" fill="#7e22ce" font-family="Noto Sans SC">关键发现</text>
+<text x="400" y="105" font-size="10" fill="#4c4b5e">1. Dynamic Degree 领先次优 <tspan fill="#10b981" font-weight="700">+23%</tspan></text>
+<text x="400" y="125" font-size="10" fill="#4c4b5e">2. 免训练 &gt; 训练型（多指标）</text>
+<text x="400" y="145" font-size="10" fill="#4c4b5e">3. 吞吐量无损失 (15.75 vs 15.78)</text>
+<text x="400" y="165" font-size="10" fill="#4c4b5e">4. VLM评估: 75.44（接近LongLive 78.58）</text>
+<text x="400" y="185" font-size="10" fill="#4c4b5e">5. 用户偏好: 全维度领先（24人2AFC）</text>
+<text x="400" y="215" font-size="10" fill="#787887">Dynamic Degree反映运动生成的丰富程度</text>
+<text x="400" y="230" font-size="10" fill="#787887">高Dynamic = 更多样的相机运动和主体动作</text>
+<text x="360" y="275" text-anchor="middle" font-size="10" fill="#787887" font-family="Noto Sans SC">* 60秒视频, VBench-Long基准, 128 MovieGen prompts</text>
+</svg>
+</div>
+<div class="svg-caption">图示：60秒视频生成各方法Dynamic Degree对比 &mdash; Deep Forcing以57.19大幅领先</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：Dynamic Degree优势的根源</div>
+<p>Deep Forcing在Dynamic Degree上的巨大优势（57.19 vs 最高训练型43.49）并非偶然。训练型方法在微调时需要同时保证Sink区的稳定性和视觉一致性，这不可避免地<strong>约束了运动生成的自由度</strong>。Deep Forcing的免训练特性保留了原始Self Forcing的全部运动生成能力，同时通过KV管理消除了长程退化，从而释放了更多的运动多样性。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">评估洞察：VBench指标与用户感知的差距</div>
+<p>值得注意的是，Deep Forcing在VBench的Subject Consistency指标上低于训练型方法，但在用户研究中主体一致性偏好率高达80-97%。这表明VBench的自动评估可能无法完全捕捉人类对视觉质量的感知。论文补充了VLM评估（Gemini 2.5-Pro）来弥合这一差距，结果也验证了Deep Forcing的竞争力。</p>
+</div>
+</section>
+
+<!-- ========== CH8 ========== -->
+<section id="ch8">
+<span class="section-tag">CH8 &middot; 消融分析</span>
+<h2>组件消融与深入验证</h2>
+
+<p>论文进行了系统性的消融研究，验证每个组件的独立贡献和设计选择的合理性。</p>
+
+<h3>组件消融结果</h3>
+
+<table class="result-table">
+<tr><th>方法配置</th><th>Dynamic Degree &uarr;</th><th>Overall Consistency &uarr;</th><th>Image Quality &uarr;</th></tr>
+<tr><td>Self Forcing (基线)</td><td>36.62</td><td>20.50</td><td>68.58</td></tr>
+<tr><td>+ Deep Sink</td><td>48.58 (+11.96)</td><td>20.54 (+0.04)</td><td>68.54 (-0.04)</td></tr>
+<tr class="ours"><td><strong>+ DS + PC (完整)</strong></td><td class="best"><strong>57.56 (+20.94)</strong></td><td class="best"><strong>20.54 (+0.04)</strong></td><td class="best"><strong>69.31 (+0.73)</strong></td></tr>
+</table>
+
+<div class="figure">
+<img src="assets/_precise/Figure_11_validates_this_p13.webp" alt="Attention consistency across timesteps">
+<div class="figure-caption">Figure 11：注意力权重在不同去噪时间步上的一致性验证 &mdash; 确认t=1000选择的token在全过程中有效</div>
+</div>
+
+<h3>三种Sink方案对比</h3>
+
+<p>论文（Appendix A）将Deep Sink与两种已有的sink方案进行了公平对比（均在免训练设定下）：</p>
+
+<div class="compare-grid">
+<div class="compare-card bad">
+<h4>LongLive Sink（3帧，无RoPE调整）</h4>
+<p>帧800开始出现保真度退化，帧801闪烁，帧802发生<strong>回滚</strong>——生成退回到早期sink帧</p>
+</div>
+<div class="compare-card mid">
+<h4>Rolling Forcing Sink（3帧+动态RoPE）</h4>
+<p>使用Dynamic RoPE重新应用位置编码，但帧800-801仍出现严重保真度退化。3帧不够</p>
+</div>
+<div class="compare-card good">
+<h4>Deep Sink（10帧+选择性RoPE）</h4>
+<p>60秒生成全程保持高质量。深层锚定+选择性RoPE调整的组合证明是最佳方案</p>
+</div>
+</div>
+
+<div class="figure">
+<img src="assets/_precise/Figure_13_further_validates_p14.webp" alt="Token selection frequency heatmap">
+<div class="figure-caption">Figure 13：1分钟生成中token选择频率热图 &mdash; 去噪query选择集中在sink边界附近</div>
+</div>
+
+<h3>Participative Compression的Query来源消融</h3>
+
+<table class="result-table">
+<tr><th>Top-C选择来源</th><th>Motion Smoothness &uarr;</th><th>Overall Consistency &uarr;</th><th>Image Quality &uarr;</th></tr>
+<tr><td>仅去噪Query</td><td>97.86</td><td>20.44</td><td>68.24</td></tr>
+<tr><td>仅历史Clean Query</td><td>97.91</td><td>20.47</td><td>68.54</td></tr>
+<tr class="ours"><td><strong>两者结合</strong></td><td class="best"><strong>98.27</strong></td><td class="best"><strong>20.54</strong></td><td class="best"><strong>69.31</strong></td></tr>
+</table>
+
+<div class="figure">
+<img src="assets/_precise/Table_6_Throughput_Comparison_p17.webp" alt="Throughput comparison">
+<div class="figure-caption">Table 6：吞吐量对比 &mdash; Deep Forcing与Self Forcing几乎相同的推理速度</div>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察：消融揭示的非线性协同</div>
+<p>组件消融展示了非线性协同效应。单独添加Deep Sink使Dynamic Degree提升32.7%（36.62&rarr;48.58），再添加PC又提升18.5%（48.58&rarr;57.56）。但有趣的是，Image Quality的提升主要来自PC而非DS——DS在30秒时的Image Quality甚至略有下降（68.58&rarr;68.54），但论文指出在50秒时DS的正面效果才显著。这表明<strong>不同组件在不同时间尺度上发挥作用</strong>。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">验证洞察：随机选择 vs 语义选择的天壤之别</div>
+<p>Figure 12的对比极具说服力：使用高斯随机选择Top-C token会导致"面部突然旋转、头部悬浮在空中"等严重伪影，而基于去噪query的语义选择则保持了主体一致性和上下文连贯性。这证明PC的重要性评分机制不是可选的优化，而是<strong>维持生成质量的必要条件</strong>。</p>
+</div>
+</section>
+
+<!-- ========== CH9 ========== -->
+<section id="ch9">
+<span class="section-tag">CH9 &middot; 总结与科研问题</span>
+<h2>总结与前沿思考</h2>
+
+<div class="summary-box">
+<h3>论文核心贡献总结</h3>
+<p><strong>Deep Forcing</strong>提出了首个完全免训练的自回归长视频生成框架，通过两个互补机制——<strong>Deep Sink</strong>（深层注意力锚定 + 时间RoPE对齐）和<strong>Participative Compression</strong>（重要性感知KV压缩）——实现了从5秒到60秒+的12倍长度外推。在VBench-Long、用户研究和VLM评估上全面超越或匹配训练型方法，同时保持15.75 FPS的实时推理速度。</p>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">范式洞察：免训练推理优化的崛起</div>
+<p>Deep Forcing代表了一种新兴的研究范式：不改变预训练模型的参数，而是通过<strong>推理时的智能策略</strong>释放模型的隐藏潜力。类似于LLM领域的推理时计算（test-time compute）和Chain-of-Thought，Deep Forcing证明了视频扩散模型中也存在大量"推理时可挖掘的能力"。这一范式对资源受限的研究者和部署场景尤其有价值。</p>
+</div>
+
+<div class="insight">
+<div class="insight-title">局限性坦诚</div>
+<p>论文坦诚指出了几个局限：(1) 在冻结骨干网络上操作，受限于预训练模型的能力上限；(2) 缺乏显式长期记忆，在极端长序列（含反复遮挡）中可能出现渐进漂移；(3) Sink比例和压缩预算等超参数可能需要针对不同场景调整。这些局限为未来工作指明了方向。</p>
+</div>
+
+<h3>开放科研问题</h3>
+
+<div class="rq-card">
+<span class="rq-tag">RQ1</span>
+<h4>自适应Sink比例：能否动态调整Deep Sink的大小？</h4>
+<p><strong>理论分析：</strong>论文使用固定40-60%的Sink比例，但不同视频内容（静态场景 vs 高动态动作）可能需要不同的锚定深度。一个自适应机制可以根据注意力熵或误差指标动态调整Sink大小，在简单场景释放更多空间给压缩，在复杂场景加强锚定。</p>
+<p><strong>调查方向：</strong>设计基于注意力熵的Sink比例调节策略；研究场景复杂度与最优Sink比例的关系；探索逐层差异化Sink配置。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">RQ2</span>
+<h4>PC与稀疏注意力的协同：能否进一步减少计算？</h4>
+<p><strong>理论分析：</strong>PC已经将KV缓存从21帧压缩到16帧，但注意力计算仍是全稠密的。结合Sparse VideoGen2等稀疏注意力方法，可能在保持质量的同时进一步降低计算成本。关键挑战是稀疏注意力的选择与PC的Top-C选择是否一致或冲突。</p>
+<p><strong>调查方向：</strong>研究PC压缩后的KV分布特征；设计PC-aware的稀疏注意力掩码；评估联合压缩+稀疏化的质量-效率权衡。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">RQ3</span>
+<h4>跨模态扩展：Deep Forcing能否应用于音频或3D生成？</h4>
+<p><strong>理论分析：</strong>Deep Sink的核心机制（长程锚定 + RoPE对齐 + 重要性压缩）是通用的推理时KV管理策略。在自回归音频生成或3D场景生成中，类似的误差累积问题同样存在。关键问题是不同模态的attention sink行为是否与视频扩散模型一致。</p>
+<p><strong>调查方向：</strong>分析音频/3D扩散模型的注意力分布特征；验证Deep Sink比例的跨模态迁移性；设计模态特定的PC重要性指标。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">RQ4</span>
+<h4>显式长期记忆整合：如何克服"无记忆"的根本限制？</h4>
+<p><strong>理论分析：</strong>Deep Forcing本质上仍是"压缩窗口"方法，不保留超出窗口大小的历史信息。对于包含长程依赖的视频（如反复出现的角色、回溯性场景），需要某种形式的长期记忆。一个可能的方向是将Deep Sink与外部记忆库（如可学习的memory tokens或检索增强机制）结合。</p>
+<p><strong>调查方向：</strong>设计轻量级的视频长期记忆模块；研究memory-augmented KV缓存的压缩策略；评估长期记忆对极端长视频（5分钟+）的影响。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">RQ5</span>
+<h4>训练-推理联合优化：能否用Deep Forcing指导训练？</h4>
+<p><strong>理论分析：</strong>当前Deep Forcing是纯推理优化。但其揭示的"深层注意力锚定"和"重要性token选择"机制可以反哺训练：在训练时显式引导模型学习更强的attention sink行为和更集中的token重要性分布，使推理时的Deep Forcing效果更强。</p>
+<p><strong>调查方向：</strong>设计Deep Sink-aware的训练损失函数；研究PC-inspired的token dropout策略；评估训练-推理联合优化的协同增益。</p>
+</div>
+
+</section>
+
+</div>
+
+<footer>
+<p>Deep Forcing: Training-Free Long Video Generation with Deep Sink and Participative Compression</p>
+<p>Jung Yi, Wooseok Jang, Paul Hyunbin Cho, Jisu Nam, Heeji Yoon, Seungryong Kim &middot; KAIST AI</p>
+<p><a href="https://cvlab-kaist.github.io/DeepForcing" target="_blank">Project Page</a> &middot; <a href="https://arxiv.org/abs/2512.05081" target="_blank">arXiv:2512.05081</a></p>
+</footer>
+
+</body>
+</html>

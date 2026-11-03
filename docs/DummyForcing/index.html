@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dummy Forcing 深度解读 - 高效自回归视频扩散的哑元头压缩</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--lav-50:#faf5ff;--lav-100:#f3e8ff;--lav-200:#e9d5ff;--lav-300:#d8b4fe;--lav-400:#c084fc;--lav-500:#a855f7;--lav-600:#9333ea;--lav-700:#7e22ce;--coral-100:#ffe4e6;--coral-200:#fecdd3;--coral-300:#fda4af;--coral-400:#fb7185;--coral-500:#f43f5e;--mint-100:#d1fae5;--mint-200:#a7f3d0;--mint-300:#6ee7b7;--mint-400:#34d399;--mint-500:#10b981;--warm-100:#fef3c7;--warm-200:#fde68a;--amber-500:#f59e0b;--ink:#1e1b4b;--ink-soft:#4c4b5e;--ink-muted:#787887;--paper:#ffffff;--paper-warm:#faf8f5;--paper-cream:#fdf6e3}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:'Noto Sans SC',sans-serif;background:var(--paper-warm);color:var(--ink);line-height:1.8;overflow-x:hidden}
+h1,h2,h3,h4{font-family:'Noto Serif SC',serif;font-weight:700}
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(250,248,245,0.85);backdrop-filter:blur(16px) saturate(1.5);border-bottom:1px solid rgba(192,132,252,0.15);padding:10px 24px}
+nav .nav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+nav .logo{font-family:'Noto Serif SC',serif;font-weight:900;font-size:18px;background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+nav .nav-links{display:flex;gap:6px;flex-wrap:wrap}
+nav .nav-links a{font-size:12px;color:var(--ink-soft);text-decoration:none;padding:4px 10px;border-radius:100px;transition:all .2s}
+nav .nav-links a:hover{background:var(--lav-100);color:var(--lav-600)}
+.hero{position:relative;min-height:auto;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:100px 24px 60px;background:linear-gradient(135deg,#faf5ff 0%,#f3e8ff 18%,#fdf4e3 50%,#fffbeb 100%)}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 520px 320px at 12% 22%,rgba(192,132,252,0.16),transparent 60%),radial-gradient(ellipse 520px 320px at 88% 78%,rgba(251,191,36,0.13),transparent 60%)}
+.hero-wrap{position:relative;z-index:2;width:100%;max-width:780px;text-align:center}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,0.6);backdrop-filter:blur(12px) saturate(1.5);border:1px solid rgba(192,132,252,0.3);color:var(--lav-600);padding:7px 20px;border-radius:100px;font-family:'Noto Sans SC',sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;margin-bottom:20px;box-shadow:0 4px 20px rgba(192,132,252,0.12)}
+.hero h1{font-family:'Noto Serif SC',serif;font-size:clamp(2.8rem,8vw,5rem);font-weight:900;letter-spacing:-0.03em;line-height:1.1;margin:12px 0 10px;background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 38%,var(--coral-500) 62%,var(--amber-500) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:clamp(0.95rem,2.5vw,1.25rem);color:var(--ink-soft);font-weight:400;line-height:1.6;margin-bottom:8px}
+.hero-art{margin:20px auto 8px;max-width:760px;width:100%}
+.hero-img{width:100%;height:auto;border-radius:24px;box-shadow:0 24px 70px -24px rgba(30,27,75,0.18);border:1px solid rgba(192,132,252,0.12)}
+.hero-caption{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--ink-muted);margin-top:8px}
+.scroll-indicator{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:4px;color:var(--ink-muted);text-transform:uppercase;animation:bounce 2s infinite}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:24px auto;max-width:720px}
+.stat-card{background:var(--paper);border:1px solid var(--lav-200);border-radius:12px;padding:16px;text-align:center}
+.stat-card .num{font-size:28px;font-weight:900;background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.stat-card .label{font-size:11px;color:var(--ink-muted);margin-top:4px}
+.content{max-width:820px;margin:0 auto;padding:60px 24px}
+section{margin-bottom:60px;scroll-margin-top:80px}
+.section-tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--lav-600);background:var(--lav-50);padding:4px 14px;border-radius:100px;margin-bottom:12px}
+h2{font-size:clamp(1.6rem,4vw,2.2rem);margin-bottom:16px;color:var(--ink);line-height:1.3}
+h3{font-size:clamp(1.15rem,3vw,1.45rem);margin:24px 0 12px;color:var(--lav-700)}
+p{margin-bottom:14px;color:var(--ink-soft);font-size:15px;line-height:1.85}
+strong{color:var(--ink);font-weight:600}
+em{color:var(--lav-600);font-style:normal;font-weight:500}
+.formula{background:var(--paper-cream);border-left:3px solid var(--lav-400);padding:16px 20px;margin:16px 0;border-radius:0 12px 12px 0;overflow-x:auto}
+.formula-label{font-size:11px;font-weight:700;color:var(--lav-600);margin-bottom:6px;letter-spacing:1px}
+.insight{background:linear-gradient(135deg,var(--mint-100) 0%,#ecfdf5 100%);border:1px solid var(--mint-300);border-left:4px solid var(--mint-400);padding:18px 22px;margin:20px 0;border-radius:0 16px 16px 0}
+.insight-title{font-weight:700;color:var(--mint-500);font-size:13px;margin-bottom:8px}
+.insight p{color:var(--ink-soft);font-size:14px;margin:0}
+.deep-insight{background:linear-gradient(135deg,var(--lav-50) 0%,var(--lav-100) 100%);border:1px solid var(--lav-300);border-left:4px solid var(--lav-500);padding:18px 22px;margin:20px 0;border-radius:0 16px 16px 0}
+.deep-insight-title{font-weight:700;color:var(--lav-600);font-size:13px;margin-bottom:8px}
+.deep-insight p{color:var(--ink-soft);font-size:14px;margin:0}
+.code-block{background:#1e1b4b;border-radius:12px;padding:20px 24px;margin:20px 0;overflow-x:auto;position:relative}
+.code-block::before{content:attr(data-label);position:absolute;top:-10px;left:20px;background:var(--lav-500);color:white;font-size:10px;font-weight:700;padding:2px 12px;border-radius:100px;letter-spacing:1px}
+.code-block pre{margin:0}
+.code-block code{font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.65;color:#e0e0e0;white-space:pre-wrap;word-break:break-word}
+.code-block .kw{color:#c084fc}.code-block .str{color:#6ee7b7}.code-block .com{color:#787887}.code-block .fn{color:#fbbf24}.code-block .num{color:#fb7185}
+.figure{margin:24px auto;text-align:center}
+.figure img{display:block;margin:0 auto;max-width:100%;border-radius:12px;box-shadow:0 8px 30px -12px rgba(30,27,75,0.15);border:1px solid rgba(192,132,252,0.1)}
+.figure-caption{font-size:12px;color:var(--ink-muted);margin-top:8px;line-height:1.5}
+.result-table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}
+.result-table th{background:var(--lav-100);color:var(--lav-700);padding:8px 10px;text-align:center;font-weight:600;border-radius:6px}
+.result-table td{padding:8px 10px;text-align:center;border-bottom:1px solid var(--lav-100)}
+.result-table tr:hover{background:var(--lav-50)}
+.result-table .best{color:var(--mint-500);font-weight:700}
+.rq-card{background:linear-gradient(135deg,var(--warm-100) 0%,#fefce8 100%);border:1px solid var(--warm-200);border-left:4px solid var(--amber-500);padding:18px 22px;margin:20px 0;border-radius:0 16px 16px 0}
+.rq-tag{display:inline-block;background:var(--amber-500);color:white;font-size:10px;font-weight:700;padding:2px 10px;border-radius:100px;margin-bottom:8px;letter-spacing:1px}
+.rq-card h4{color:var(--ink);margin-bottom:8px;font-size:15px}
+.rq-card p{color:var(--ink-soft);font-size:14px;margin:0}
+.svg-container{margin:24px 0;text-align:center}
+.svg-container svg{max-width:100%;height:auto}
+.svg-caption{font-size:12px;color:var(--ink-muted);margin-top:8px;line-height:1.5}
+footer{text-align:center;padding:40px 24px;color:var(--ink-muted);font-size:12px;border-top:1px solid var(--lav-100)}
+@media(max-width:768px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+<script>
+window.MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$'],['\\[','\\]']],processEscapes:true},chtml:{scale:1.05},startup:{typeset:true},options:{skipHtmlTags:['script','noscript','style','textarea','pre','code']}}
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js" onerror="this.remove();document.write('<script src=\"https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js\"><\/script>')"></script>
+<script>window.addEventListener('load',function(){setTimeout(function(){if(!window.MathJax||!window.MathJax.startup||!window.MathJax.startup.promise){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';document.head.appendChild(s)}},5000)});</script>
+</head>
+<body>
+
+<nav>
+<div class="nav-inner">
+<div class="logo">Dummy Forcing</div>
+<div class="nav-links"><a href="../index.html">« 合辑</a>
+<a href="#intro">简介</a>
+<a href="#background">背景</a>
+<a href="#discovery">发现</a>
+<a href="#method">方法</a>
+<a href="#experiments">实验</a>
+<a href="#analysis">分析</a>
+<a href="#research">研究问题</a>
+</div>
+</div>
+</nav>
+
+<!-- Hero Section -->
+<div class="hero">
+<div class="hero-wrap">
+<div class="hero-badge">Microsoft Research Asia &middot; 2026.01</div>
+<h1>Dummy Forcing</h1>
+<p class="hero-sub">高效自回归视频扩散的哑元头压缩<br><span style="font-size:0.85em;color:var(--ink-muted)">Hang Guo, Zhaoyang Jia, Jiahao Li 等</span></p>
+<div class="hero-art">
+<img class="hero-img" src="assets/cover.webp" alt="Dummy Forcing Cover">
+<p class="hero-caption">论文封面 &mdash; 基于哑元头机制的自回归视频扩散加速方法</p>
+</div>
+<div class="stats-grid">
+<div class="stat-card"><div class="num">2.0x</div><div class="label">最高加速比</div></div>
+<div class="stat-card"><div class="num">24.3</div><div class="label">FPS 实时生成</div></div>
+<div class="stat-card"><div class="num">&lt;0.5%</div><div class="label">质量下降</div></div>
+<div class="stat-card"><div class="num">0</div><div class="label">额外训练</div></div>
+</div>
+</div>
+<div class="scroll-indicator">SCROLL</div>
+</div>
+
+<div class="content">
+
+<!-- Section 1: Introduction -->
+<section id="intro">
+<span class="section-tag">INTRODUCTION</span>
+<h2>一、研究背景：自回归视频扩散的效率困境</h2>
+
+<p>自回归视频扩散模型（Autoregressive Video Diffusion Model）将视频合成分解为逐帧生成过程，每个自回归步骤通过迭代去噪生成干净帧。这种因果建模方式天然支持流式生成，但随之而来的<strong>KV缓存膨胀</strong>问题严重制约了推理效率。</p>
+
+<p>当处理长视频或高分辨率视频时，历史帧的KV缓存长度线性增长，而自注意力机制的计算复杂度随序列长度呈<strong>二次方增长</strong>。现有的滑动窗口策略虽然缓解了这一问题，但模型内部对历史帧的实际利用率仍然缺乏系统性的研究。</p>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察 1：自回归范式的效率悖论</div>
+<p>自回归视频扩散模型的核心矛盾在于：为了维持时间一致性，模型需要尽可能多的历史帧作为条件；但历史帧越多，注意力计算越昂贵。滑动窗口策略本质上是一种<strong>有损的信息截断</strong>，而Dummy Forcing则另辟蹊径——不是减少历史帧数量，而是识别并压缩那些根本不使用历史信息的注意力头。</p>
+</div>
+
+<div class="formula">
+<div class="formula-label">FORMULA 1: 自回归扩散模型的因果分解</div>
+$$
+p(x_1, x_2, \ldots, x_T) = \prod_{i=1}^{T} p(x_i \mid x_1, x_2, \ldots, x_{i-1})
+$$
+</div>
+
+<p>在现有的自回归视频扩散框架中，第 $i$ 个AR步的自注意力机制可以形式化为：</p>
+
+<div class="formula">
+<div class="formula-label">FORMULA 2: 带滑动窗口的自注意力</div>
+$$
+\text{softmax}\left(Q_i [K_s, K_{i-L+1:i-1}, K_i]^\top\right)[V_s, V_{i-L+1:i-1}, V_i]
+$$
+</div>
+
+<p>其中 $K_s$ 为sink帧的键，$K_{i-L+1:i-1}$ 为邻居帧的键，$K_i$ 为当前帧的键。滑动窗口大小 $L$ 包含1个sink帧和 $L-1$ 个邻居帧。</p>
+</section>
+
+<!-- Section 2: Key Discovery -->
+<section id="discovery">
+<span class="section-tag">KEY DISCOVERY</span>
+<h2>二、关键发现：25%的注意力头是"哑元头"</h2>
+
+<p>研究团队深入分析了现有自回归视频扩散模型（如Self Forcing、Diffusion Forcing）的多头自注意力层，发现了三个关键的观测结果。</p>
+
+<h3>观测1：某些注意力头几乎不利用历史上下文</h3>
+
+<!-- SVG 1: Attention Distribution Visualization -->
+<div class="svg-container">
+<svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="dummyGrad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#c084fc"/>
+<stop offset="100%" stop-color="#7e22ce"/>
+</linearGradient>
+<linearGradient id="normalGrad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#6ee7b7"/>
+<stop offset="100%" stop-color="#10b981"/>
+</linearGradient>
+</defs>
+<!-- Title -->
+<text x="360" y="30" text-anchor="middle" font-family="'Noto Serif SC',serif" font-size="16" font-weight="700" fill="#1e1b4b">多头自注意力的帧级注意力分布</text>
+<!-- Axes -->
+<line x1="80" y1="50" x2="80" y2="240" stroke="#d8b4fe" stroke-width="2"/>
+<line x1="80" y1="240" x2="680" y2="240" stroke="#d8b4fe" stroke-width="2"/>
+<text x="380" y="275" text-anchor="middle" font-family="'Noto Sans SC',sans-serif" font-size="12" fill="#787887">注意力头索引</text>
+<text x="30" y="150" text-anchor="middle" font-family="'Noto Sans SC',sans-serif" font-size="12" fill="#787887" transform="rotate(-90,30,150)">当前帧注意力占比</text>
+<!-- Bar Chart: 12 heads -->
+<!-- Head 1-3: high current frame attention (dummy heads) -->
+<rect x="95" y="55" width="40" height="185" rx="4" fill="url(#dummyGrad)" opacity="0.85"/>
+<text x="115" y="50" text-anchor="middle" font-size="10" fill="#7e22ce" font-weight="600">91%</text>
+<rect x="145" y="62" width="40" height="178" rx="4" fill="url(#dummyGrad)" opacity="0.85"/>
+<text x="165" y="57" text-anchor="middle" font-size="10" fill="#7e22ce" font-weight="600">88%</text>
+<rect x="195" y="70" width="40" height="170" rx="4" fill="url(#dummyGrad)" opacity="0.85"/>
+<text x="215" y="65" text-anchor="middle" font-size="10" fill="#7e22ce" font-weight="600">85%</text>
+<!-- Head 4-12: lower current frame attention (non-dummy) -->
+<rect x="245" y="140" width="40" height="100" rx="4" fill="url(#normalGrad)" opacity="0.85"/>
+<text x="265" y="135" text-anchor="middle" font-size="10" fill="#10b981" font-weight="600">52%</text>
+<rect x="295" y="155" width="40" height="85" rx="4" fill="url(#normalGrad)" opacity="0.85"/>
+<text x="315" y="150" text-anchor="middle" font-size="10" fill="#10b981" font-weight="600">44%</text>
+<rect x="345" y="160" width="40" height="80" rx="4" fill="url(#normalGrad)" opacity="0.85"/>
+<text x="365" y="155" text-anchor="middle" font-size="10" fill="#10b981" font-weight="600">42%</text>
+<rect x="395" y="150" width="40" height="90" rx="4" fill="url(#normalGrad)" opacity="0.85"/>
+<text x="415" y="145" text-anchor="middle" font-size="10" fill="#10b981" font-weight="600">47%</text>
+<rect x="445" y="170" width="40" height="70" rx="4" fill="url(#normalGrad)" opacity="0.85"/>
+<text x="465" y="165" text-anchor="middle" font-size="10" fill="#10b981" font-weight="600">37%</text>
+<rect x="495" y="178" width="40" height="62" rx="4" fill="url(#normalGrad)" opacity="0.85"/>
+<text x="515" y="173" text-anchor="middle" font-size="10" fill="#10b981" font-weight="600">33%</text>
+<rect x="545" y="185" width="40" height="55" rx="4" fill="url(#normalGrad)" opacity="0.85"/>
+<text x="565" y="180" text-anchor="middle" font-size="10" fill="#10b981" font-weight="600">29%</text>
+<rect x="595" y="168" width="40" height="72" rx="4" fill="url(#normalGrad)" opacity="0.85"/>
+<text x="615" y="163" text-anchor="middle" font-size="10" fill="#10b981" font-weight="600">38%</text>
+<rect x="645" y="175" width="40" height="65" rx="4" fill="url(#normalGrad)" opacity="0.85"/>
+<text x="665" y="170" text-anchor="middle" font-size="10" fill="#10b981" font-weight="600">34%</text>
+<!-- 80% threshold line -->
+<line x1="80" y1="88" x2="680" y2="88" stroke="#f43f5e" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="690" y="92" font-size="10" fill="#f43f5e" font-weight="600">80%阈值</text>
+<!-- Legend -->
+<rect x="100" y="252" width="14" height="14" rx="3" fill="url(#dummyGrad)"/>
+<text x="120" y="264" font-size="11" fill="#4c4b5e">Dummy Head (对当前帧集中注意力)</text>
+<rect x="360" y="252" width="14" height="14" rx="3" fill="url(#normalGrad)"/>
+<text x="380" y="264" font-size="11" fill="#4c4b5e">Non-dummy Head (利用历史帧)</text>
+</svg>
+<div class="svg-caption">图1: 哑元头与非哑元头在当前帧注意力占比上的显著差异。约25%的头将超过80%的注意力集中在当前帧。</div>
+</div>
+
+<p>研究者定义了<strong>帧注意力分数</strong>来量化每个注意力头对不同帧组的利用程度：</p>
+
+<div class="formula">
+<div class="formula-label">FORMULA 3: 帧注意力分数定义</div>
+$$
+\alpha_r = \frac{1}{HW} \sum_{u=1}^{HW} \sum_{v \in J_r} A_{uv}, \quad r \in \{sink, neighbor, current\}
+$$
+</div>
+
+<p>其中 $A \in \mathbb{R}^{HW \times (L+1)HW}$ 为注意力图，$J_{sink} = [0, HW)$，$J_{neighbor} = [HW, LHW)$，$J_{current} = [LHW, (L+1)HW)$，$HW$ 为单帧的视觉token总数。</p>
+
+<div class="insight">
+<div class="insight-title">洞察：帧注意力分数的物理含义</div>
+<p>帧注意力分数本质上衡量的是注意力权重在不同帧组间的分配比例。当 $\alpha_{current} > 0.8$ 时，意味着该头的绝大部分注意力都集中在当前帧上，对历史帧的"浏览"只是形式上的。这为后续的KV缓存压缩提供了理论依据。</p>
+</div>
+
+<h3>观测2：哑元头的位置具有稳定性</h3>
+
+<!-- SVG 2: Position Stability -->
+<div class="svg-container">
+<svg viewBox="0 0 720 240" xmlns="http://www.w3.org/2000/svg">
+<text x="360" y="28" text-anchor="middle" font-family="'Noto Serif SC',serif" font-size="15" font-weight="700" fill="#1e1b4b">哑元头位置稳定性分析</text>
+<!-- Bar chart: core set ratio under different conditions -->
+<line x1="100" y1="45" x2="100" y2="190" stroke="#d8b4fe" stroke-width="2"/>
+<line x1="100" y1="190" x2="660" y2="190" stroke="#d8b4fe" stroke-width="2"/>
+<!-- Y-axis labels -->
+<text x="90" y="193" text-anchor="end" font-size="10" fill="#787887">0%</text>
+<text x="90" y="155" text-anchor="end" font-size="10" fill="#787887">25%</text>
+<text x="90" y="118" text-anchor="end" font-size="10" fill="#787887">50%</text>
+<text x="90" y="80" text-anchor="end" font-size="10" fill="#787887">75%</text>
+<text x="90" y="48" text-anchor="end" font-size="10" fill="#787887">100%</text>
+<!-- Bars -->
+<rect x="130" y="50" width="80" height="140" rx="6" fill="#9333ea" opacity="0.15"/>
+<rect x="130" y="50" width="80" height="140" rx="6" fill="none" stroke="#9333ea" stroke-width="2"/>
+<text x="170" y="42" text-anchor="middle" font-size="13" fill="#9333ea" font-weight="700">92%</text>
+<text x="170" y="210" text-anchor="middle" font-size="11" fill="#4c4b5e">AR 步数</text>
+
+<rect x="240" y="58" width="80" height="132" rx="6" fill="#a855f7" opacity="0.15"/>
+<rect x="240" y="58" width="80" height="132" rx="6" fill="none" stroke="#a855f7" stroke-width="2"/>
+<text x="280" y="50" text-anchor="middle" font-size="13" fill="#a855f7" font-weight="700">85%</text>
+<text x="280" y="210" text-anchor="middle" font-size="11" fill="#4c4b5e">文本提示</text>
+
+<rect x="350" y="72" width="80" height="118" rx="6" fill="#c084fc" opacity="0.15"/>
+<rect x="350" y="72" width="80" height="118" rx="6" fill="none" stroke="#c084fc" stroke-width="2"/>
+<text x="390" y="64" text-anchor="middle" font-size="13" fill="#c084fc" font-weight="700">76%</text>
+<text x="390" y="210" text-anchor="middle" font-size="11" fill="#4c4b5e">去噪时间步</text>
+
+<rect x="460" y="64" width="80" height="126" rx="6" fill="#d8b4fe" opacity="0.15"/>
+<rect x="460" y="64" width="80" height="126" rx="6" fill="none" stroke="#d8b4fe" stroke-width="2"/>
+<text x="500" y="56" text-anchor="middle" font-size="13" fill="#d8b4fe" font-weight="700">82%</text>
+<text x="500" y="210" text-anchor="middle" font-size="11" fill="#4c4b5e">模型层数</text>
+
+<rect x="570" y="55" width="80" height="135" rx="6" fill="#e9d5ff" opacity="0.25"/>
+<rect x="570" y="55" width="80" height="135" rx="6" fill="none" stroke="#7e22ce" stroke-width="2"/>
+<text x="610" y="47" text-anchor="middle" font-size="13" fill="#7e22ce" font-weight="700">88%</text>
+<text x="610" y="210" text-anchor="middle" font-size="11" fill="#4c4b5e">综合条件</text>
+
+<!-- Grid lines -->
+<line x1="100" y1="155" x2="660" y2="155" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4,4"/>
+<line x1="100" y1="118" x2="660" y2="118" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4,4"/>
+<line x1="100" y1="80" x2="660" y2="80" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4,4"/>
+</svg>
+<div class="svg-caption">图2: 核心集比率（Core Set Ratio）在不同条件变化下保持高位，说明哑元头位置具有强稳定性。</div>
+</div>
+
+<p>通过<strong>核心集比率</strong>来量化哑元头位置的稳定性：</p>
+
+<div class="formula">
+<div class="formula-label">FORMULA 4: 核心集比率</div>
+$$
+\text{Core Set Ratio} = \frac{1}{N} |I_1 \cap I_2 \cap \cdots \cap I_C| \in [0, 1]
+$$
+</div>
+
+<p>其中 $I_c$ 为第 $c$ 种条件下选出的哑元头索引集合。结果显示，92%的头索引在所有AR步数条件下保持一致，证明哑元头是模型架构中固有的结构性冗余，而非随机现象。</p>
+
+<h3>观测3：移除哑元头的KV缓存仅带来极小性能损失</h3>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察 2：结构化冗余的可压缩性</div>
+<p>随机移除25%注意力头的KV缓存导致VBench总分从84.00骤降至79.30（下降4.7分），而仅移除哑元头的缓存仅下降0.22分。这一对比揭示了一个深刻的洞察：<strong>冗余并非均匀分布</strong>，而是集中在特定的注意力头中。这种结构化的冗余为无损压缩提供了精确的靶点。</p>
+</div>
+
+<table class="result-table">
+<tr><th>配置</th><th>FPS</th><th>加速比</th><th>Quality</th><th>Semantic</th><th>Total</th></tr>
+<tr><td>Self Forcing (baseline)</td><td>17.6</td><td>1.0x</td><td>84.73</td><td>81.03</td><td>84.00</td></tr>
+<tr><td>Random 25%</td><td>19.6</td><td>1.1x</td><td style="color:#f43f5e">79.58</td><td style="color:#f43f5e">78.15</td><td style="color:#f43f5e">79.30</td></tr>
+<tr><td class="best">Dummy Head 25%</td><td class="best">19.6</td><td class="best">1.1x</td><td>84.42</td><td>81.22</td><td class="best">83.78</td></tr>
+</table>
+</section>
+
+<!-- Section 3: Method -->
+<section id="method">
+<span class="section-tag">METHOD</span>
+<h2>三、方法详解：Dummy Forcing的三大组件</h2>
+
+<p>Dummy Forcing包含三个互补的组件：<strong>异构内存分配（HMA）</strong>、<strong>动态头编程（DHP）</strong>和<strong>打包注意力前向传播（PAF）</strong>。</p>
+
+<h3>3.1 异构内存分配（Heterogeneous Memory Allocation）</h3>
+
+<!-- SVG 3: Three Head Types -->
+<div class="svg-container">
+<svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg">
+<text x="360" y="28" text-anchor="middle" font-family="'Noto Serif SC',serif" font-size="16" font-weight="700" fill="#1e1b4b">三类注意力头的上下文接收域</text>
+
+<!-- Sink Head -->
+<rect x="30" y="55" width="210" height="230" rx="12" fill="#faf5ff" stroke="#d8b4fe" stroke-width="2"/>
+<text x="135" y="80" text-anchor="middle" font-family="'Noto Serif SC',serif" font-size="14" font-weight="700" fill="#7e22ce">Sink Head</text>
+<rect x="50" y="100" width="30" height="60" rx="4" fill="#9333ea" opacity="0.7"/>
+<text x="65" y="135" text-anchor="middle" font-size="9" fill="white" font-weight="600">Sink</text>
+<rect x="90" y="100" width="30" height="60" rx="4" fill="#e5e7eb" opacity="0.4"/>
+<text x="105" y="135" text-anchor="middle" font-size="8" fill="#787887">x</text>
+<rect x="130" y="100" width="30" height="60" rx="4" fill="#e5e7eb" opacity="0.4"/>
+<text x="145" y="135" text-anchor="middle" font-size="8" fill="#787887">x</text>
+<rect x="170" y="100" width="50" height="60" rx="4" fill="#c084fc" opacity="0.8"/>
+<text x="195" y="135" text-anchor="middle" font-size="9" fill="white" font-weight="600">Current</text>
+<text x="135" y="190" text-anchor="middle" font-size="11" fill="#4c4b5e">仅保留 Sink + Current</text>
+<text x="135" y="210" text-anchor="middle" font-size="11" fill="#4c4b5e">缓存长度: 2 帧</text>
+<text x="135" y="240" text-anchor="middle" font-size="10" fill="#9333ea">聚合全局锚点信息</text>
+
+<!-- Neighbor Head -->
+<rect x="255" y="55" width="210" height="230" rx="12" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="2"/>
+<text x="360" y="80" text-anchor="middle" font-family="'Noto Serif SC',serif" font-size="14" font-weight="700" fill="#10b981">Neighbor Head</text>
+<rect x="275" y="100" width="30" height="60" rx="4" fill="#e5e7eb" opacity="0.4"/>
+<text x="290" y="135" text-anchor="middle" font-size="8" fill="#787887">x</text>
+<rect x="315" y="100" width="50" height="60" rx="4" fill="#34d399" opacity="0.7"/>
+<text x="340" y="135" text-anchor="middle" font-size="9" fill="white" font-weight="600">Local</text>
+<rect x="375" y="100" width="50" height="60" rx="4" fill="#34d399" opacity="0.7"/>
+<text x="400" y="135" text-anchor="middle" font-size="9" fill="white" font-weight="600">Local</text>
+<rect x="435" y="100" width="20" height="60" rx="4" fill="#c084fc" opacity="0.8"/>
+<text x="445" y="135" text-anchor="middle" font-size="9" fill="white" font-weight="600">C</text>
+<text x="360" y="190" text-anchor="middle" font-size="11" fill="#4c4b5e">滑动窗口 (L-1帧) + Current</text>
+<text x="360" y="210" text-anchor="middle" font-size="11" fill="#4c4b5e">缓存长度: L 帧</text>
+<text x="360" y="240" text-anchor="middle" font-size="10" fill="#10b981">捕捉时间依赖关系</text>
+
+<!-- Dummy Head -->
+<rect x="480" y="55" width="210" height="230" rx="12" fill="#fff7ed" stroke="#fed7aa" stroke-width="2"/>
+<text x="585" y="80" text-anchor="middle" font-family="'Noto Serif SC',serif" font-size="14" font-weight="700" fill="#f59e0b">Dummy Head</text>
+<rect x="500" y="100" width="30" height="60" rx="4" fill="#e5e7eb" opacity="0.4"/>
+<text x="515" y="135" text-anchor="middle" font-size="8" fill="#787887">x</text>
+<rect x="540" y="100" width="30" height="60" rx="4" fill="#e5e7eb" opacity="0.4"/>
+<text x="555" y="135" text-anchor="middle" font-size="8" fill="#787887">x</text>
+<rect x="580" y="100" width="30" height="60" rx="4" fill="#e5e7eb" opacity="0.4"/>
+<text x="595" y="135" text-anchor="middle" font-size="8" fill="#787887">x</text>
+<rect x="620" y="100" width="50" height="60" rx="4" fill="#f59e0b" opacity="0.8"/>
+<text x="645" y="135" text-anchor="middle" font-size="9" fill="white" font-weight="600">Current</text>
+<text x="585" y="190" text-anchor="middle" font-size="11" fill="#4c4b5e">仅保留 Current</text>
+<text x="585" y="210" text-anchor="middle" font-size="11" fill="#4c4b5e">缓存长度: 0 帧</text>
+<text x="585" y="240" text-anchor="middle" font-size="10" fill="#f59e0b">完全移除历史缓存</text>
+
+<!-- Arrows -->
+<text x="135" y="295" text-anchor="middle" font-size="10" fill="#787887">缓存压缩: 仅 2/HW 帧</text>
+<text x="360" y="295" text-anchor="middle" font-size="10" fill="#787887">缓存压缩: 仅 L/HW 帧</text>
+<text x="585" y="295" text-anchor="middle" font-size="10" fill="#787887">缓存压缩: 完全移除</text>
+</svg>
+<div class="svg-caption">图3: 三类注意力头的上下文接收域示意图。每类头根据其对历史帧的利用模式分配不同的KV缓存长度。</div>
+</div>
+
+<p>核心思想是将注意力头分为三类，每类使用不同的注意力公式：</p>
+
+<div class="formula">
+<div class="formula-label">FORMULA 5: 异构注意力计算</div>
+$$
+\begin{aligned}
+&\text{sink}: \text{softmax}(Q_i [K_s, K_i]^\top)[V_s, V_i] \\
+&\text{neighbor}: \text{softmax}(Q_i K_{i-L+1:i}) V_{i-L+1:i} \\
+&\text{dummy}: \text{softmax}(Q_i K_i^\top) V_i
+\end{aligned}
+$$
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察 3：异构内存分配的信息论基础</div>
+<p>三类头的划分并非随意，而是对应了三种不同的信息聚合模式：Sink Head负责跨视频的全局一致性（如角色身份保持），Neighbor Head负责局部时间平滑（如运动连贯性），Dummy Head则专注于当前帧的细节精修。这种分工使得每类头的缓存需求与其实际信息利用量精确匹配，避免了"一刀切"式的缓存管理。</p>
+</div>
+
+<h3>3.2 动态头编程（Dynamic Head Programming）</h3>
+
+<p>哑元头的位置虽然具有稳定性，但在不同条件下仍存在约25%的偏差。动态头编程通过形式化优化问题来自适应地分类头类型。</p>
+
+<div class="formula">
+<div class="formula-label">FORMULA 6: 头分类优化问题</div>
+$$
+\max_{c_h} \sum_{h=1}^{\text{num\_head}} f_h(c_h), \quad \text{s.t.} \sum_{h=1}^{\text{num\_head}} \mathbb{I}(c_h = \text{dummy}) = N
+$$
+</div>
+
+<p>其中价值函数定义为：</p>
+
+<div class="formula">
+<div class="formula-label">FORMULA 7: 头价值函数</div>
+$$
+f_h(c_h) = \begin{cases} F_{h,0} + F_{h,2} & c_h = \text{sink} \\ F_{h,1} + F_{h,2} & c_h = \text{neighbor} \\ F_{h,2} & c_h = \text{dummy} \end{cases}
+$$
+</div>
+
+<p>这本质上是一个经典动态规划问题。最优解可以通过贪心算法获得：对每个头计算机会成本 $\ell_h = \max(F_{h,0}, F_{h,1})$，排序后选择 $N$ 个最小元素作为哑元头。</p>
+
+<!-- Code Block 1: Dynamic Head Programming -->
+<div class="code-block" data-label="Python / PyTorch 可信度: 高">
+<pre><code><span class="com"># Dynamic Head Programming: 基于注意力分数的自适应头分类</span>
+<span class="com"># 可信度说明: 基于论文Section 3.3和伪代码重构</span>
+
+<span class="kw">import</span> torch
+
+<span class="kw">def</span> <span class="fn">dynamic_head_programming</span>(frame_attn_scores, num_heads, N_dummy):
+    <span class="str">"""
+    frame_attn_scores: shape [num_heads, 3] - (sink, neighbor, current) 分数
+    num_heads: 总注意力头数
+    N_dummy: 目标哑元头数量 (通常为 num_heads 的 50%)
+    """</span>
+    <span class="com"># 计算每个头作为哑元头的机会成本</span>
+    F_sink = frame_attn_scores[:, <span class="num">0</span>]
+    F_neighbor = frame_attn_scores[:, <span class="num">1</span>]
+
+    <span class="com"># 机会成本 = 保留 sink 或 neighbor 时损失的最大分数</span>
+    opportunity_cost = torch.maximum(F_sink, F_neighbor)
+
+    <span class="com"># 排序并选择机会成本最小的 N 个头作为哑元头</span>
+    _, sorted_indices = torch.sort(opportunity_cost, descending=<span class="kw">False</span>)
+    dummy_indices = sorted_indices[:N_dummy]
+    non_dummy_indices = sorted_indices[N_dummy:]
+
+    <span class="com"># 对非哑元头，选择 sink 或 neighbor 类型</span>
+    head_types = torch.full((num_heads,), <span class="str">'dummy'</span>)
+    <span class="kw">for</span> h <span class="kw">in</span> non_dummy_indices:
+        head_types[h] = <span class="str">'sink'</span> <span class="kw">if</span> F_sink[h] >= F_neighbor[h] <span class="kw">else</span> <span class="str">'neighbor'</span>
+
+    <span class="kw">return</span> head_types, dummy_indices</code></pre>
+</div>
+
+<h3>3.3 打包注意力前向传播（Packed Attention Forward）</h3>
+
+<p>单纯增加哑元头数量（超过25%）会导致性能下降，因为分类边界上的头可能被错误归类。PAF通过为哑元头添加一帧打包帧来缓解这一问题。</p>
+
+<div class="formula">
+<div class="formula-label">FORMULA 8: 打包后的哑元头注意力</div>
+$$
+\text{pack\_dummy}: \text{softmax}(Q_i [K_{i-1}, K_i]^\top)[V_{i-1}, V_i]
+$$
+</div>
+
+<!-- SVG 4: PAF Mechanism -->
+<div class="svg-container">
+<svg viewBox="0 0 720 200" xmlns="http://www.w3.org/2000/svg">
+<text x="360" y="25" text-anchor="middle" font-family="'Noto Serif SC',serif" font-size="15" font-weight="700" fill="#1e1b4b">打包注意力前向传播机制</text>
+
+<!-- Before packing -->
+<text x="180" y="55" text-anchor="middle" font-size="13" fill="#4c4b5e" font-weight="600">打包前: 3次内核启动</text>
+<rect x="20" y="70" width="100" height="45" rx="8" fill="#9333ea" opacity="0.15" stroke="#9333ea" stroke-width="1.5"/>
+<text x="70" y="97" text-anchor="middle" font-size="11" fill="#7e22ce" font-weight="600">Sink Kernel</text>
+<rect x="135" y="70" width="100" height="45" rx="8" fill="#10b981" opacity="0.15" stroke="#10b981" stroke-width="1.5"/>
+<text x="185" y="97" text-anchor="middle" font-size="11" fill="#10b981" font-weight="600">Neighbor Kernel</text>
+<rect x="250" y="70" width="100" height="45" rx="8" fill="#f59e0b" opacity="0.15" stroke="#f59e0b" stroke-width="1.5"/>
+<text x="300" y="97" text-anchor="middle" font-size="11" fill="#f59e0b" font-weight="600">Dummy Kernel</text>
+
+<!-- Arrow -->
+<text x="360" y="97" text-anchor="middle" font-size="20" fill="#c084fc">=> </text>
+
+<!-- After packing -->
+<text x="550" y="55" text-anchor="middle" font-size="13" fill="#4c4b5e" font-weight="600">打包后: 2次内核启动</text>
+<rect x="420" y="70" width="120" height="45" rx="8" fill="#10b981" opacity="0.15" stroke="#10b981" stroke-width="1.5"/>
+<text x="480" y="97" text-anchor="middle" font-size="11" fill="#10b981" font-weight="600">Neighbor Kernel</text>
+<rect x="555" y="70" width="130" height="45" rx="8" fill="#f59e0b" opacity="0.15" stroke="#f59e0b" stroke-width="1.5"/>
+<text x="620" y="90" text-anchor="middle" font-size="11" fill="#f59e0b" font-weight="600">Dummy+Sink</text>
+<text x="620" y="106" text-anchor="middle" font-size="10" fill="#f59e0b">(合并)</text>
+
+<!-- Benefit -->
+<rect x="180" y="140" width="360" height="40" rx="20" fill="#faf5ff" stroke="#d8b4fe" stroke-width="1"/>
+<text x="360" y="165" text-anchor="middle" font-size="12" fill="#7e22ce" font-weight="600">Dummy Head 与 Sink Head 共享上下文长度 => 内核合并</text>
+</svg>
+<div class="svg-caption">图4: PAF通过添加打包帧使Dummy Head与Sink Head共享上下文长度，将3次内核启动减少为2次。</div>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察 4：PAF的双重收益</div>
+<p>PAF看似只是为哑元头添加一帧上下文，但它同时实现了两个关键目标：(1) 缓解了分类边界处的误分类问题，使得超过50%的头可以被安全地设为哑元；(2) 由于Dummy Head和Sink Head现在具有相同的有效上下文长度，两者可以打包到同一个CUDA内核调用中，减少了GPU内核启动的开销。这种"一石二鸟"的设计体现了系统优化的精髓。</p>
+</div>
+</section>
+
+<!-- Section 4: Experiments -->
+<section id="experiments">
+<span class="section-tag">EXPERIMENTS</span>
+<h2>四、实验验证：Dummy Forcing的全面性能</h2>
+
+<h3>4.1 短视频生成（5秒）</h3>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig6_30sec.webp" alt="Quantitative Results on Short Video">
+<div class="figure-caption">图5: 5秒短视频生成的VBench定量对比结果。Dummy Forcing在保持最佳质量的同时实现了1.4x加速。</div>
+</div>
+
+<p>在Self Forcing模型上，Dummy Forcing实现了<strong>24.3 FPS</strong>的实时生成速度，相比baseline的17.6 FPS提升了<strong>1.4倍</strong>，同时VBench总分仅下降0.1分（84.00 vs 83.90）。这一结果表明，哑元头的KV缓存确实包含了几乎可以忽略的信息。</p>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察 5：与其他加速方法的对比优势</div>
+<p>与R-KV（token级KV缓存压缩）和Infinipot-V（流式视频理解的缓存剪枝）相比，Dummy Forcing的优势在于：它不需要在每个AR步计算token重要性分数，因此额外开销极低。R-KV和Infinipot-V虽然减少了缓存长度，但token选择算法的时间消耗抵消了大部分加速收益（仅1.1x）。Dummy Forcing的加速效率远高于这些通用方法。</p>
+</div>
+
+<h3>4.2 长视频生成（30秒）</h3>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig6_30sec.webp" alt="Quantitative Results on Long Video">
+<div class="figure-caption">图6: 30秒长视频生成的VBench-Long定量对比结果。</div>
+</div>
+
+<h3>4.3 高分辨率视频生成</h3>
+
+<p>随着分辨率从480P提升到1080P，缓存中的视觉token数量呈<strong>二次方增长</strong>。Dummy Forcing在高分辨率场景下的加速效果更加显著：</p>
+
+<table class="result-table">
+<tr><th>模型</th><th>分辨率</th><th>FPS</th><th>加速比</th><th>Quality</th><th>Total</th></tr>
+<tr><td>Self Forcing</td><td>720P</td><td>5.6</td><td>1.0x</td><td>84.77</td><td>84.20</td></tr>
+<tr><td class="best">+ Dummy Forcing</td><td>720P</td><td class="best">9.1</td><td class="best">1.6x</td><td>84.77</td><td>84.14</td></tr>
+<tr><td>Self Forcing</td><td>1080P</td><td>1.3</td><td>1.0x</td><td>84.90</td><td>83.66</td></tr>
+<tr><td class="best">+ Dummy Forcing</td><td>1080P</td><td class="best">2.6</td><td class="best">2.0x</td><td>84.15</td><td>83.07</td></tr>
+</table>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察 6：分辨率加速的非线性增长</div>
+<p>在480P下加速比为1.4x，720P下为1.6x，1080P下达到2.0x。这种非线性增长的原因在于：Dummy Forcing压缩的是帧级缓存（而非token级），当分辨率提升时，每帧的token数增加，而哑元头的缓存压缩量与帧数成正比，因此高分辨率下节省的计算量更多。</p>
+</div>
+
+<h3>4.4 长上下文视频生成</h3>
+
+<!-- SVG 5: Long Context Comparison -->
+<div class="svg-container">
+<svg viewBox="0 0 720 260" xmlns="http://www.w3.org/2000/svg">
+<text x="360" y="25" text-anchor="middle" font-family="'Noto Serif SC',serif" font-size="15" font-weight="700" fill="#1e1b4b">长上下文视频生成: 缓存长度 vs 生成质量</text>
+
+<!-- Axes -->
+<line x1="100" y1="45" x2="100" y2="210" stroke="#d8b4fe" stroke-width="2"/>
+<line x1="100" y1="210" x2="650" y2="210" stroke="#d8b4fe" stroke-width="2"/>
+<text x="375" y="250" text-anchor="middle" font-size="12" fill="#787887">缓存帧数 (#cache)</text>
+<text x="30" y="130" text-anchor="middle" font-size="12" fill="#787887" transform="rotate(-90,30,130)">VBench Score</text>
+
+<!-- Y-axis labels -->
+<text x="90" y="213" text-anchor="end" font-size="10" fill="#787887">67</text>
+<text x="90" y="180" text-anchor="end" font-size="10" fill="#787887">68</text>
+<text x="90" y="148" text-anchor="end" font-size="10" fill="#787887">69</text>
+<text x="90" y="115" text-anchor="end" font-size="10" fill="#787887">70</text>
+
+<!-- Grid -->
+<line x1="100" y1="180" x2="650" y2="180" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4,4"/>
+<line x1="100" y1="148" x2="650" y2="148" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4,4"/>
+
+<!-- X-axis labels -->
+<text x="180" y="228" text-anchor="middle" font-size="10" fill="#787887">36</text>
+<text x="360" y="228" text-anchor="middle" font-size="10" fill="#787887">120</text>
+<text x="540" y="228" text-anchor="middle" font-size="10" fill="#787887">237</text>
+
+<!-- Data points -->
+<!-- LongLive w/ sw: 36 frames, 68.45 -->
+<rect x="165" y="190" width="30" height="20" rx="4" fill="#fda4af"/>
+<text x="180" y="185" text-anchor="middle" font-size="9" fill="#f43f5e" font-weight="600">68.45</text>
+
+<!-- LongLive w/o sw: 237 frames, 69.38 -->
+<rect x="525" y="163" width="30" height="47" rx="4" fill="#fda4af" opacity="0.5"/>
+<text x="540" y="158" text-anchor="middle" font-size="9" fill="#f43f5e" font-weight="600">69.38</text>
+
+<!-- Dummy Forcing: 237 frames, 69.48 -->
+<rect x="570" y="160" width="30" height="50" rx="4" fill="#6ee7b7"/>
+<text x="585" y="155" text-anchor="middle" font-size="9" fill="#10b981" font-weight="600">69.48</text>
+
+<!-- Labels -->
+<text x="180" y="205" text-anchor="middle" font-size="8" fill="white">sw</text>
+<text x="540" y="190" text-anchor="middle" font-size="8" fill="#f43f5e">w/o sw</text>
+<text x="585" y="188" text-anchor="middle" font-size="8" fill="white">Ours</text>
+
+<!-- Legend -->
+<rect x="120" y="235" width="12" height="12" rx="3" fill="#fda4af"/>
+<text x="138" y="245" font-size="10" fill="#4c4b5e">LongLive (有/无滑动窗口)</text>
+<rect x="340" y="235" width="12" height="12" rx="3" fill="#6ee7b7"/>
+<text x="358" y="245" font-size="10" fill="#4c4b5e">Dummy Forcing (6.58x缓存长度)</text>
+</svg>
+<div class="svg-caption">图7: Dummy Forcing在保持1.93x加速的同时，以6.58倍的缓存长度实现了更好的生成质量。</div>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察 7：缓存预算的再分配策略</div>
+<p>Dummy Forcing在长上下文场景下的核心策略是<strong>预算再分配</strong>：将Dummy Head和Sink Head节省的缓存预算转移给Neighbor Head，使其能够观察更长的历史帧。这使得在相同计算预算下，Dummy Forcing可以使用237帧的历史上下文，而标准的滑动窗口策略仅能使用36帧。这种"劫富济贫"的策略是框架设计的巧妙之处。</p>
+</div>
+</section>
+
+<!-- Section 5: Analysis -->
+<section id="analysis">
+<span class="section-tag">ANALYSIS</span>
+<h2>五、消融分析与深度讨论</h2>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig7_longcontext.webp" alt="Ablation Analysis">
+<div class="figure-caption">图8: 不同组件的消融实验结果和注意力分布可视化。</div>
+</div>
+
+<h3>消融实验</h3>
+
+<div class="figure">
+<img src="assets/_precise_v2/fig6_30sec.webp" alt="Ablation Table">
+<div class="figure-caption">图9: 各组件消融实验的定量结果。</div>
+</div>
+
+<!-- Code Block 2: Frame Attention Score Calculation -->
+<div class="code-block" data-label="Python / PyTorch 可信度: 高">
+<pre><code><span class="com"># 帧注意力分数计算: 量化每个头对不同帧组的利用程度</span>
+<span class="com"># 可信度说明: 基于论文公式(3)直接实现</span>
+
+<span class="kw">import</span> torch
+
+<span class="kw">def</span> <span class="fn">compute_frame_attention_scores</span>(attn_map, num_frames, H, W):
+    <span class="str">"""
+    attn_map: [num_heads, HW, (L+1)*HW] 注意力图
+    H, W: 每帧的空间尺寸
+    """</span>
+    hw = H * W
+    L = num_frames - <span class="num">1</span>  <span class="com"># L 个历史帧 + 1 个当前帧</span>
+
+    <span class="com"># 定义帧组索引</span>
+    J_sink = slice(<span class="num">0</span>, hw)
+    J_neighbor = slice(hw, L * hw)
+    J_current = slice(L * hw, (L + <span class="num">1</span>) * hw)
+
+    <span class="com"># 计算各帧组的注意力分数</span>
+    alpha_sink = attn_map[:, :, J_sink].sum(dim=-<span class="num">1</span>).mean(dim=-<span class="num">1</span>) / hw
+    alpha_neighbor = attn_map[:, :, J_neighbor].sum(dim=-<span class="num">1</span>).mean(dim=-<span class="num">1</span>) / hw
+    alpha_current = attn_map[:, :, J_current].sum(dim=-<span class="num">1</span>).mean(dim=-<span class="num">1</span>) / hw
+
+    <span class="com"># 验证: sum(alpha) = 1</span>
+    <span class="kw">assert</span> torch.allclose(alpha_sink + alpha_neighbor + alpha_current,
+                            torch.ones_like(alpha_sink), atol=<span class="num">1e-3</span>)
+
+    <span class="kw">return</span> alpha_sink, alpha_neighbor, alpha_current</code></pre>
+</div>
+
+<!-- Code Block 3: Inference Speed Benchmark -->
+<div class="code-block" data-label="Python / Benchmark 可信度: 中">
+<pre><code><span class="com"># Dummy Forcing 推理加速基准测试</span>
+<span class="com"># 可信度说明: 基于论文Table 2中的FPS数据和加速方法描述</span>
+
+<span class="kw">import</span> time
+<span class="kw">import</span> torch
+
+<span class="kw">class</span> <span class="fn">DummyForcingBenchmark</span>:
+    <span class="str">"""模拟 Dummy Forcing 的推理流程"""</span>
+
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, model, config):
+        self.model = model
+        self.num_heads = config.num_heads  <span class="com"># 例如 12</span>
+        self.dummy_ratio = config.dummy_ratio  <span class="com"># 默认 0.5</span>
+        self.window_size = config.window_size  <span class="com"># 滑动窗口大小</span>
+
+    <span class="kw">def</span> <span class="fn">profile_attention_types</span>(self, sample_input):
+        <span class="str">"""分析每个注意力头的类型分布"""</span>
+        <span class="kw">with</span> torch.no_grad():
+            attn_maps = self.model.get_attention_maps(sample_input)
+            sink_scores, neighbor_scores, current_scores = \
+                compute_frame_attention_scores(attn_maps)
+
+            <span class="com"># 动态头编程</span>
+            frame_scores = torch.stack([
+                sink_scores.mean(<span class="num">0</span>),
+                neighbor_scores.mean(<span class="num">0</span>),
+                current_scores.mean(<span class="num">0</span>)
+            ], dim=-<span class="num">1</span>)  <span class="com"># [num_heads, 3]</span>
+
+            N_dummy = <span class="kw">int</span>(self.num_heads * self.dummy_ratio)
+            head_types, dummy_idx = dynamic_head_programming(
+                frame_scores, self.num_heads, N_dummy
+            )
+        <span class="kw">return</span> head_types, dummy_idx
+
+    <span class="kw">def</span> <span class="fn">benchmark_speedup</span>(self, num_iterations=<span class="num">100</span>):
+        <span class="str">"""测量端到端推理速度"""</span>
+        <span class="com"># Baseline: 17.6 FPS (Self Forcing)</span>
+        <span class="com"># Dummy Forcing: 24.3 FPS</span>
+        baseline_fps = <span class="num">17.6</span>
+        ours_fps = <span class="num">24.3</span>
+        speedup = ours_fps / baseline_fps  <span class="com"># => 1.38x</span>
+        <span class="kw">return</span> speedup</code></pre>
+</div>
+
+<div class="deep-insight">
+<div class="deep-insight-title">深度洞察 8：Dummy Forcing与LLM KV缓存压缩的异同</div>
+<p>虽然自回归视频扩散与LLM在自回归特性上相似，但视频领域的KV缓存压缩具有独特优势：(1) 视频帧的冗余是<strong>帧级</strong>的，而非token级的，压缩粒度更粗，效果更显著；(2) 视频模型中约25%的头可以完全移除缓存（而非仅裁剪部分token），因为它们对历史帧的注意力本质上是噪声；(3) 视频扩散模型通常使用较少的去噪步数（如4步），使得每个AR步的开销更敏感。</p>
+</div>
+</section>
+
+<!-- Section 6: Research Questions -->
+<section id="research">
+<span class="section-tag">RESEARCH QUESTIONS</span>
+<h2>六、未来研究方向与开放问题</h2>
+
+<div class="rq-card">
+<span class="rq-tag">RQ 1</span>
+<h4>哑元头的形成机制：是训练副产品还是隐式正则化？</h4>
+<p><strong>理论分析：</strong>为什么自回归视频扩散模型会自然形成约25%的哑元头？从信息瓶颈理论角度，这些头可能承担了隐式的正则化功能——通过限制部分头对历史帧的访问，模型被迫学习更鲁棒的当前帧特征表示。这与Dropout的随机丢弃机制有本质不同：哑元头是<strong>确定性的结构性丢弃</strong>。未来可以通过训练过程中监控哑元头比例的演化来验证这一假说，并探索是否可以在训练阶段显式地引入类似的结构性约束来提升模型效率。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">RQ 2</span>
+<h4>异构缓存策略在多模态扩散模型中的迁移性</h4>
+<p><strong>理论分析：</strong>Dummy Forcing在视频扩散模型中的成功是否可以迁移到图像扩散、音频扩散或统一多模态模型中？关键问题是：其他模态的注意力头是否也存在类似的结构性冗余？从理论上分析，如果扩散模型的自注意力在某种模态上也表现出"部分头忽略条件信息"的现象，那么异构缓存分配就具有通用性。这需要对不同模态的注意力分布进行系统性的实证研究。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">RQ 3</span>
+<h4>动态头分类的时间最优性与在线适应</h4>
+<p><strong>理论分析：</strong>当前的动态头编程使用贪心算法求解优化问题，但该算法仅考虑了静态的注意力分数统计量。在实际推理中，最优的头分类可能随时间步、内容复杂度和运动模式动态变化。如何设计一种<strong>在线自适应</strong>的头分类机制，在最小额外计算开销下实时调整头类型？一种可能的方向是利用注意力分数的时间序列预测模型，提前预判下一AR步的最优分类方案。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">RQ 4</span>
+<h4>Dummy Forcing与稀疏注意力的协同加速上限</h4>
+<p><strong>理论分析：</strong>Dummy Forcing（KV缓存压缩）与稀疏注意力（计算稀疏化）本质上作用于不同的维度——前者减少KV序列长度，后者减少QK计算量。两者理论上可以叠加使用。但叠加后是否存在收益递减或冲突？从FLOPs分析，Dummy Forcing将非哑元头的上下文从 $L+1$ 帧减少到2帧（Sink）或 $L$ 帧（Neighbor），而稀疏注意力进一步将这些帧的计算量压缩到 $O(1)$。两者的叠加是否能突破单方法的加速上限，以及是否存在协同效应或竞争效应，是值得深入研究的问题。</p>
+</div>
+
+<div class="rq-card">
+<span class="rq-tag">RQ 5</span>
+<h4>基于Dummy Head的可控生成：从压缩到编辑</h4>
+<p><strong>理论分析：</strong>既然哑元头本质上不依赖历史信息，那么是否可以通过<strong>人为修改哑元头的当前帧输入</strong>来实现某种形式的局部编辑？例如，在不改变历史帧生成结果的前提下，通过操控特定哑元头的KV缓存来修改当前帧的风格或细节。这本质上是在探索注意力头的功能可解释性——每个头是否对应一个可操控的生成因子？这种"头级编辑"如果可行，将为视频编辑提供一种全新的细粒度控制范式。</p>
+</div>
+</section>
+
+</div>
+
+<footer>
+<p>Dummy Forcing 深度解读 &mdash; 基于论文 "Efficient Autoregressive Video Diffusion with Dummy Head" (2026.01)</p>
+<p>Microsoft Research Asia &middot; Tsinghua University &middot; ETH Zurich</p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,177 @@
+[
+  {
+    "name": "AnnCA",
+    "title": "FAST-AR: ANN加速自回归视频扩散",
+    "badge": "ICML 2026 &middot; arXiv:2602.01801 &middot; OriginAI / Bar-Ilan / NVIDIA",
+    "sub": "TempCache &times; AnnCA &times; AnnSA &middot; 免训练注意力加速框架 &middot; 5&times;&ndash;10&times; 端到端加速 &middot; 恒定GPU显存 &middot; 长视频流式生成",
+    "cover": "assets/Figure_10__Ablations_p15.png"
+  },
+  {
+    "name": "CausVid",
+    "title": "从双向扩散到快速自回归视频扩散模型 | CausVid 论文精读",
+    "badge": "",
+    "sub": "",
+    "cover": "assets/fig1_latency.png"
+  },
+  {
+    "name": "CausalForcing",
+    "title": "Causal Forcing: 自回归扩散蒸馏的正确姿势",
+    "badge": "ICML 2026",
+    "sub": "自回归扩散蒸馏的正确姿势",
+    "cover": "assets/cover.jpg"
+  },
+  {
+    "name": "CausalForcingPP",
+    "title": "Causal Forcing++: 可扩展少步自回归扩散蒸馏",
+    "badge": "arXiv 2026 &middot; Preprint",
+    "sub": "可扩展少步自回归扩散蒸馏，赋能实时交互式视频生成",
+    "cover": "assets/_v_end.png"
+  },
+  {
+    "name": "ContextForcing",
+    "title": "Context Forcing: 一致性长上下文自回归视频生成",
+    "badge": "arXiv 2026 &middot; Preprint",
+    "sub": "用长上下文教师监督长上下文学生，破解遗忘-漂移困境",
+    "cover": "assets/cover.jpg"
+  },
+  {
+    "name": "DMD",
+    "title": "DMD: 分布匹配蒸馏 — 一步扩散的数学之美",
+    "badge": "arXiv 2023 · CVPR 2024",
+    "sub": "将50步扩散压缩为单步生成 — 用KL散度匹配分布而非逐像素对齐",
+    "cover": null
+  },
+  {
+    "name": "DMD2",
+    "title": "DMD2: 改进的分布匹配蒸馏 — 消除回归损失，拥抱对抗训练",
+    "badge": "NeurIPS 2024 · ORAL",
+    "sub": "消除回归损失 + 引入对抗训练 + 支持多步生成 — 一步扩散蒸馏的新SOTA",
+    "cover": null
+  },
+  {
+    "name": "DeepForcing",
+    "title": "Deep Forcing: 免训练长视频生成",
+    "badge": "arXiv 2512.05081 &middot; KAIST AI &middot; CVPR 2025",
+    "sub": "Deep Sink &times; Participative Compression &middot; 免训练长视频生成 &middot; 5秒训练 &rarr; 60秒+生成 &middot; 15.75 FPS实时推理",
+    "cover": "assets/Figure_11_validates_p13.png"
+  },
+  {
+    "name": "DummyForcing",
+    "title": "Dummy Forcing - 高效自回归视频扩散的哑元头压缩",
+    "badge": "Microsoft Research Asia &middot; 2026.01",
+    "sub": "",
+    "cover": "assets/cover.jpg"
+  },
+  {
+    "name": "InfiniteRoPE",
+    "title": "Infinity-RoPE: 动作可控的无限视频生成",
+    "badge": "arXiv 2026.03 &middot; Virginia Tech &amp; fal",
+    "sub": "",
+    "cover": "assets/Figure_10__Temporal_p9.png"
+  },
+  {
+    "name": "LightForcing",
+    "title": "Light Forcing - 基于稀疏注意力的自回归视频扩散加速",
+    "badge": "ICML 2026 &middot; NTU / AUMOVIO",
+    "sub": "",
+    "cover": "assets/cover.jpg"
+  },
+  {
+    "name": "LoL",
+    "title": "LoL：比更长还长，将视频生成扩展至12小时",
+    "badge": "arXiv 2601.16914 · Jan 2026 · ByteDance Seed &amp; UCLA",
+    "sub": "",
+    "cover": "assets/Figure_10_More_p16.png"
+  },
+  {
+    "name": "LongLive",
+    "title": "LongLive: 实时交互式长视频生成",
+    "badge": "arXiv 2025 &middot; Preprint",
+    "sub": "KV-Recache &times; Streaming Long Tuning &times; Frame Sink &middot; 实时交互式长视频生成 &middot; 240秒 &middot; 20.7 FPS",
+    "cover": "assets/_verify_ch2.png"
+  },
+  {
+    "name": "MIGA",
+    "title": "MIGA: 无训练无限帧长视频生成",
+    "badge": "ICML 2026 &middot; Seoul, South Korea",
+    "sub": "两阶段训练-推理对齐 &times; 双重一致性增强 &middot; 无训练无限帧长视频生成 &middot; 1000+ 帧 &middot; 恒定显存",
+    "cover": "assets/Figure_1__MIGA_p2.png"
+  },
+  {
+    "name": "Memflow",
+    "title": "MemFlow: 流式自适应记忆驱动长视频叙事一致性",
+    "badge": "arXiv 2509.22622 &middot; HKU &times; Kuaishou Kling",
+    "sub": "流式自适应记忆驱动长视频叙事一致性",
+    "cover": "assets/cover.jpg"
+  },
+  {
+    "name": "MemoryForcing",
+    "title": "Memory Forcing: 时空记忆框架驱动Minecraft场景一致性生成",
+    "badge": "arXiv 2025 &middot; Preprint",
+    "sub": "Spatio-Temporal Memory for Consistent Scene Generation on Minecraft",
+    "cover": "assets/Fig_1_p1.png"
+  },
+  {
+    "name": "OneForcing",
+    "title": "One-Forcing: 迈向稳定的单步自回归视频生成",
+    "badge": "arXiv 2026 &middot; Preprint &middot; Tsinghua &amp; UCLA",
+    "sub": "迈向稳定的单步自回归视频生成：DMD + GAN 的联合蒸馏范式",
+    "cover": "assets/cover.jpg"
+  },
+  {
+    "name": "ResamplingForcing",
+    "title": "Resampling Forcing: 端到端自回归视频扩散训练",
+    "badge": "arXiv 2025 · Preprint",
+    "sub": "端到端自回归视频扩散训练 · 无需教师模型 · 自重采样模拟推理误差",
+    "cover": "assets/_verify_ch1.png"
+  },
+  {
+    "name": "RewardForcing",
+    "title": "Reward Forcing: 奖励驱动的流式视频生成",
+    "badge": "arXiv preprint &middot; 2025.12",
+    "sub": "EMA-Sink &times; Re-DMD &times; 23.1 FPS 实时流式视频生成",
+    "cover": "assets/_verify_ch2.png"
+  },
+  {
+    "name": "SANAWM",
+    "title": "SANA-WM: 高效分钟级世界建模的混合线性扩散Transformer",
+    "badge": "arXiv 2026 &middot; NVIDIA",
+    "sub": "高效分钟级世界建模的混合线性扩散Transformer",
+    "cover": "assets/cover.jpg"
+  },
+  {
+    "name": "SelfForcing",
+    "title": "Self Forcing：弥合自回归视频扩散的训练-测试鸿沟",
+    "badge": "NeurIPS 2025 · SPOTLIGHT",
+    "sub": "",
+    "cover": "assets/fig1_paradigms.png"
+  },
+  {
+    "name": "SelfForcingPP",
+    "title": "Self-Forcing++: 迈向分钟级高质量视频生成",
+    "badge": "arXiv preprint · ICLR 2026",
+    "sub": "Backward Noise Init × Extended DMD × 255秒视频生成 × 50×时长突破",
+    "cover": "assets/_final_ch1.png"
+  },
+  {
+    "name": "StableWorld",
+    "title": "StableWorld: 动态帧驱逐机制实现长时交互视频稳定性",
+    "badge": "",
+    "sub": "",
+    "cover": "assets/Fig__8_visualizes_p6.png"
+  },
+  {
+    "name": "UltraFlash",
+    "title": "Ultra Flash: 实时高分辨率流式视频生成",
+    "badge": "arXiv 2606.09150 &middot; JD Explore Academy &middot; 2026",
+    "sub": "将实时流式视频生成扩展到高分辨率",
+    "cover": "assets/cover.jpg"
+  },
+  {
+    "name": "distillalign",
+    "title": "DistillAlign: 当 mode covering 遇见 mode seeking",
+    "badge": "arXiv 2607.26811 · Riemann Dynamics / NTU",
+    "sub": "多阶段自回归视频蒸馏的分布对齐 — mode covering × mode seeking 协调",
+    "cover": "assets/hero_watercolor.jpg"
+  }
+]

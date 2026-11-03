@@ -1,0 +1,1455 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Causal Forcing: 自回归扩散蒸馏的正确姿势 | 论文精读</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- MathJax v5 Standard Config with Options Block and Retry Typeset -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true
+  },
+  options: {
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+  },
+  chtml: { scale: 1.05 },
+  startup: {
+    typeset: true,
+    pageReady: function() {
+      return MathJax.startup.defaultPageReady().then(function() {
+        // Second pass via typesetPromise for formulas missed on large pages
+        if (MathJax.typesetPromise) {
+          return MathJax.typesetPromise();
+        }
+      });
+    }
+  }
+};
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"
+  onerror="document.getElementById('mathjax-fallback').src='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'">
+</script>
+<script id="mathjax-fallback"></script>
+<script>
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    if (!window.MathJax || !window.MathJax.startup || !window.MathJax.startup.promise) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+      document.head.appendChild(s);
+    } else {
+      // Final retry: clear and re-typeset to catch any remaining formulas
+      if (window.MathJax.typesetPromise && window.MathJax.startup) {
+        MathJax.startup.promise.then(function() {
+          // Use typesetPromise for async processing of remaining formulas
+          MathJax.typesetPromise().catch(function(){});
+        });
+      }
+    }
+  }, 5000);
+});
+</script>
+
+<style>
+:root {
+  --lav-50:#faf5ff;--lav-100:#f3e8ff;--lav-200:#e9d5ff;--lav-300:#d8b4fe;
+  --lav-400:#c084fc;--lav-500:#a855f7;--lav-600:#9333ea;--lav-700:#7e22ce;
+  --coral-100:#ffe4e6;--coral-200:#fecdd3;--coral-300:#fda4af;--coral-400:#fb7185;--coral-500:#f43f5e;
+  --mint-100:#d1fae5;--mint-200:#a7f3d0;--mint-300:#6ee7b7;--mint-400:#34d399;--mint-500:#10b981;
+  --warm-100:#fef3c7;--warm-200:#fde68a;--warm-300:#fcd34d;--warm-400:#fbbf24;--warm-500:#f59e0b;
+  --ink:#1e1b4b;--ink-soft:#4c4b5e;--ink-muted:#787887;
+  --paper:#ffffff;--paper-warm:#faf8f5;--paper-cream:#fdfbf7;
+  --shadow-sm:0 2px 8px rgba(30,27,75,0.06);
+  --shadow-md:0 8px 30px rgba(30,27,75,0.08);
+  --shadow-lg:0 20px 60px rgba(30,27,75,0.12);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;font-size:16px}
+body{
+  font-family:'Noto Sans SC',sans-serif;color:var(--ink);background:var(--paper-cream);
+  line-height:1.75;overflow-x:hidden;
+}
+h1,h2,h3,h4,h5,h6{font-family:'Noto Serif SC',serif;font-weight:700;letter-spacing:-0.02em}
+
+/* Navigation */
+.nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(253,251,247,0.82);backdrop-filter:blur(20px) saturate(1.5);
+  border-bottom:1px solid rgba(192,132,252,0.12);transition:all .3s ease;
+}
+.nav-inner{max-width:1200px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;justify-content:space-between}
+.nav-brand{font-family:'Noto Serif SC',serif;font-size:15px;font-weight:700;color:var(--lav-600);text-decoration:none}
+.nav-links{display:flex;gap:4px;flex-wrap:wrap}
+.nav-links a{
+  font-size:12px;color:var(--ink-soft);text-decoration:none;padding:6px 12px;border-radius:8px;
+  transition:all .2s;font-weight:500;
+}
+.nav-links a:hover{background:var(--lav-100);color:var(--lav-600)}
+
+/* Hero */
+.hero{
+  position:relative;min-height:96vh;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;padding:120px 24px 80px;
+  background:linear-gradient(135deg,#faf5ff 0%,#f3e8ff 18%,#fdf4e3 50%,#fffbeb 100%);
+}
+.hero::before{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 520px 320px at 12% 22%,rgba(192,132,252,0.16),transparent 60%),
+    radial-gradient(ellipse 520px 320px at 88% 78%,rgba(251,191,36,0.13),transparent 60%);
+}
+.hero-wrap{position:relative;z-index:2;width:100%;max-width:780px;text-align:center}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,0.6);backdrop-filter:blur(12px) saturate(1.5);
+  border:1px solid rgba(192,132,252,0.3);color:var(--lav-600);
+  padding:7px 20px;border-radius:100px;
+  font-family:'Noto Sans SC',sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;
+  margin-bottom:20px;box-shadow:0 4px 20px rgba(192,132,252,0.12);
+}
+.hero h1{
+  font-size:clamp(2.4rem,7vw,4.2rem);font-weight:900;
+  letter-spacing:-0.03em;line-height:1.15;margin:12px 0 10px;
+  background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 38%,var(--coral-500) 62%,var(--warm-400) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero-sub{
+  font-size:clamp(1rem,2.5vw,1.3rem);color:var(--ink-soft);font-weight:400;
+  margin-bottom:8px;font-family:'Noto Sans SC',sans-serif;
+}
+.hero-tagline{
+  font-size:13px;color:var(--ink-muted);font-weight:500;letter-spacing:1px;
+  margin-bottom:24px;
+}
+.hero-art{margin:20px auto 8px;max-width:760px;width:100%}
+.hero-img{
+  width:100%;height:auto;border-radius:24px;
+  box-shadow:0 24px 70px -24px rgba(30,27,75,0.18);
+  border:1px solid rgba(192,132,252,0.12);
+}
+.hero-caption{font-size:11px;color:var(--ink-muted);margin-top:8px}
+.scroll-ind{
+  position:absolute;bottom:30px;left:50%;transform:translateX(-50%);
+  font-size:10px;letter-spacing:3px;color:var(--ink-muted);font-weight:600;
+  animation:bounce 2s infinite;
+}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+
+/* Content */
+.content{max-width:820px;margin:0 auto;padding:60px 24px}
+.chapter{margin-bottom:80px;scroll-margin-top:80px}
+.chapter-num{
+  display:inline-block;font-family:'JetBrains Mono',monospace;font-size:11px;
+  color:var(--lav-500);font-weight:600;letter-spacing:2px;margin-bottom:8px;
+}
+.chapter h2{
+  font-size:clamp(1.6rem,4vw,2.2rem);margin-bottom:24px;
+  background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.chapter h3{font-size:1.25rem;margin:28px 0 12px;color:var(--ink)}
+.chapter p{margin-bottom:16px;color:var(--ink-soft);font-size:15px;line-height:1.85}
+.chapter strong{color:var(--ink);font-weight:600}
+.chapter em{color:var(--lav-600);font-style:normal;font-weight:500}
+
+/* Figure */
+.fig{margin:28px 0;border-radius:16px;overflow:hidden;box-shadow:var(--shadow-md);background:var(--paper)}
+.fig img{width:100%;display:block}
+.fig-caption{padding:12px 16px;font-size:12px;color:var(--ink-muted);line-height:1.5;background:var(--paper-warm)}
+
+/* Insight Box */
+.insight-box{
+  background:linear-gradient(135deg,var(--mint-100) 0%,rgba(209,250,229,0.5) 100%);
+  border-left:4px solid var(--mint-400);border-radius:12px;
+  padding:20px 24px;margin:24px 0;box-shadow:var(--shadow-sm);
+}
+.insight-box .ib-title{
+  font-family:'Noto Serif SC',serif;font-weight:700;font-size:14px;
+  color:var(--mint-500);margin-bottom:8px;display:flex;align-items:center;gap:6px;
+}
+.insight-box .ib-title::before{content:'';width:8px;height:8px;background:var(--mint-400);border-radius:50%}
+.insight-box p{color:var(--ink-soft);font-size:14px;margin:0}
+
+/* Math Block */
+.math-block{
+  background:var(--paper);border:1px solid rgba(192,132,252,0.15);
+  border-radius:12px;padding:20px 24px;margin:20px 0;
+  box-shadow:var(--shadow-sm);overflow-x:auto;
+}
+.math-label{
+  font-size:11px;color:var(--lav-500);font-weight:600;
+  font-family:'JetBrains Mono',monospace;margin-bottom:8px;letter-spacing:1px;
+}
+
+/* Code Block */
+.code-block{
+  background:#1e1b2e;border-radius:12px;overflow:hidden;margin:24px 0;
+  box-shadow:var(--shadow-md);
+}
+.code-header{
+  background:rgba(255,255,255,0.05);padding:10px 16px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.code-header span{font-family:'JetBrains Mono',monospace;font-size:11px;color:#a78bfa;font-weight:500}
+.code-header .tag{
+  font-size:10px;padding:2px 8px;border-radius:4px;
+  background:rgba(167,139,250,0.15);color:#c4b5fd;
+}
+.code-block pre{
+  padding:16px 20px;overflow-x:auto;
+}
+.code-block code{
+  font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.7;color:#e0e0e0;
+}
+
+/* Research Question */
+.rq-card{
+  background:linear-gradient(135deg,var(--coral-100) 0%,rgba(255,228,230,0.4) 100%);
+  border-left:4px solid var(--coral-400);border-radius:12px;
+  padding:20px 24px;margin:20px 0;box-shadow:var(--shadow-sm);
+}
+.rq-card .rq-tag{
+  display:inline-block;font-size:10px;font-weight:700;letter-spacing:1px;
+  color:var(--coral-500);background:rgba(244,63,94,0.1);padding:3px 10px;border-radius:6px;
+  margin-bottom:10px;
+}
+.rq-card h4{font-size:15px;color:var(--ink);margin-bottom:8px}
+.rq-card p{font-size:13px;color:var(--ink-soft);margin:0}
+
+/* Table */
+.result-table{
+  width:100%;border-collapse:collapse;margin:20px 0;font-size:13px;
+  border-radius:12px;overflow:hidden;box-shadow:var(--shadow-sm);
+}
+.result-table th{
+  background:var(--lav-100);color:var(--lav-700);font-weight:600;
+  padding:10px 12px;text-align:left;font-size:12px;
+}
+.result-table td{padding:8px 12px;border-bottom:1px solid rgba(192,132,252,0.08);color:var(--ink-soft)}
+.result-table tr:hover{background:var(--lav-50)}
+.result-table .highlight{background:var(--mint-100);font-weight:600;color:var(--ink)}
+
+/* Compare Card */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
+.compare-card{
+  border-radius:12px;padding:20px;box-shadow:var(--shadow-sm);
+}
+.compare-card.bad{background:linear-gradient(135deg,var(--coral-100),rgba(255,228,230,0.3))}
+.compare-card.good{background:linear-gradient(135deg,var(--mint-100),rgba(209,250,229,0.3))}
+.compare-card h4{font-size:14px;margin-bottom:10px}
+.compare-card p{font-size:13px;margin:0}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+
+/* SVG container */
+.svg-wrap{margin:24px 0;text-align:center}
+.svg-wrap svg{max-width:100%;height:auto}
+.svg-caption{font-size:11px;color:var(--ink-muted);margin-top:8px}
+
+/* Footer */
+.footer{
+  text-align:center;padding:40px 24px;
+  background:linear-gradient(135deg,var(--lav-50),var(--warm-100));
+  border-top:1px solid rgba(192,132,252,0.1);
+}
+.footer p{font-size:12px;color:var(--ink-muted);margin-bottom:6px}
+
+/* Section divider */
+.divider{
+  text-align:center;margin:40px 0;color:var(--lav-300);
+  font-size:20px;letter-spacing:8px;
+}
+
+/* Stats grid */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:24px 0}
+.stat-card{
+  background:var(--paper);border-radius:12px;padding:20px;text-align:center;
+  box-shadow:var(--shadow-sm);border:1px solid rgba(192,132,252,0.1);
+}
+.stat-card .stat-val{
+  font-family:'Noto Serif SC',serif;font-size:28px;font-weight:900;
+  background:linear-gradient(135deg,var(--lav-600),var(--coral-500));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.stat-card .stat-label{font-size:11px;color:var(--ink-muted);margin-top:4px}
+@media(max-width:640px){.stats-grid{grid-template-columns:1fr}}
+
+/* Warning box */
+.warn-box{
+  background:linear-gradient(135deg,var(--warm-100),rgba(254,243,199,0.4));
+  border-left:4px solid var(--warm-400);border-radius:12px;
+  padding:16px 20px;margin:20px 0;
+}
+.warn-box p{font-size:13px;color:var(--ink-soft);margin:0}
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="nav">
+<div class="nav-inner">
+<a href="#hero" class="nav-brand">Causal Forcing</a>
+<div class="nav-links"><a href="../index.html">« 合辑</a>
+<a href="#ch1">架构鸿沟</a>
+<a href="#ch2">帧级注入性</a>
+<a href="#ch3">三阶段方法</a>
+<a href="#ch4">TF vs DF</a>
+<a href="#ch5">因果CD</a>
+<a href="#ch6">实验</a>
+<a href="#ch7">代码实现</a>
+<a href="#ch8">科研问题</a>
+</div>
+</div>
+</nav>
+
+<!-- Hero -->
+<section class="hero" id="hero">
+<div class="hero-wrap">
+<div class="hero-badge">ICML 2026</div>
+<h1>Causal Forcing</h1>
+<p class="hero-sub">自回归扩散蒸馏的正确姿势</p>
+<p class="hero-tagline">帧级注入性 &times; 因果ODE蒸馏 &times; 三阶段Pipeline</p>
+<div class="hero-art">
+<img src="assets/cover.webp" alt="Causal Forcing Cover" class="hero-img">
+<p class="hero-caption">水彩写意：从纠缠的双向注意力流向有序的因果序列，ODE蒸馏架起跨越架构鸿沟的桥梁</p>
+</div>
+</div>
+<div class="scroll-ind">SCROLL TO READ</div>
+</section>
+
+<div class="content">
+
+<!-- ==================== CH1: 架构鸿沟 ==================== -->
+<div class="chapter" id="ch1">
+<div class="chapter-num">CHAPTER 01</div>
+<h2>架构鸿沟：AR 蒸馏的根本挑战</h2>
+
+<p>实时交互式视频生成的核心需求是：<strong>模型必须以自回归（Autoregressive, AR）方式逐帧生成</strong>，使用户能够在生成过程中干预后续帧的内容。然而，当前最强大的视频扩散模型（如 Wan2.1）都是<strong>双向（Bidirectional）</strong>架构——它们一次性处理所有帧，每帧都能通过全注意力（Full Attention）"看到"未来帧。这种架构无法实现流式生成和实时交互。</p>
+
+<p>现有方法（CausVid、Self Forcing）的解决思路是<strong>非对称蒸馏</strong>：将预训练的双向模型蒸馏为少步自回归学生模型。这一过程面临两层挑战：</p>
+
+<div class="compare-grid">
+<div class="compare-card bad">
+<h4>采样步数鸿沟</h4>
+<p>将多步扩散采样（50+步）压缩到少步（4步），这是标准步蒸馏的通用挑战</p>
+</div>
+<div class="compare-card bad">
+<h4>架构鸿沟 <span style="color:var(--coral-500);font-size:11px">（本文核心关注）</span></h4>
+<p>将双向注意力（可访问未来帧）转换为因果注意力（仅依赖过去帧），这是 AR 蒸馏独有的根本挑战</p>
+</div>
+</div>
+
+<div class="fig">
+<img src="assets/fig1_limitations.webp" alt="Figure 1">
+<div class="fig-caption">Figure 1: 即使从相同的双向基座模型蒸馏，SOTA AR 蒸馏方法（Self Forcing）在动态度、视觉质量和指令遵循上仍显著落后于标准 DMD（蒸馏双向学生）</div>
+</div>
+
+<h3>关键发现：DMD 无法弥补架构鸿沟</h3>
+
+<p>论文通过一个精巧的对照实验揭示了问题的严重性。作者先用标准 DMD 蒸馏一个少步双向模型——这消除了采样步数鸿沟，<strong>仅保留了架构鸿沟</strong>。然后用这个模型初始化 AR 学生模型进行 DMD 训练。结果令人震惊：</p>
+
+<div class="fig">
+<img src="assets/fig2_dmd_gap.webp" alt="Figure 2">
+<div class="fig-caption">Figure 2: 即使消除了采样步数鸿沟，仅保留架构鸿沟的模型仍显著落后于标准 DMD。这证明架构鸿沟无法被 DMD 阶段解决</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：架构鸿沟 &ne; 采样步数鸿沟</div>
+<p>架构鸿沟的本质是<strong>信息不对称</strong>：双向模型在训练时可以访问未来帧的信息来辅助当前帧的去噪，而因果模型在推理时被严格限制为只能看过去。这种不对称不是简单的"少了一些信息"，而是改变了去噪映射的数学性质——从视频级别的唯一映射退化为帧级别的多值映射。DMD 的分布匹配机制只能优化学生分布与数据分布的 KL 散度，但无法修复初始化阶段已经坍塌的映射函数。</p>
+</div>
+
+<h3>双向注意力 vs 因果注意力</h3>
+
+<p>下图直观展示了两种注意力模式的根本差异：</p>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="bi-grad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#c084fc" stop-opacity="0.3"/>
+<stop offset="100%" stop-color="#c084fc" stop-opacity="0.05"/>
+</linearGradient>
+<linearGradient id="causal-grad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#34d399" stop-opacity="0.3"/>
+<stop offset="100%" stop-color="#34d399" stop-opacity="0.05"/>
+</linearGradient>
+</defs>
+<!-- Left: Bidirectional -->
+<text x="140" y="20" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#9333ea">双向注意力 (Bidirectional)</text>
+<rect x="30" y="30" width="220" height="220" fill="url(#bi-grad)" rx="8" stroke="#c084fc" stroke-width="1" stroke-dasharray="4,3"/>
+<!-- Frames -->
+<rect x="50" y="50" width="40" height="30" rx="6" fill="#e9d5ff" stroke="#a855f7" stroke-width="1.5"/>
+<rect x="110" y="50" width="40" height="30" rx="6" fill="#e9d5ff" stroke="#a855f7" stroke-width="1.5"/>
+<rect x="170" y="50" width="40" height="30" rx="6" fill="#e9d5ff" stroke="#a855f7" stroke-width="1.5"/>
+<text x="70" y="70" text-anchor="middle" font-size="10" fill="#7e22ce">f1</text>
+<text x="130" y="70" text-anchor="middle" font-size="10" fill="#7e22ce">f2</text>
+<text x="190" y="70" text-anchor="middle" font-size="10" fill="#7e22ce">f3</text>
+<!-- All-to-all arrows -->
+<line x1="70" y1="85" x2="130" y2="85" stroke="#a855f7" stroke-width="1" marker-end="url(#arrow-bi)"/>
+<line x1="130" y1="85" x2="70" y2="85" stroke="#a855f7" stroke-width="1" marker-end="url(#arrow-bi)"/>
+<line x1="70" y1="90" x2="190" y2="90" stroke="#a855f7" stroke-width="1" marker-end="url(#arrow-bi)"/>
+<line x1="190" y1="90" x2="70" y2="90" stroke="#a855f7" stroke-width="1" marker-end="url(#arrow-bi)"/>
+<line x1="130" y1="85" x2="190" y2="85" stroke="#a855f7" stroke-width="1" marker-end="url(#arrow-bi)"/>
+<line x1="190" y1="85" x2="130" y2="85" stroke="#a855f7" stroke-width="1" marker-end="url(#arrow-bi)"/>
+<!-- Label -->
+<text x="140" y="130" text-anchor="middle" font-size="11" fill="#7e22ce">每帧可访问所有帧</text>
+<text x="140" y="148" text-anchor="middle" font-size="10" fill="#9333ea" font-style="italic">含未来帧信息</text>
+<!-- Future info indicator -->
+<circle cx="190" cy="175" r="8" fill="#fda4af" opacity="0.6"/>
+<text x="190" y="179" text-anchor="middle" font-size="8" fill="#f43f5e">!</text>
+<text x="140" y="210" text-anchor="middle" font-size="10" fill="#787887">训练时：x_t^{1:N} &rarr; x_0^{1:N}</text>
+<text x="140" y="228" text-anchor="middle" font-size="10" fill="#787887">视频级唯一映射</text>
+
+<!-- Divider -->
+<line x1="290" y1="30" x2="290" y2="250" stroke="#d8b4fe" stroke-width="1" stroke-dasharray="4,4"/>
+
+<!-- Right: Causal -->
+<text x="470" y="20" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#10b981">因果注意力 (Causal)</text>
+<rect x="340" y="30" width="260" height="220" fill="url(#causal-grad)" rx="8" stroke="#34d399" stroke-width="1" stroke-dasharray="4,3"/>
+<!-- Frames -->
+<rect x="360" y="50" width="40" height="30" rx="6" fill="#d1fae5" stroke="#34d399" stroke-width="1.5"/>
+<rect x="420" y="50" width="40" height="30" rx="6" fill="#d1fae5" stroke="#34d399" stroke-width="1.5"/>
+<rect x="480" y="50" width="40" height="30" rx="6" fill="#d1fae5" stroke="#34d399" stroke-width="1.5"/>
+<rect x="540" y="50" width="40" height="30" rx="6" fill="#d1fae5" stroke="#34d399" stroke-width="1.5"/>
+<text x="380" y="70" text-anchor="middle" font-size="10" fill="#047857">f1</text>
+<text x="440" y="70" text-anchor="middle" font-size="10" fill="#047857">f2</text>
+<text x="500" y="70" text-anchor="middle" font-size="10" fill="#047857">f3</text>
+<text x="560" y="70" text-anchor="middle" font-size="10" fill="#047857">f4</text>
+<!-- Causal arrows (only left to right) -->
+<line x1="380" y1="85" x2="440" y2="85" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrow-causal)"/>
+<line x1="380" y1="95" x2="500" y2="95" stroke="#34d399" stroke-width="1" marker-end="url(#arrow-causal)"/>
+<line x1="380" y1="105" x2="560" y2="105" stroke="#34d399" stroke-width="1" marker-end="url(#arrow-causal)"/>
+<line x1="440" y1="85" x2="500" y2="85" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrow-causal)"/>
+<line x1="440" y1="95" x2="560" y2="95" stroke="#34d399" stroke-width="1" marker-end="url(#arrow-causal)"/>
+<line x1="500" y1="85" x2="560" y2="85" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrow-causal)"/>
+<!-- Label -->
+<text x="470" y="140" text-anchor="middle" font-size="11" fill="#047857">每帧仅访问过去帧</text>
+<text x="470" y="158" text-anchor="middle" font-size="10" fill="#10b981" font-style="italic">无未来信息泄漏</text>
+<!-- No future info -->
+<line x1="560" y1="170" x2="560" y2="185" stroke="#f43f5e" stroke-width="2"/>
+<line x1="556" y1="181" x2="564" y2="181" stroke="#f43f5e" stroke-width="2"/>
+<text x="470" y="210" text-anchor="middle" font-size="10" fill="#787887">推理时：x_t^i | x_0^{&lt;i} &rarr; x_0^i</text>
+<text x="470" y="228" text-anchor="middle" font-size="10" fill="#787887">帧级映射（需注入性）</text>
+
+<!-- Arrow markers -->
+<defs>
+<marker id="arrow-bi" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#a855f7"/>
+</marker>
+<marker id="arrow-causal" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#34d399"/>
+</marker>
+</defs>
+</svg>
+</div>
+<p class="svg-caption">SVG 可视化：双向注意力中所有帧互相可见（左），因果注意力中每帧仅条件于过去帧（右）</p>
+
+<div class="insight-box">
+<div class="ib-title">设计 Rationale：为什么架构鸿沟必须在 ODE 初始化阶段解决</div>
+<p>论文的核心论点是：<strong>架构鸿沟的解决时机至关重要</strong>。DMD 阶段通过分布匹配来优化学生模型，但它本质上是在已有初始化的基础上进行微调。如果初始化阶段已经因为架构鸿沟导致了映射坍塌（从确定性映射退化为条件期望），DMD 无法从这个坍塌状态中恢复。因此，架构鸿沟必须在 ODE 初始化阶段就被正确处理——这正是 Causal Forcing 的切入点。</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH2: 帧级注入性 ==================== -->
+<div class="chapter" id="ch2">
+<div class="chapter-num">CHAPTER 02</div>
+<h2>帧级注入性：ODE 蒸馏的必要条件</h2>
+
+<p>本章是论文的理论核心。Causal Forcing 的关键贡献不在于提出了一个新的训练技巧，而在于<strong>从数学上证明了现有方法的理论缺陷</strong>，并给出了正确的解决方案所需满足的必要条件。</p>
+
+<h3>2.1 ODE 蒸馏与注入性</h3>
+
+<p>ODE 蒸馏的核心思想是：从教师模型的 PF-ODE 轨迹上采样配对数据 $(x_t, x_0)$，训练学生模型 $G_\theta$ 直接回归干净样本 $x_0$。这一过程要求配对数据满足<strong>注入性（Injectivity）</strong>——即每个噪声样本 $x_t$ 必须唯一对应一个干净样本 $x_0$。</p>
+
+<div class="math-block">
+<div class="math-label">Equation 1 — PF-ODE 定义</div>
+$$dx_t = v_\theta(x_t, t)\,dt, \quad x_T \sim \mathcal{N}(0, I), \quad t: T \to 0$$
+</div>
+
+<p>在标准 ODE 蒸馏中（双向教师 → 双向学生），注入性自然成立：PF-ODE 的解是唯一的，因此对于任意噪声视频 $x_t^{1:N}$，存在唯一的干净视频 $x_0^{1:N}$。学生模型学习的就是这个唯一映射 $\phi^{\text{Bi}}: (x_t^{1:N}, t) \mapsto x_0^{1:N}$。</p>
+
+<h3>2.2 帧级注入性的定义</h3>
+
+<p>然而，当蒸馏目标是自回归学生模型时，情况发生了根本变化。AR 模型逐帧生成，因此注入性要求从<strong>视频级别</strong>转移到<strong>帧级别</strong>：</p>
+
+<div class="math-block">
+<div class="math-label">Definition 3.1 — 帧级注入性 (Frame-level Injectivity)</div>
+$$\forall t \in (0, 1], \; \forall \{x_t^j\}_{j=1}^N, \{y_t^j\}_{j=1}^N: \quad \forall i \in [N], \; x_t^i = y_t^i \Rightarrow \phi^{\text{AR}}(x_t^i, t) = \phi^{\text{AR}}(y_t^i, t)$$
+</div>
+
+<p>直观理解：<strong>对于同一个噪声帧 $x_t^i$，无论它出现在哪个视频中（即无论其他帧 $x_t^{j \neq i}$ 是什么），AR 教师的 PF-ODE 都必须映射到同一个干净帧 $x_0^i$</strong>。这意味着第 $i$ 帧的去噪结果不能依赖于未来帧。</p>
+
+<h3>2.3 Self Forcing 为何违反帧级注入性</h3>
+
+<p>Self Forcing 使用双向教师模型生成 ODE 配对数据。双向模型的去噪过程利用了<strong>所有帧</strong>的信息，包括未来帧。因此，即使第 $i$ 个噪声帧 $x_t^i$ 相同，不同的未来帧 $x_t^{\gt i}$ 会导致不同的干净帧 $x_0^i$。</p>
+
+<div class="math-block">
+<div class="math-label">Lemma 3.2 — PF-ODE 的帧级非注入性（非正式）</div>
+$$\forall t \in (0, 1], \; \forall x_t^{1:N} \in \mathbb{R}^d, \; \exists y_t^{1:N} \in \mathbb{R}^d: \quad y_t^i = x_t^i, \; \text{且} \; \phi^{\text{Bi}}(x_t^{1:N}, t)_i \neq \phi^{\text{Bi}}(y_t^{1:N}, t)_i$$
+</div>
+
+<div class="insight-box">
+<div class="ib-title">数学直觉：为什么双向模型的 PF-ODE 违反帧级注入性</div>
+<p>双向扩散模型通过全注意力去噪第 $i$ 帧时，<strong>使用了所有帧的信息</strong>（包括未来帧 $x_t^{\gt i}$）。因此，即使 $x_t^i$ 固定，不同的 $x_t^{\gt i}$ 仍然可以产生不同的 $x_0^i$。关键在于：$\phi^{\text{Bi}}(x_t^{1:N}, t)_i$ 作为 $x_t^{\text{other}}$ 的函数<strong>不是几乎处处常数</strong>的（因为 DiT 的注意力映射确实依赖于所有 token）。这意味着同一噪声帧可以对应多个不同的干净帧，违反了帧级注入性。</p>
+</div>
+
+<h3>2.4 条件期望坍塌</h3>
+
+<p>当帧级注入性被违反时，MSE 回归的最优解不再是教师模型的真实 flow map，而是退化为<strong>条件期望</strong>：</p>
+
+<div class="math-block">
+<div class="math-label">Proposition 3.3 — 分布不匹配（条件期望坍塌）</div>
+$$G_\theta^*(x_t^i, x_t^{\lt i}, t) = \mathbb{E}[x_0^i \mid x_t^i, x_t^{\lt i}, t] \nsim p_{\text{data}}(x_0^i)$$
+</div>
+
+<p>条件期望的本质是对所有可能的干净帧取<strong>平均</strong>，这直接导致生成结果变得模糊。论文通过 L2 正交投影恒等式严格证明了这一点：</p>
+
+<div class="math-block">
+<div class="math-label">证明关键步骤 — L2 正交投影</div>
+$$\mathbb{E}\|Y\|^2 = \mathbb{E}\|\hat{Y}\|^2 + \mathbb{E}\|Y - \hat{Y}\|^2 = \mathbb{E}\|\hat{Y}\|^2 + \mathbb{E}[\text{Var}(Y \mid U, t)]$$
+</div>
+
+<p>由 Lemma 3.2 知 $\mathbb{P}(\text{Var}(Y \mid U, t) \gt 0) \gt 0$，因此 $\mathbb{E}\|\hat{Y}\|^2 \lt \mathbb{E}\|Y\|^2$。如果 $\hat{Y}$ 和 $Y$ 同分布，则它们的 L2 范数期望应相等，矛盾。因此条件期望 $\hat{Y}$ 不服从数据分布。</p>
+
+<div class="fig">
+<img src="assets/fig3_injectivity.webp" alt="Figure 3">
+<div class="fig-caption">Figure 3: 三种 ODE 蒸馏配置的对比。(a) 双向教师+双向学生：视频级注入性成立；(b) AR教师+AR学生：帧级注入性成立（本文方法）；(c) 双向教师+AR学生：帧级非注入性，导致模糊视频</div>
+</div>
+
+<h3>2.5 注入性概念可视化</h3>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<radialGradient id="noise-region" cx="50%" cy="50%" r="50%">
+<stop offset="0%" stop-color="#c084fc" stop-opacity="0.4"/>
+<stop offset="100%" stop-color="#c084fc" stop-opacity="0.05"/>
+</radialGradient>
+<radialGradient id="data-region" cx="50%" cy="50%" r="50%">
+<stop offset="0%" stop-color="#fbbf24" stop-opacity="0.4"/>
+<stop offset="100%" stop-color="#fbbf24" stop-opacity="0.05"/>
+</radialGradient>
+<marker id="arr-ok" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+<path d="M0,0 L8,4 L0,8" fill="#34d399"/>
+</marker>
+<marker id="arr-bad" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+<path d="M0,0 L8,4 L0,8" fill="#f43f5e"/>
+</marker>
+</defs>
+
+<!-- Left: Injective (correct) -->
+<text x="160" y="20" text-anchor="middle" font-family="Noto Serif SC" font-size="12" font-weight="700" fill="#10b981">帧级注入性 (Causal Forcing)</text>
+<!-- Noise region -->
+<ellipse cx="90" cy="100" rx="50" ry="70" fill="url(#noise-region)" stroke="#c084fc" stroke-width="1" stroke-dasharray="3,2"/>
+<text x="90" y="60" text-anchor="middle" font-size="10" fill="#9333ea">p_t (噪声)</text>
+<!-- Single point in noise -->
+<circle cx="90" cy="100" r="5" fill="#a855f7"/>
+<text x="90" y="120" text-anchor="middle" font-size="9" fill="#7e22ce">x_t^i</text>
+<!-- Data region -->
+<ellipse cx="240" cy="100" rx="50" ry="70" fill="url(#data-region)" stroke="#fbbf24" stroke-width="1" stroke-dasharray="3,2"/>
+<text x="240" y="60" text-anchor="middle" font-size="10" fill="#d97706">p_data</text>
+<!-- Single point in data -->
+<circle cx="240" cy="100" r="5" fill="#f59e0b"/>
+<text x="240" y="120" text-anchor="middle" font-size="9" fill="#92400e">x_0^i</text>
+<!-- Arrow: one-to-one -->
+<path d="M 95,100 L 235,100" stroke="#34d399" stroke-width="2" marker-end="url(#arr-ok)"/>
+<text x="165" y="92" text-anchor="middle" font-size="9" fill="#059669">&phi;^AR</text>
+<!-- Check -->
+<circle cx="165" cy="170" r="12" fill="#34d399" opacity="0.2"/>
+<text x="165" y="175" text-anchor="middle" font-size="14" fill="#059669">&#10003;</text>
+<text x="165" y="210" text-anchor="middle" font-size="10" fill="#787887">唯一映射</text>
+<text x="165" y="225" text-anchor="middle" font-size="9" fill="#787887">清晰生成</text>
+
+<!-- Divider -->
+<line x1="340" y1="15" x2="340" y2="240" stroke="#d8b4fe" stroke-width="1" stroke-dasharray="4,4"/>
+
+<!-- Right: Non-injective (Self Forcing) -->
+<text x="530" y="20" text-anchor="middle" font-family="Noto Serif SC" font-size="12" font-weight="700" fill="#f43f5e">帧级非注入性 (Self Forcing)</text>
+<!-- Noise region -->
+<ellipse cx="460" cy="100" rx="50" ry="70" fill="url(#noise-region)" stroke="#c084fc" stroke-width="1" stroke-dasharray="3,2"/>
+<text x="460" y="60" text-anchor="middle" font-size="10" fill="#9333ea">p_t (噪声)</text>
+<!-- Single point in noise -->
+<circle cx="460" cy="100" r="5" fill="#a855f7"/>
+<text x="460" y="120" text-anchor="middle" font-size="9" fill="#7e22ce">x_t^i</text>
+<!-- Data region -->
+<ellipse cx="610" cy="100" rx="50" ry="70" fill="url(#data-region)" stroke="#fbbf24" stroke-width="1" stroke-dasharray="3,2"/>
+<text x="610" y="60" text-anchor="middle" font-size="10" fill="#d97706">p_data</text>
+<!-- Multiple points in data -->
+<circle cx="590" cy="80" r="4" fill="#f59e0b"/>
+<circle cx="630" cy="85" r="4" fill="#f59e0b"/>
+<circle cx="595" cy="120" r="4" fill="#f59e0b"/>
+<circle cx="625" cy="115" r="4" fill="#f59e0b"/>
+<text x="610" y="140" text-anchor="middle" font-size="9" fill="#92400e">多个 x_0^i</text>
+<!-- Arrows: one-to-many -->
+<path d="M 465,95 Q 520,70 585,80" stroke="#f43f5e" stroke-width="1.5" marker-end="url(#arr-bad)" fill="none"/>
+<path d="M 465,100 Q 520,100 625,85" stroke="#f43f5e" stroke-width="1.5" marker-end="url(#arr-bad)" fill="none"/>
+<path d="M 465,105 Q 520,130 590,120" stroke="#f43f5e" stroke-width="1.5" marker-end="url(#arr-bad)" fill="none"/>
+<path d="M 465,108 Q 530,135 620,115" stroke="#f43f5e" stroke-width="1.5" marker-end="url(#arr-bad)" fill="none"/>
+<text x="535" y="50" text-anchor="middle" font-size="9" fill="#dc2626">&phi;^Bi (多值)</text>
+<!-- X mark -->
+<circle cx="535" cy="170" r="12" fill="#f43f5e" opacity="0.2"/>
+<text x="535" y="175" text-anchor="middle" font-size="14" fill="#dc2626">&#10007;</text>
+<text x="535" y="210" text-anchor="middle" font-size="10" fill="#787887">多值映射</text>
+<text x="535" y="225" text-anchor="middle" font-size="9" fill="#787887">条件期望 &rarr; 模糊</text>
+</svg>
+</div>
+<p class="svg-caption">SVG 可视化：帧级注入性（左）保证噪声到干净帧的一对一映射；帧级非注入性（右）导致一对多映射，MSE 回归退化为条件期望</p>
+
+<div class="insight-box">
+<div class="ib-title">批判评估：MSE 回归的本质——注入性决定能否恢复 flow map</div>
+<p>这个理论结果的深刻之处在于揭示了 MSE 回归与注入性之间的内在联系。MSE 损失 $\mathbb{E}[\|G_\theta(x_t, t) - x_0\|^2]$ 的最优解始终是条件期望 $\mathbb{E}[x_0 | x_t, t]$。<strong>只有当配对数据满足注入性时</strong>，条件期望才等于确定性的 flow map $\phi(x_t, t)$，从而恢复教师模型的真实映射。一旦注入性被违反，条件期望就变成了对多个可能目标的平均，导致模糊。这不是工程实现的缺陷，而是数学原理的必然结果。</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH3: 三阶段方法 ==================== -->
+<div class="chapter" id="ch3">
+<div class="chapter-num">CHAPTER 03</div>
+<h2>Causal Forcing 三阶段方法</h2>
+
+<p>基于第二章的理论分析，Causal Forcing 提出了一个清晰的三阶段流水线，每一步都有明确的理论依据和工程目标。</p>
+
+<h3>整体架构</h3>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 760 200" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="stage1-grad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#e9d5ff"/><stop offset="100%" stop-color="#c084fc"/>
+</linearGradient>
+<linearGradient id="stage2-grad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#d1fae5"/><stop offset="100%" stop-color="#34d399"/>
+</linearGradient>
+<linearGradient id="stage3-grad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#fef3c7"/><stop offset="100%" stop-color="#fbbf24"/>
+</linearGradient>
+<marker id="flow-arr" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+<path d="M0,0 L10,5 L0,10" fill="#a855f7"/>
+</marker>
+</defs>
+
+<!-- Stage 1 -->
+<rect x="10" y="30" width="220" height="140" rx="12" fill="url(#stage1-grad)" opacity="0.9" stroke="#9333ea" stroke-width="1.5"/>
+<text x="120" y="55" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#fff">Stage 1</text>
+<text x="120" y="75" text-anchor="middle" font-size="11" fill="#fff" font-weight="600">AR Diffusion Training</text>
+<text x="120" y="95" text-anchor="middle" font-size="10" fill="#fff">Teacher Forcing</text>
+<text x="120" y="115" text-anchor="middle" font-size="9" fill="#fff" opacity="0.9">Wan2.1 &rarr; AR 模型</text>
+<text x="120" y="132" text-anchor="middle" font-size="9" fill="#fff" opacity="0.9">2K steps</text>
+<text x="120" y="155" text-anchor="middle" font-size="8" fill="#fff" opacity="0.8">输出: 多步 AR 教师</text>
+
+<!-- Arrow -->
+<path d="M 235,100 L 265,100" stroke="#a855f7" stroke-width="2" marker-end="url(#flow-arr)"/>
+
+<!-- Stage 2 -->
+<rect x="270" y="30" width="220" height="140" rx="12" fill="url(#stage2-grad)" opacity="0.9" stroke="#059669" stroke-width="1.5"/>
+<text x="380" y="55" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#fff">Stage 2</text>
+<text x="380" y="75" text-anchor="middle" font-size="11" fill="#fff" font-weight="600">Causal ODE Distillation</text>
+<text x="380" y="95" text-anchor="middle" font-size="10" fill="#fff">AR Teacher &rarr; AR Student</text>
+<text x="380" y="115" text-anchor="middle" font-size="9" fill="#fff" opacity="0.9">帧级注入性保证</text>
+<text x="380" y="132" text-anchor="middle" font-size="9" fill="#fff" opacity="0.9">1K steps</text>
+<text x="380" y="155" text-anchor="middle" font-size="8" fill="#fff" opacity="0.8">输出: 少步 AR 初始化</text>
+
+<!-- Arrow -->
+<path d="M 495,100 L 525,100" stroke="#34d399" stroke-width="2" marker-end="url(#flow-arr)"/>
+
+<!-- Stage 3 -->
+<rect x="530" y="30" width="220" height="140" rx="12" fill="url(#stage3-grad)" opacity="0.9" stroke="#d97706" stroke-width="1.5"/>
+<text x="640" y="55" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#fff">Stage 3</text>
+<text x="640" y="75" text-anchor="middle" font-size="11" fill="#fff" font-weight="600">Asymmetric DMD</text>
+<text x="640" y="95" text-anchor="middle" font-size="10" fill="#fff">Self-Rollout + 分布匹配</text>
+<text x="640" y="115" text-anchor="middle" font-size="9" fill="#fff" opacity="0.9">s_real: Wan2.1-14B</text>
+<text x="640" y="132" text-anchor="middle" font-size="9" fill="#fff" opacity="0.9">750 steps</text>
+<text x="640" y="155" text-anchor="middle" font-size="8" fill="#fff" opacity="0.8">输出: 最终少步 AR 模型</text>
+</svg>
+</div>
+<p class="svg-caption">SVG 可视化：Causal Forcing 三阶段流水线</p>
+
+<h3>Stage 1：自回归扩散训练（Teacher Forcing）</h3>
+
+<p>第一阶段从预训练的双向模型（Wan2.1-T2V-1.3B）出发，训练一个多步自回归扩散模型作为后续 ODE 蒸馏的教师。训练采用 Teacher Forcing 策略——每个帧的去噪条件于<strong>干净的真实历史帧</strong> $x_0^{\lt i}$，而非噪声历史帧。</p>
+
+<p>这一阶段的关键发现将在第四章详细讨论：Teacher Forcing 优于 Diffusion Forcing，这与社区的普遍认知相反。</p>
+
+<h3>Stage 2：因果 ODE 蒸馏</h3>
+
+<p>第二阶段是论文的核心创新。使用 Stage 1 训练的 AR 模型作为教师，采样其 PF-ODE 轨迹来构建配对数据，然后训练少步 AR 学生模型：</p>
+
+<div class="math-block">
+<div class="math-label">Equation 8 — 因果 ODE 蒸馏目标</div>
+$$\theta^* = \min_\theta \mathbb{E}_{x_{\text{gt}}^{\lt i}, \, t \in \mathcal{S}, \, i, \, x_t^i}\left[\left\|G_\theta(x_t^i, x_{\text{gt}}^{\lt i}, t) - x_0^i\right\|^2\right]$$
+</div>
+
+<p>注意与 Self Forcing 的 ODE 目标（Eq 3）的关键区别：</p>
+
+<div class="compare-grid">
+<div class="compare-card bad">
+<h4>Self Forcing (Eq 3)</h4>
+<p>条件：$x_t^{\lt i}$（噪声历史帧）<br>教师：双向模型<br>配对数据来自双向 PF-ODE<br><span style="color:var(--coral-500)">&rarr; 违反帧级注入性</span></p>
+</div>
+<div class="compare-card good">
+<h4>Causal Forcing (Eq 8)</h4>
+<p>条件：$x_{\text{gt}}^{\lt i}$（干净历史帧）<br>教师：AR 模型<br>配对数据来自 AR PF-ODE<br><span style="color:var(--mint-500)">&rarr; 满足帧级注入性</span></p>
+</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">设计 Rationale：AR 教师的 PF-ODE 天然满足帧级注入性</div>
+<p>AR 模型逐帧生成时，第 $i$ 帧的去噪过程<strong>仅依赖于历史帧 $x_0^{\lt i}$ 和当前噪声 $x_t^i$</strong>，不涉及未来帧。因此，给定相同的 $x_t^i$ 和 $x_{\text{gt}}^{\lt i}$，AR 教师的 PF-ODE 总是映射到同一个 $x_0^i$——帧级注入性天然成立。这使得学生模型能够准确学习到确定性的 flow map，而非退化的条件期望。</p>
+</div>
+
+<h3>Stage 2 代码实现：ODE 轨迹采样</h3>
+
+<p>以下代码展示了如何从 AR 教师模型采样 PF-ODE 轨迹来构建因果 ODE 配对数据：</p>
+
+<div class="code-block">
+<div class="code-header">
+<span>get_causal_ode_data_framewise.py</span>
+<span class="tag">可运行实现</span>
+</div>
+<pre><code>def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output_folder", type=str)
+    parser.add_argument("--rawdata_path", type=str)
+    parser.add_argument("--generator_ckpt", type=str)
+    parser.add_argument("--guidance_scale", type=float, default=6.0)
+    args = parser.parse_args()
+    launch_distributed_job()
+
+    config = OmegaConf.load(args.config)
+    pipeline = CausalDiffusionInferencePipeline(config, device=device)
+    pipeline.generator.load_state_dict(
+        torch.load(args.generator_ckpt, map_location=device)
+    )
+
+    dataset = load_dataset(args.rawdata_path)
+    for prompt_index, batch in enumerate(dataset):
+        text_prompts = batch["prompts"]
+        clean_latent = batch["clean_latent"].to(device)
+
+        # 从 AR 教师采样 PF-ODE 轨迹
+        # 关键：条件于干净历史帧 x_gt^{&lt;i}
+        noisy_input = []
+        for t in config.denoising_step_list:
+            # AR 教师在干净前缀条件下生成
+            noise = torch.randn_like(clean_latent[:, :chunk_size])
+            noisy_latent = pipeline.ar_teacher_denoise(
+                noise=noise,
+                text_prompts=text_prompts,
+                initial_latent=clean_latent,  # 干净历史帧
+                timestep=t,
+            )
+            noisy_input.append(noisy_latent)
+
+        # 保存配对数据 (x_t^i, x_0^i)
+        noisy_inputs = torch.stack(noisy_input, dim=1)
+        noisy_inputs = noisy_inputs[:, [0, 12, 24, 36, -2, -1]]  # 采样时间步
+        torch.save(
+            {prompt: noisy_inputs.cpu().detach()},
+            os.path.join(args.output_folder, f"{prompt_index:05d}.pt")
+        )</code></pre>
+</div>
+
+<h3>Stage 3：非对称 DMD</h3>
+
+<p>第三阶段沿用 Self Forcing 的非对称 DMD 流程。学生模型在自身的自展开（self-rollout）生成上进行分布匹配，使用 Wan2.1-14B 作为 $s_{\text{real}}$（真实分布的 score 估计器），Wan2.1-1.3B 作为 $s_{\text{fake}}$（学生分布的 score 估计器）。</p>
+
+<div class="math-block">
+<div class="math-label">Equation 2 — DMD 梯度方向</div>
+$$\nabla_\theta \mathbb{E}_t\left[D_{\text{KL}}(p_{\theta,t} \| p_{\text{data},t})\right] = -\mathbb{E}_{\tilde{x}, t, \tilde{x}_t}\left[(s_{\text{real}}(\tilde{x}_t, t) - s_{\text{fake}}(\tilde{x}_t, t)) \frac{\partial \tilde{x}}{\partial \theta}\right]$$
+</div>
+
+<p>DMD 的核心在于通过两个 score 模型的差值来估计 KL 散度的梯度方向，驱动学生分布向数据分布靠拢。<strong>关键区别在于初始化</strong>：Causal Forcing 使用因果 ODE 蒸馏的模型作为初始化（已正确学习 flow map），而 Self Forcing 使用违反帧级注入性的 ODE 初始化（已退化为条件期望）。</p>
+
+<h3>替代方案分析：为什么不直接用 AR 扩散模型初始化 DMD？</h3>
+
+<p>论文附录 C.2 探讨了一个自然的替代方案：跳过 Stage 2，直接用 Stage 1 的多步 AR 扩散模型初始化 DMD。实验表明这比 Self Forcing 有显著提升，但仍不及完整的 Causal Forcing：</p>
+
+<table class="result-table">
+<tr><th>初始化方式</th><th>Total&uarr;</th><th>Dyn.&uarr;</th><th>Vision.&uarr;</th><th>Inst.&uarr;</th></tr>
+<tr><td>Self Forcing ODE + DMD</td><td>82.00</td><td>24</td><td>3.330</td><td>38</td></tr>
+<tr><td>AR Diffusion + DMD</td><td>84.02</td><td>66</td><td>5.863</td><td>48</td></tr>
+<tr class="highlight"><td>Causal ODE + DMD</td><td>84.04</td><td>68</td><td>6.326</td><td>56</td></tr>
+</table>
+
+<p>原因在于：多步 AR 模型在少步采样下存在<strong>条件上下文质量退化</strong>问题——第 $i$ 帧条件于前面帧的少步生成结果（质量较差），而训练时条件于干净前缀。这种质量退化在自回归生成中逐帧累积，导致 chunk 间的突变。因果 ODE 蒸馏通过将多步模型压缩为少步模型，在保持因果一致性的同时消除了这一 mismatch。</p>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH4: TF vs DF ==================== -->
+<div class="chapter" id="ch4">
+<div class="chapter-num">CHAPTER 04</div>
+<h2>Teacher Forcing vs Diffusion Forcing</h2>
+
+<p>Causal Forcing 的 Stage 1 需要训练一个 AR 扩散模型作为教师。社区中存在两种主要的训练范式：<strong>Teacher Forcing (TF)</strong> 和 <strong>Diffusion Forcing (DF)</strong>。论文得出了一个<strong>反直觉的结论</strong>：TF 优于 DF。</p>
+
+<h3>两种训练范式</h3>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="tf-arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#34d399"/>
+</marker>
+<marker id="df-arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#f43f5e"/>
+</marker>
+</defs>
+
+<!-- TF Training -->
+<text x="160" y="20" text-anchor="middle" font-family="Noto Serif SC" font-size="12" font-weight="700" fill="#10b981">Teacher Forcing (训练)</text>
+<rect x="40" y="35" width="240" height="110" rx="8" fill="#d1fae5" opacity="0.4" stroke="#34d399" stroke-width="1"/>
+<!-- Clean prefix -->
+<rect x="55" y="50" width="35" height="25" rx="4" fill="#34d399" opacity="0.3" stroke="#10b981"/>
+<text x="72" y="67" text-anchor="middle" font-size="8" fill="#047857">clean</text>
+<rect x="95" y="50" width="35" height="25" rx="4" fill="#34d399" opacity="0.3" stroke="#10b981"/>
+<text x="112" y="67" text-anchor="middle" font-size="8" fill="#047857">clean</text>
+<!-- Current noisy frame -->
+<rect x="155" y="45" width="45" height="35" rx="4" fill="#a855f7" opacity="0.3" stroke="#9333ea" stroke-width="1.5"/>
+<text x="177" y="67" text-anchor="middle" font-size="8" fill="#7e22ce">x_t^i</text>
+<!-- Arrow from clean to current -->
+<line x1="130" y1="62" x2="150" y2="62" stroke="#34d399" stroke-width="1.5" marker-end="url(#tf-arr)"/>
+<text x="100" y="100" text-anchor="middle" font-size="9" fill="#059669">条件于干净前缀 x_0^{&lt;i}</text>
+<text x="100" y="125" text-anchor="middle" font-size="9" fill="#059669">= 推理时条件</text>
+<!-- Check -->
+<text x="160" y="165" text-anchor="middle" font-size="20" fill="#34d399">&#10003;</text>
+<text x="160" y="185" text-anchor="middle" font-size="10" fill="#059669">训练 = 推理</text>
+
+<!-- DF Training -->
+<text x="530" y="20" text-anchor="middle" font-family="Noto Serif SC" font-size="12" font-weight="700" fill="#f43f5e">Diffusion Forcing (训练)</text>
+<rect x="410" y="35" width="240" height="110" rx="8" fill="#fecdd3" opacity="0.4" stroke="#f43f5e" stroke-width="1"/>
+<!-- Noisy prefix -->
+<rect x="425" y="50" width="35" height="25" rx="4" fill="#a855f7" opacity="0.3" stroke="#9333ea"/>
+<text x="442" y="67" text-anchor="middle" font-size="8" fill="#7e22ce">noisy</text>
+<rect x="465" y="50" width="35" height="25" rx="4" fill="#a855f7" opacity="0.3" stroke="#9333ea"/>
+<text x="482" y="67" text-anchor="middle" font-size="8" fill="#7e22ce">noisy</text>
+<!-- Current noisy frame -->
+<rect x="525" y="45" width="45" height="35" rx="4" fill="#a855f7" opacity="0.3" stroke="#9333ea" stroke-width="1.5"/>
+<text x="547" y="67" text-anchor="middle" font-size="8" fill="#7e22ce">x_t^i</text>
+<!-- Arrow from noisy to current -->
+<line x1="500" y1="62" x2="520" y2="62" stroke="#f43f5e" stroke-width="1.5" marker-end="url(#df-arr)"/>
+<text x="530" y="100" text-anchor="middle" font-size="9" fill="#dc2626">条件于噪声前缀 x_t^{&lt;i}</text>
+<text x="530" y="125" text-anchor="middle" font-size="9" fill="#dc2626">&ne; 推理时条件</text>
+<!-- X -->
+<text x="530" y="165" text-anchor="middle" font-size="20" fill="#f43f5e">&#10007;</text>
+<text x="530" y="185" text-anchor="middle" font-size="10" fill="#dc2626">训练 &ne; 推理</text>
+
+<!-- Inference (shared) -->
+<rect x="180" y="215" width="340" height="50" rx="8" fill="#fef3c7" opacity="0.5" stroke="#fbbf24" stroke-width="1"/>
+<text x="350" y="235" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">推理时：条件于干净前缀 x_0^{&lt;i}</text>
+<text x="350" y="252" text-anchor="middle" font-size="9" fill="#92400e">（前面帧已完全生成）</text>
+</svg>
+</div>
+<p class="svg-caption">SVG 可视化：TF 训练条件与推理一致（绿），DF 训练条件与推理不一致（红）</p>
+
+<h3>理论分析：DF 的分布不匹配</h3>
+
+<p>论文从理论上证明了 DF 在 AR 扩散训练中的劣性：</p>
+
+<div class="math-block">
+<div class="math-label">Proposition 3.4 — AR 扩散强迫的分布不匹配</div>
+$$\mathbb{E}_{y \sim p_{\text{data}}(x_0^{\lt i})}\left[D_{\text{KL}}\left(p_{\text{DF}}(x_0^i \mid y) \| p_{\text{data}}(x_0^i \mid y)\right)\right] \gt 0$$
+</div>
+
+<p>这个命题表明：用 DF 训练的模型在给定干净前缀 $y$ 时，生成的分布 $p_{\text{DF}}(x_0^i | y)$ <strong>不等于</strong>真实数据分布 $p_{\text{data}}(x_0^i | y)$。KL 散度严格大于零，意味着存在不可忽略的分布偏移。</p>
+
+<h3>证明直觉：Markov 链与信息损失</h3>
+
+<p>证明的核心思路是利用 Markov 链的性质。在 DF 训练中，噪声前缀 $Z = x_t^{\lt i}$ 是从干净前缀 $Y = x_0^{\lt i}$ 经前向扩散得到的。因此存在 Markov 链 $X \to Y \to Z$（其中 $X = x_0^i$）。DF 训练的模型学到的是 $p(X|Z)$，但推理时需要的是 $p(X|Y)$。</p>
+
+<p>关键假设是 (A2)：<strong>同一视频中的不同帧不是独立的</strong>，即 $p_{\text{data}}(X|Y)$ 不是几乎处处常数。在这个假设下，通过反证法和条件期望算子的性质，可以证明 $p(X|Z=y) \neq p(X|Y=y)$ 对正测度集成立。</p>
+
+<div class="insight-box">
+<div class="ib-title">跨论文连接：DF 在不同场景下的适用性</div>
+<p>论文附录 C.1 精确界定了 DF 的适用范围。DF 最初是为<strong>双向扩散模型的长视频续写</strong>设计的——推理时将干净视频的尾部帧与噪声拼接，这与训练设置一致，因此不存在 train-inference gap。问题仅出现在<strong>将 DF 用于 AR 扩散训练</strong>时：AR 推理条件于干净前缀，但 DF 训练条件于噪声前缀。CausVid 和 LiveAvatar 等工作采用了这种有缺陷的设置。Causal Forcing 的贡献在于从理论上明确了这一区分。</p>
+</div>
+
+<h3>实验验证</h3>
+
+<div class="fig">
+<img src="assets/fig4_tf_vs_df.webp" alt="Figure 4">
+<div class="fig-caption">Figure 4: TF vs DF 对比。DF 导致视频坍塌（高动态度但低视觉质量），TF 产生更高质量的生成结果</div>
+</div>
+
+<table class="result-table">
+<tr><th>方法</th><th>Total&uarr;</th><th>Quality&uarr;</th><th>Semantic&uarr;</th><th>Dyn.&uarr;</th><th>Vision.&uarr;</th><th>Inst.&uarr;</th></tr>
+<tr><td>Diffusion Forcing</td><td>81.76</td><td>82.52</td><td>78.71</td><td>60</td><td>1.583</td><td>30</td></tr>
+<tr class="highlight"><td>Teacher Forcing</td><td>82.12</td><td>82.73</td><td>79.67</td><td>50</td><td>3.343</td><td>32</td></tr>
+</table>
+
+<p>值得注意的是，DF 获得了更高的 Dynamic Degree（60 vs 50），但这并非真正的动态性，而是<strong>视频坍塌导致的运动指标病态膨胀</strong>——坍塌的视频会产生不自然的高频运动，被 Dynamic Degree 指标误判为"动态"。VisionReward 的巨大差距（1.583 vs 3.343，提升 111.2%）才是真实质量的体现。</p>
+
+<div class="warn-box">
+<p><strong>反幻觉验证</strong>：论文还对比了其他 AR 训练策略（PFVG、BAgger、Resampling Forcing），它们在 5s 视频设置下均未显著优于 TF。这些方法主要针对长视频训练设计，在短视频场景下优势不明显。论文未过度声称 TF 在所有场景下最优，而是精确限定了适用范围。</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH5: 因果CD ==================== -->
+<div class="chapter" id="ch5">
+<div class="chapter-num">CHAPTER 05</div>
+<h2>因果一致性蒸馏扩展</h2>
+
+<p>Causal Forcing 的理论洞察不仅适用于 ODE 蒸馏，还自然扩展到一致性蒸馏（Consistency Distillation, CD）。论文提出了<strong>首个因果一致性蒸馏框架</strong>，并证明它优于使用双向教师的不对称 CD。</p>
+
+<h3>5.1 从 ODE 蒸馏到一致性蒸馏</h3>
+
+<p>ODE 蒸馏可以看作 CD 的简化形式。标准 CD 通过学习一个 flow map $G_\theta: (x_t, t) \mapsto x_0$，在相邻时间步之间保持一致性：</p>
+
+<div class="math-block">
+<div class="math-label">Equation 9 — 因果一致性蒸馏目标</div>
+$$\theta^* = \min_\theta \mathbb{E}_{x_{\text{gt}}, \epsilon, t, i}\left[w(t) \, d\left(G_\theta(x_t^i, x_{\text{gt}}^{\lt i}, t), \; G_{\theta^-}(\hat{x}_{t-\Delta t}^i, x_{\text{gt}}^{\lt i}, t - \Delta t)\right)\right]$$
+</div>
+
+<p>其中 $\hat{x}_{t-\Delta t}^i$ 通过 AR 教师模型从 $x_t^i$ 求解一步 ODE 得到，$\theta^-$ 是 $\theta$ 的运行平均（stop-gradient），$d(\cdot, \cdot)$ 是所选范数下的距离。</p>
+
+<h3>5.2 因果 CD vs 不对称 CD</h3>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="ccd-good" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#34d399" stop-opacity="0.2"/><stop offset="100%" stop-color="#34d399" stop-opacity="0.05"/>
+</linearGradient>
+<linearGradient id="acd-bad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#f43f5e" stop-opacity="0.2"/><stop offset="100%" stop-color="#f43f5e" stop-opacity="0.05"/>
+</linearGradient>
+</defs>
+
+<!-- Asymmetric CD -->
+<rect x="20" y="20" width="310" height="200" rx="10" fill="url(#acd-bad)" stroke="#f43f5e" stroke-width="1.5" stroke-dasharray="4,3"/>
+<text x="175" y="45" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#dc2626">不对称 CD (Asymmetric CD)</text>
+<text x="175" y="70" text-anchor="middle" font-size="11" fill="#787887">教师：双向模型</text>
+<text x="175" y="90" text-anchor="middle" font-size="11" fill="#787887">学生：AR 模型</text>
+<text x="175" y="115" text-anchor="middle" font-size="11" fill="#f43f5e">PF-ODE 违反帧级注入性</text>
+<text x="175" y="135" text-anchor="middle" font-size="11" fill="#f43f5e">&rarr; 一致性目标退化</text>
+<text x="175" y="160" text-anchor="middle" font-size="11" fill="#f43f5e">&rarr; 模糊 + 突变</text>
+<text x="175" y="195" text-anchor="middle" font-size="10" fill="#dc2626" font-weight="600">VisionReward: -7.983</text>
+
+<!-- Causal CD -->
+<rect x="370" y="20" width="310" height="200" rx="10" fill="url(#ccd-good)" stroke="#34d399" stroke-width="1.5"/>
+<text x="525" y="45" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#059669">因果 CD (Causal CD)</text>
+<text x="525" y="70" text-anchor="middle" font-size="11" fill="#787887">教师：AR 模型 (TF训练)</text>
+<text x="525" y="90" text-anchor="middle" font-size="11" fill="#787887">学生：AR 模型</text>
+<text x="525" y="115" text-anchor="middle" font-size="11" fill="#10b981">PF-ODE 满足帧级注入性</text>
+<text x="525" y="135" text-anchor="middle" font-size="11" fill="#10b981">&rarr; 一致性目标正确</text>
+<text x="525" y="160" text-anchor="middle" font-size="11" fill="#10b981">&rarr; 更清晰 + 稳定</text>
+<text x="525" y="195" text-anchor="middle" font-size="10" fill="#059669" font-weight="600">VisionReward: 1.798</text>
+</svg>
+</div>
+<p class="svg-caption">SVG 可视化：不对称 CD（左）因帧级非注入性导致退化，因果 CD（右）正确学习 flow map</p>
+
+<h3>5.3 边界条件的简化设计</h3>
+
+<p>CD 要求边界条件 $G_\theta(x_i, x_{\text{gt}}^{\lt i}, 0) \equiv x_i$，通常通过包装网络 $F_\theta$ 实现：</p>
+
+<div class="math-block">
+<div class="math-label">Equation 30 — 标准 CD 包装网络</div>
+$$G_\theta(x_i, x_{\text{gt}}^{\lt i}, t) = c_{\text{skip}}(t) \, x_i + c_{\text{out}}(t) \, F_\theta(x_i, x_{\text{gt}}^{\lt i}, t)$$
+</div>
+
+<p>但论文发现，由于使用 flow matching（v-prediction 参数化），$x_0$-prediction 形式天然满足边界条件：</p>
+
+<div class="math-block">
+<div class="math-label">Equation 31 — 简化的 CD 参数化（v-prediction）</div>
+$$G_\theta(x_i, x_{\text{gt}}^{\lt i}, t) = x_i - t \, v_\theta(x_i, x_{\text{gt}}^{\lt i}, t)$$
+</div>
+
+<p>当 $t = 0$ 时，$G_\theta(x_i, \cdot, 0) = x_i - 0 \cdot v_\theta = x_i$，自然满足边界条件。这种简化设计避免了额外的网络结构，但论文也承认这可能不是最优的，留有改进空间。</p>
+
+<div class="insight-box">
+<div class="ib-title">架构洞察：因果视角统一了 ODE 蒸馏和 CD</div>
+<p>Causal Forcing 的理论贡献超越了具体的蒸馏方法。其核心洞察——<strong>AR 学生需要 AR 教师来保证帧级注入性</strong>——同时适用于 ODE 蒸馏和 CD。这是因为两者的数学基础都依赖于 PF-ODE 的 flow map 具有唯一性。只要蒸馏目标是 AR 学生，无论使用 ODE 回归还是 CD 一致性，都必须使用 AR 教师来生成配对数据。这一统一视角为未来的蒸馏方法设计提供了理论指导。</p>
+</div>
+
+<h3>5.4 实验结果</h3>
+
+<table class="result-table">
+<tr><th>方法</th><th>Total&uarr;</th><th>Quality&uarr;</th><th>Semantic&uarr;</th><th>Dyn.&uarr;</th><th>Vision.&uarr;</th><th>Inst.&uarr;</th></tr>
+<tr><td>不对称 CD</td><td>79.07</td><td>79.99</td><td>75.37</td><td>59</td><td>-7.983</td><td>-42</td></tr>
+<tr class="highlight"><td>因果 CD</td><td>81.48</td><td>82.13</td><td>78.88</td><td>51</td><td>1.798</td><td>18</td></tr>
+</table>
+
+<p>因果 CD 在 VisionReward 上提升了 9.781 分，Instruction Following 提升了 60 分。但论文坦诚指出，当前的因果 CD 仍不及 score distillation（DMD），因为它直接采用了 vanilla LCM 设置，是一个"初步实现"。这一诚实的评估避免了过度声称。</p>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH6: 实验 ==================== -->
+<div class="chapter" id="ch6">
+<div class="chapter-num">CHAPTER 06</div>
+<h2>实验结果与分析</h2>
+
+<h3>6.1 主要定量结果</h3>
+
+<div class="fig">
+<img src="assets/table1_comparison.webp" alt="Table 1">
+<div class="fig-caption">Table 1: 与现有方法的定量比较。Causal Forcing 在所有指标上一致优于所有基线</div>
+</div>
+
+<div class="stats-grid">
+<div class="stat-card">
+<div class="stat-val">19.3%</div>
+<div class="stat-label">Dynamic Degree 提升</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">8.7%</div>
+<div class="stat-label">VisionReward 提升</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">16.7%</div>
+<div class="stat-label">Instruction Following 提升</div>
+</div>
+</div>
+
+<p>在<strong>相同训练预算</strong>下（同为 3K 步 ODE 初始化），Causal Forcing 全面超越 Self Forcing。更值得注意的是，Causal Forcing 在 Dynamic Degree（68 vs 57）、VisionReward（6.326 vs 5.820）和 Instruction Following（56 vs 48）上均取得最优，同时保持了相同的推理延迟（0.69s）和吞吐量（17.0 FPS）。</p>
+
+<h3>6.2 性能雷达图</h3>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+<!-- Radar chart center -->
+<defs>
+<polygon id="grid" points="" />
+</defs>
+<g transform="translate(200,200)">
+<!-- Grid hexagons -->
+<polygon points="0,-150 130,-75 130,75 0,150 -130,75 -130,-75" fill="none" stroke="#e9d5ff" stroke-width="1"/>
+<polygon points="0,-120 104,-60 104,60 0,120 -104,60 -104,-60" fill="none" stroke="#e9d5ff" stroke-width="1"/>
+<polygon points="0,-90 78,-45 78,45 0,90 -78,45 -78,-45" fill="none" stroke="#e9d5ff" stroke-width="1"/>
+<polygon points="0,-60 52,-30 52,30 0,60 -52,30 -52,-30" fill="none" stroke="#e9d5ff" stroke-width="1"/>
+<polygon points="0,-30 26,-15 26,15 0,30 -26,15 -26,-15" fill="none" stroke="#e9d5ff" stroke-width="1"/>
+<!-- Axes -->
+<line x1="0" y1="0" x2="0" y2="-150" stroke="#d8b4fe" stroke-width="1"/>
+<line x1="0" y1="0" x2="130" y2="-75" stroke="#d8b4fe" stroke-width="1"/>
+<line x1="0" y1="0" x2="130" y2="75" stroke="#d8b4fe" stroke-width="1"/>
+<line x1="0" y1="0" x2="0" y2="150" stroke="#d8b4fe" stroke-width="1"/>
+<line x1="0" y1="0" x2="-130" y2="75" stroke="#d8b4fe" stroke-width="1"/>
+<line x1="0" y1="0" x2="-130" y2="-75" stroke="#d8b4fe" stroke-width="1"/>
+
+<!-- Labels -->
+<text x="0" y="-165" text-anchor="middle" font-size="10" fill="#787887" font-weight="600">Total</text>
+<text x="145" y="-80" text-anchor="middle" font-size="10" fill="#787887" font-weight="600">Quality</text>
+<text x="145" y="85" text-anchor="middle" font-size="10" fill="#787887" font-weight="600">Semantic</text>
+<text x="0" y="170" text-anchor="middle" font-size="10" fill="#787887" font-weight="600">Dynamic</text>
+<text x="-145" y="85" text-anchor="middle" font-size="10" fill="#787887" font-weight="600">Vision</text>
+<text x="-145" y="-80" text-anchor="middle" font-size="10" fill="#787887" font-weight="600">Instruct</text>
+
+<!-- Self Forcing data (normalized to 0-150 scale) -->
+<!-- Total:83.74/85*150=148, Quality:84.48/85*150=149, Semantic:80.77/85*150=143, Dynamic:57/70*150=122, Vision:5.82/7*150=125, Instruct:48/60*150=120 -->
+<polygon points="0,-148 128,-74 128,74 0,122 -107,62 -104,-60" fill="rgba(192,132,252,0.15)" stroke="#a855f7" stroke-width="2"/>
+<text x="0" y="-155" text-anchor="middle" font-size="9" fill="#a855f7">SF</text>
+
+<!-- Causal Forcing data -->
+<!-- Total:84.04/85*150=148, Quality:84.59/85*150=149, Semantic:81.84/85*150=145, Dynamic:68/70*150=146, Vision:6.326/7*150=136, Instruct:56/60*150=140 -->
+<polygon points="0,-148 129,-75 129,75 0,146 -118,68 -121,-70" fill="rgba(52,211,153,0.15)" stroke="#34d399" stroke-width="2"/>
+<text x="5" y="-160" text-anchor="middle" font-size="9" fill="#34d399">Ours</text>
+</g>
+</svg>
+</div>
+<p class="svg-caption">SVG 可视化：性能雷达图（紫色=Self Forcing，绿色=Causal Forcing），Causal Forcing 在动态度和指令遵循上优势最明显</p>
+
+<h3>6.3 消融实验</h3>
+
+<div class="fig">
+<img src="assets/table2_ablation.webp" alt="Table 2">
+<div class="fig-caption">Table 2: 消融实验。涵盖 AR 训练策略、score distillation 和 consistency distillation 的对比</div>
+</div>
+
+<p>消融实验的几个关键发现：</p>
+
+<p><strong>(1) TF vs DF（AR 训练阶段）</strong>：TF 在 VisionReward 上比 DF 提升 111.2%。DF 虽然获得更高的 Dynamic Degree（60 vs 50），但这源于视频坍塌导致的病态运动。</p>
+
+<p><strong>(2) 因果 ODE vs Self Forcing ODE（chunk-wise）</strong>：因果 ODE 初始化在 DMD 后全面优于 Self Forcing 的 ODE 初始化——VisionReward 提升 90.0%，Dynamic Degree 提升 183.3%，Instruction Following 提升 47.4%。</p>
+
+<p><strong>(3) 帧级 vs chunk-wise</strong>：在 frame-wise 设置下，差距更为悬殊——Dynamic Degree 提升 3100%（从 2 到 64），VisionReward 提升 218.0%。这表明帧级别设置下架构鸿沟更加严重，Causal Forcing 的优势也更突出。</p>
+
+<div class="insight-box">
+<div class="ib-title">架构洞察：为什么 chunk-wise 优于 frame-wise</div>
+<p>Chunk-wise 设置（每个 chunk 包含 3 个 latent frame）比 frame-wise 设置表现更好，原因在于<strong>chunk 内部的帧可以互相参考</strong>，部分缓解了因果注意力的信息限制。在 frame-wise 设置下，每帧完全独立生成，架构鸿沟的影响被放大。Causal Forcing 在两种设置下都显著优于 Self Forcing，但 frame-wise 的提升幅度更大（3100% vs 183.3%），说明帧级注入性在更严格的因果约束下更加关键。</p>
+</div>
+
+<h3>6.4 定性对比</h3>
+
+<div class="fig">
+<img src="assets/fig5_pipeline.webp" alt="Figure 5">
+<div class="fig-caption">Figure 5: Self Forcing vs Causal Forcing 的 DMD 结果对比。Self Forcing 的 ODE 初始化导致弱动态和伪影，因果 ODE 初始化实现更强动态和更高视觉保真度</div>
+</div>
+
+<div class="fig">
+<img src="assets/fig6_qualitative.webp" alt="Figure 6">
+<div class="fig-caption">Figure 6: 与现有方法的定性比较。Causal Forcing 在动态度和视觉质量上显著超越 CausVid 和 Self Forcing，匹配甚至超越双向模型 Wan2.1</div>
+</div>
+
+<h3>6.5 初始化消融</h3>
+
+<p>论文附录 C.3 还验证了一个关键问题：性能差异是来自配对数据构建方式还是学生初始化？作者使用 AR 教师生成的配对数据 $D_{\text{Causal}}$，但用双向模型初始化学生。结果显示性能与 AR 初始化相当，仍远优于 Self Forcing。</p>
+
+<div class="insight-box">
+<div class="ib-title">批判评估：性能差异的根源是配对数据，而非初始化</div>
+<p>这个消融实验精确定位了 Causal Forcing 优势的来源：<strong>不是学生模型的初始化权重，而是 ODE 配对数据的构建方式</strong>。只要配对数据来自 AR 教师（满足帧级注入性），即使学生从双向模型初始化也能获得优秀性能。反之，即使学生从 AR 模型初始化，如果配对数据来自双向教师（违反帧级注入性），性能仍然不佳。这验证了论文核心论点——帧级注入性是 ODE 蒸馏成功的必要条件。</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH7: 代码实现 ==================== -->
+<div class="chapter" id="ch7">
+<div class="chapter-num">CHAPTER 07</div>
+<h2>代码实现深度剖析</h2>
+
+<p>本章深入分析 Causal Forcing 的官方代码实现（<a href="https://github.com/thu-ml/Causal-Forcing" style="color:var(--lav-600)">GitHub 仓库</a>），揭示论文方法与工程实现之间的对应关系。</p>
+
+<h3>7.1 系统架构总览</h3>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 760 260" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="code-grad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#f3e8ff" stop-opacity="0.8"/><stop offset="100%" stop-color="#e9d5ff" stop-opacity="0.3"/>
+</linearGradient>
+</defs>
+
+<!-- Model layer -->
+<rect x="20" y="10" width="720" height="50" rx="8" fill="url(#code-grad)" stroke="#c084fc" stroke-width="1"/>
+<text x="380" y="30" text-anchor="middle" font-family="Noto Serif SC" font-size="12" font-weight="700" fill="#7e22ce">Model Layer (model/base.py)</text>
+<text x="380" y="48" text-anchor="middle" font-size="10" fill="#9333ea">BaseModel &rarr; WanDiffusionWrapper (generator/real_score/fake_score) + WanTextEncoder + WanVAE</text>
+
+<!-- Training layer -->
+<rect x="20" y="75" width="720" height="80" rx="8" fill="url(#code-grad)" stroke="#c084fc" stroke-width="1"/>
+<text x="380" y="95" text-anchor="middle" font-family="Noto Serif SC" font-size="12" font-weight="700" fill="#7e22ce">Training Layer</text>
+<rect x="40" y="105" width="200" height="40" rx="6" fill="#d1fae5" stroke="#34d399" stroke-width="1"/>
+<text x="140" y="122" text-anchor="middle" font-size="10" fill="#059669" font-weight="600">trainer/ode.py</text>
+<text x="140" y="137" text-anchor="middle" font-size="9" fill="#059669">ODE Regression (Stage 2)</text>
+<rect x="280" y="105" width="200" height="40" rx="6" fill="#fef3c7" stroke="#fbbf24" stroke-width="1"/>
+<text x="380" y="122" text-anchor="middle" font-size="10" fill="#d97706" font-weight="600">trainer/distillation.py</text>
+<text x="380" y="137" text-anchor="middle" font-size="9" fill="#d97706">DMD (Stage 3)</text>
+<rect x="520" y="105" width="200" height="40" rx="6" fill="#e9d5ff" stroke="#a855f7" stroke-width="1"/>
+<text x="620" y="122" text-anchor="middle" font-size="10" fill="#7e22ce" font-weight="600">get_causal_ode_data.py</text>
+<text x="620" y="137" text-anchor="middle" font-size="9" fill="#7e22ce">ODE 轨迹采样 (Stage 2 data)</text>
+
+<!-- Inference layer -->
+<rect x="20" y="170" width="720" height="50" rx="8" fill="url(#code-grad)" stroke="#c084fc" stroke-width="1"/>
+<text x="380" y="190" text-anchor="middle" font-family="Noto Serif SC" font-size="12" font-weight="700" fill="#7e22ce">Inference Layer (inference.py)</text>
+<text x="380" y="208" text-anchor="middle" font-size="10" fill="#9333ea">CausalInferencePipeline / CausalDiffusionInferencePipeline &rarr; 4-step generation</text>
+
+<!-- Data flow arrows -->
+<line x1="140" y1="55" x2="140" y2="72" stroke="#34d399" stroke-width="1.5" marker-end="url(#flow-arr2)"/>
+<line x1="380" y1="55" x2="380" y2="72" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#flow-arr2)"/>
+<line x1="620" y1="55" x2="620" y2="72" stroke="#a855f7" stroke-width="1.5" marker-end="url(#flow-arr2)"/>
+<line x1="380" y1="155" x2="380" y2="167" stroke="#c084fc" stroke-width="1.5" marker-end="url(#flow-arr2)"/>
+
+<defs>
+<marker id="flow-arr2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+<path d="M0,0 L8,4 L0,8" fill="#a855f7"/>
+</marker>
+</defs>
+</svg>
+</div>
+<p class="svg-caption">SVG 可视化：代码架构层次与数据流</p>
+
+<h3>7.2 ODE 回归训练器</h3>
+
+<p>以下代码展示了 Stage 2 的核心训练逻辑，对应论文 Eq 8 的因果 ODE 蒸馏目标：</p>
+
+<div class="code-block">
+<div class="code-header">
+<span>trainer/ode.py — train_one_step</span>
+<span class="tag">可运行实现</span>
+</div>
+<pre><code>class Trainer:
+    def __init__(self, config):
+        self.config = config
+        self.step = 0
+        self.device = config.device
+        self.dtype = torch.bfloat16 if config.mixed_precision else torch.float32
+        
+        # 初始化 ODE 回归模型
+        self.model = ODERegression(config, device=self.device)
+        
+        # 优化器配置：仅训练 generator 参数
+        self.generator_optimizer = torch.optim.AdamW(
+            [param for param in self.model.generator.parameters() 
+             if param.requires_grad],
+            lr=config.lr, 
+            betas=(config.beta1, config.beta2), 
+            weight_decay=config.weight_decay
+        )
+        self.max_grad_norm = config.max_grad_norm
+
+    def train_one_step(self, loss_scale=1.0):
+        self.model.eval()
+        
+        # 从预采样的 ODE 轨迹中加载配对数据
+        batch = next(self.dataloader)
+        text_prompts = batch["prompts"]
+        # ode_latent 包含不同时间步的噪声中间态 x_t^i
+        ode_latent = batch["ode_latent"].to(
+            device=self.device, dtype=self.dtype
+        )
+        
+        # 编码文本条件
+        with torch.no_grad():
+            conditional_dict = self.model.text_encoder(
+                text_prompts=text_prompts
+            )
+        
+        # 计算 MSE 回归损失 (对应 Eq 8)
+        # generator_loss = ||G_θ(x_t^i, x_gt^{&lt;i}, t) - x_0^i||^2
+        generator_loss, log_dict = self.model.generator_loss(
+            ode_latent=ode_latent,
+            conditional_dict=conditional_dict
+        )
+        
+        # 反向传播 + 梯度裁剪
+        self.generator_optimizer.zero_grad()
+        (generator_loss * loss_scale).backward()
+        generator_grad_norm = self.model.generator.clip_grad_norm_(
+            self.max_grad_norm
+        )
+        self.generator_optimizer.step()
+        
+        return log_dict</code></pre>
+</div>
+
+<p>关键实现细节：<strong>ode_latent</strong> 是预采样的 PF-ODE 轨迹（来自 AR 教师），包含不同时间步的噪声中间态。训练时直接回归干净目标，无需在线采样教师模型——这是 ODE 蒸馏（回归式）区别于 CD（一致性式）的核心特征。</p>
+
+<h3>7.3 DMD 训练器</h3>
+
+<p>Stage 3 的 DMD 训练采用 generator-critic 交替训练策略：</p>
+
+<div class="code-block">
+<div class="code-header">
+<span>trainer/distillation.py — fwdbwd_one_step</span>
+<span class="tag">可运行实现</span>
+</div>
+<pre><code>class Trainer:
+    def __init__(self, config):
+        self.config = config
+        self.step = 0
+        
+        # 根据 distribution_loss 类型选择模型
+        if config.distribution_loss == "dmd":
+            self.model = DMD(config, device=self.device)
+        
+        # Generator 优化器（学生模型）
+        self.generator_optimizer = torch.optim.AdamW(
+            [param for param in self.model.generator.parameters() 
+             if param.requires_grad],
+            lr=config.lr, 
+            betas=(config.beta1, config.beta2),
+            weight_decay=config.weight_decay
+        )
+        # Critic 优化器（fake score 模型）
+        self.critic_optimizer = torch.optim.AdamW(
+            [param for param in self.model.fake_score.parameters() 
+             if param.requires_grad],
+            lr=config.lr_critic,
+            betas=(config.beta1_critic, config.beta2_critic),
+            weight_decay=config.weight_decay
+        )
+
+    def fwdbwd_one_step(self, batch, train_generator, clean_latent=None):
+        # ... (预处理条件字典)
+        
+        if train_generator:
+            # Generator 训练步：最小化 KL 散度
+            # 对应 Eq 2 中的梯度方向
+            generator_loss, generator_log_dict = self.model.generator_loss(
+                image_or_video_shape=image_or_video_shape,
+                conditional_dict=conditional_dict,
+                unconditional_dict=unconditional_dict,
+                clean_latent=clean_latent,
+                initial_latent=image_latent if self.config.i2v else None
+            )
+            generator_loss.backward()
+            return generator_log_dict
+        else:
+            # Critic 训练步：训练 fake score 模型
+            # 使 s_fake 更好地估计学生分布的 score
+            critic_loss, critic_log_dict = self.model.critic_loss(
+                image_or_video_shape=image_or_video_shape,
+                conditional_dict=conditional_dict,
+                unconditional_dict=unconditional_dict,
+                clean_latent=clean_latent
+            )
+            critic_loss.backward()
+            return critic_log_dict</code></pre>
+</div>
+
+<p>DMD 训练的关键在于<strong>交替优化</strong>：generator 步通过 $s_{\text{real}} - s_{\text{fake}}$ 的差值估计 KL 梯度方向来更新学生模型；critic 步训练 $s_{\text{fake}}$ 以更准确地估计当前学生分布的 score。这种对抗式训练确保分布匹配的准确性。</p>
+
+<h3>7.4 推理流程</h3>
+
+<div class="code-block">
+<div class="code-header">
+<span>inference.py — 主推理流程</span>
+<span class="tag">可运行实现</span>
+</div>
+<pre><code>def main():
+    # ... (参数解析和初始化)
+    
+    # 根据配置选择推理管线
+    # CausalInferencePipeline: 支持自定义去噪步列表（4步）
+    # CausalDiffusionInferencePipeline: 标准扩散推理
+    pipeline = CausalInferencePipeline(config, device=device) \
+        if hasattr(config, 'denoising_step_list') \
+        else CausalDiffusionInferencePipeline(config, device=device)
+    
+    # ... (加载模型权重)
+    
+    # 因果推理：逐 chunk 生成，支持 KV 缓存
+    video, latents = pipeline.inference(
+        noise=sampled_noise,
+        text_prompts=prompts,
+        return_latents=True,
+        initial_latent=initial_latent,  # I2V 时的初始帧
+        report_timing=sample_report_timing,
+    )
+    
+    # 保存视频（16 FPS）
+    write_video(output_path, video[0], fps=16)</code></pre>
+</div>
+
+<p>推理使用 4 步采样，时间步为 $[1.0, 0.9375, 0.8333, 0.625]$。CausalInferencePipeline 支持<strong>时序 KV 缓存</strong>——已生成帧的 KV 对在后续 chunk 生成时被复用，避免重复计算，这是实现实时推理（17 FPS）的关键工程优化。</p>
+
+<h3>7.5 模型初始化</h3>
+
+<div class="code-block">
+<div class="code-header">
+<span>model/base.py — BaseModel 初始化</span>
+<span class="tag">示意性实现</span>
+</div>
+<pre><code>class BaseModel(nn.Module):
+    def __init__(self, args, device):
+        super().__init__()
+        self._initialize_models(args, device)
+        self.device = device
+        self.args = args
+        self.dtype = torch.bfloat16 if args.mixed_precision else torch.float32
+    
+    def _initialize_models(self, args, device):
+        self.real_model_name = getattr(args, "real_name", "Wan2.1-T2V-1.3B")
+        self.fake_model_name = getattr(args, "fake_name", "Wan2.1-T2V-1.3B")
+        
+        # 关键：iscausal 标志控制注意力类型
+        # generator=True（因果），real_score/fake_score=False（双向）
+        self.iscausal = getattr(args, "causal", True)
+        
+        # 学生模型：因果注意力
+        self.generator = WanDiffusionWrapper(
+            **getattr(args, "model_kwargs", {}), 
+            is_causal=self.iscausal
+        )
+        # 真实分布 score 估计器：双向注意力
+        self.real_score = WanDiffusionWrapper(
+            model_name=self.real_model_name, 
+            is_causal=False
+        )
+        # 学生分布 score 估计器：双向注意力
+        self.fake_score = WanDiffusionWrapper(
+            model_name=self.fake_model_name, 
+            is_causal=False
+        )
+        
+        # 文本编码器和 VAE
+        self.text_encoder = WanTextEncoder()
+        self.vae = WanVAEWrapper()
+        self.scheduler = self.generator.get_scheduler()</code></pre>
+</div>
+
+<p>关键设计：<strong>generator 使用因果注意力（is_causal=True），而 real_score 和 fake_score 使用双向注意力（is_causal=False）</strong>。这体现了非对称 DMD 的设计哲学——学生模型需要因果约束以支持流式生成，但 score 估计器只需要评估单帧质量，不需要因果约束。real_score 使用更大的 Wan2.1-14B 模型以提供更准确的真实分布估计。</p>
+
+<div class="insight-box">
+<div class="ib-title">设计 Rationale：为什么 score 估计器不需要因果注意力</div>
+<p>DMD 中 $s_{\text{real}}$ 和 $s_{\text{fake}}$ 的作用是估计给定噪声样本 $\tilde{x}_t$ 的 score 函数——即数据分布在该点的梯度。这个估计本质上是<strong>单帧级别</strong>的操作，不涉及帧间因果关系。使用双向注意力的 score 估计器可以更准确地建模帧间依赖（因为训练时有完整视频），从而提供更精确的分布匹配信号。这种"学生因果、评估器双向"的非对称设计是 Causal Forcing（以及 Self Forcing）高效蒸馏的关键工程选择。</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH8: 自主科研问题 ==================== -->
+<div class="chapter" id="ch8">
+<div class="chapter-num">CHAPTER 08</div>
+<h2>自主科研问题</h2>
+
+<p>基于对 Causal Forcing 的深入分析，我们提出以下五个未解问题，每个都附有理论分析和可能的研究方向。</p>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 01</div>
+<h4>帧级注入性是否可以松弛为"近似注入性"？</h4>
+<p>Causal Forcing 要求严格满足帧级注入性（Definition 3.1），即相同 $x_t^i$ 必须映射到完全相同的 $x_0^i$。但实际中，双向模型的 PF-ODE 对未来帧的依赖程度可能因帧内容而异——静态背景帧的依赖较弱，动态前景帧的依赖较强。能否定义一个"近似注入性"度量（如条件方差的上界），并在该度量满足阈值时允许使用双向教师？这将扩大可选教师模型的范围。理论上的挑战在于：即使条件方差很小，MSE 回归仍会产生偏差，需要量化这种偏差与生成质量之间的关系。</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 02</div>
+<h4>Causal CD 能否替代 Causal ODE 作为 DMD 的初始化？</h4>
+<p>论文提到因果 CD 可以作为 ODE 蒸馏的替代品用于 DMD 初始化，但留作未来工作。当前因果 CD 使用 vanilla LCM，性能不及 score distillation。如果采用更先进的 CD 方法（如 sCM、Mean Flows），因果 CD 是否能达到甚至超越因果 ODE？这需要解决两个挑战：(1) CD 的一致性损失在因果设置下的稳定性；(2) CD 的边界条件在 v-prediction 参数化下的最优设计（论文的 Eq 31 是简化版，可能非最优）。</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 03</div>
+<h4>多帧 chunk 级别的注入性条件如何形式化？</h4>
+<p>论文的 Lemma B.1 将帧级注入性推广到 chunk 级别（将 $k$ 个连续帧视为一个单元），但实际实现中每个 chunk 包含 3 个 latent frame。问题是：chunk 级别的注入性条件是否比帧级别更宽松？如果 chunk 内部使用双向注意力（如当前实现），但 chunk 间使用因果注意力，那么注入性要求是针对 chunk 整体还是 chunk 内每个帧？这个形式化对于设计混合注意力模式（如 sparse attention）的 AR 模型至关重要。</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 04</div>
+<h4>架构鸿沟是否存在于其他模态的 AR 蒸馏中？</h4>
+<p>Causal Forcing 的理论框架是否适用于音频生成、3D 点云生成或文本到 3D 的 AR 蒸馏？这些领域同样存在双向模型到 AR 模型的蒸馏需求。关键在于：其他模态的"帧"定义不同（音频的帧是短时间窗，3D 的帧是空间区块），其 PF-ODE 的注入性性质可能不同。特别是 3D 生成中，空间上的非因果性（一个区域的去噪可以参考其他区域）与时间上的因果性（只能参考过去）形成混合约束，帧级注入性的理论需要推广。</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 05</div>
+<h4>能否设计无需 AR 教师的帧级注入性保证？</h4>
+<p>Causal Forcing 需要先训练一个 AR 扩散模型作为教师，这增加了训练成本（额外 2K 步）。能否设计一种方法，直接从双向模型构建满足帧级注入性的配对数据？一个可能的方向是：<strong>条件化双向模型的 PF-ODE 采样</strong>——固定未来帧为某个参考值（如零或均值），使得对第 $i$ 帧的去噪不再依赖于未来帧的变化。但这会引入分布偏移（因为固定未来帧不服从数据分布）。另一个方向是使用变分推断来 marginalize 掉未来帧的影响，但这可能导致高方差估计。这个问题的解决将简化 Causal Forcing 的训练流程。</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- Summary -->
+<div class="chapter">
+<div class="chapter-num">SUMMARY</div>
+<h2>总结</h2>
+
+<p>Causal Forcing 的核心贡献不在于提出一个新的训练技巧，而在于<strong>从理论上诊断了现有 AR 扩散蒸馏方法的根本缺陷</strong>，并给出了基于帧级注入性的正确解决方案。论文的三个关键洞察形成了完整的逻辑链：</p>
+
+<p><strong>(1) 诊断</strong>：Self Forcing 的 ODE 蒸馏使用双向教师生成配对数据，违反了帧级注入性，导致 MSE 回归退化为条件期望，产生模糊视频。</p>
+
+<p><strong>(2) 治疗</strong>：使用 AR 教师生成 ODE 配对数据，天然满足帧级注入性，使学生能够准确学习 flow map。</p>
+
+<p><strong>(3) 预防</strong>：Teacher Forcing 比 Diffusion Forcing 更适合 AR 扩散训练，因为它消除了训练-推理分布不匹配。</p>
+
+<p>这三个洞察构成了一个<strong>理论驱动的方法设计范式</strong>——先理解为什么现有方法失败（数学分析），再设计正确的解决方案（因果 ODE 蒸馏），最后选择最优的训练策略（Teacher Forcing）。这种范式对未来的蒸馏方法设计具有指导意义。</p>
+
+</div>
+
+</div>
+
+<!-- Footer -->
+<footer class="footer">
+<p>Causal Forcing: Autoregressive Diffusion Distillation Done Right &middot; ICML 2026</p>
+<p>论文精读博客 &middot; 基于论文原文和官方代码实现</p>
+</footer>
+
+</body>
+</html>

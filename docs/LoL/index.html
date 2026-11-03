@@ -1,0 +1,1575 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LoL：比更长还长，将视频生成扩展至12小时 | 论文精读</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;600;700;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true
+  },
+  options: {
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+  },
+  chtml: { scale: 1.05 },
+  startup: { typeset: true }
+};
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+<script>
+// CDN fallback
+window.addEventListener('error', function(e) {
+  if (e.target && e.target.id === 'MathJax-script') {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+    s.async = true;
+    s.id = 'MathJax-script-fallback';
+    document.head.appendChild(s);
+  }
+}, true);
+setTimeout(function() {
+  if (!window.MathJax || !window.MathJax.startup || !window.MathJax.startup.promise) {
+    var existing = document.getElementById('MathJax-script-fallback');
+    if (!existing) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+      s.async = true;
+      s.id = 'MathJax-script-fallback';
+      document.head.appendChild(s);
+    }
+  }
+}, 5000);
+</script>
+<style>
+:root {
+  --lav-50:#faf5ff;--lav-100:#f3e8ff;--lav-200:#e9d5ff;--lav-300:#d8b4fe;
+  --lav-400:#c084fc;--lav-500:#a855f7;--lav-600:#9333ea;--lav-700:#7e22ce;
+  --coral-100:#ffe4e6;--coral-200:#fecdd3;--coral-300:#fda4af;--coral-400:#fb7185;
+  --coral-500:#f43f5e;
+  --mint-100:#d1fae5;--mint-200:#a7f3d0;--mint-300:#6ee7b7;--mint-400:#34d399;
+  --mint-500:#10b981;
+  --amber-100:#fef3c7;--amber-200:#fde68a;--amber-400:#fbbf24;--amber-500:#f59e0b;
+  --ink:#1e1b4b;--ink-soft:#4c4b5e;--ink-muted:#787887;
+  --paper:#ffffff;--paper-warm:#faf8f5;--paper-soft:#f5f3f0;
+  --paper-cream:#fdf4e3;
+  --border:rgba(30,27,75,0.08);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Noto Sans SC',sans-serif;color:var(--ink);background:var(--paper-warm);
+  line-height:1.8;font-size:16px;overflow-x:hidden;
+}
+/* ===== Nav ===== */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(250,248,245,0.75);backdrop-filter:blur(20px) saturate(1.5);
+  border-bottom:1px solid var(--border);transition:all .3s;
+}
+nav.scrolled{background:rgba(250,248,245,0.92);box-shadow:0 1px 20px rgba(30,27,75,0.06)}
+.nav-inner{max-width:1200px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;justify-content:space-between}
+.nav-logo{font-family:'Noto Serif SC',serif;font-weight:700;font-size:16px;color:var(--ink);display:flex;align-items:center;gap:8px}
+.nav-logo span{color:var(--lav-500)}
+.nav-links{display:flex;gap:4px;flex-wrap:wrap}
+.nav-links a{
+  font-size:12px;color:var(--ink-soft);text-decoration:none;padding:6px 12px;
+  border-radius:8px;transition:all .2s;font-weight:500;
+}
+.nav-links a:hover{background:var(--lav-100);color:var(--lav-600)}
+/* ===== Hero ===== */
+.hero{
+  position:relative;min-height:auto;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;padding:120px 24px 80px;
+  background:linear-gradient(135deg,#faf5ff 0%,#f3e8ff 18%,#fdf4e3 50%,#fffbeb 100%);
+}
+.hero::before{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 520px 320px at 12% 22%,rgba(192,132,252,0.16),transparent 60%),
+    radial-gradient(ellipse 520px 320px at 88% 78%,rgba(251,191,36,0.13),transparent 60%);
+}
+.hero-wrap{position:relative;z-index:2;width:100%;max-width:780px;text-align:center}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,0.6);backdrop-filter:blur(12px) saturate(1.5);
+  border:1px solid rgba(192,132,252,0.3);color:var(--lav-600);
+  padding:7px 20px;border-radius:100px;
+  font-family:'Noto Sans SC',sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;
+  margin-bottom:20px;box-shadow:0 4px 20px rgba(192,132,252,0.12);
+}
+.hero h1{
+  font-family:'Noto Serif SC',serif;
+  font-size:clamp(2.2rem,6vw,3.8rem);font-weight:900;
+  letter-spacing:-0.03em;line-height:1.15;margin:12px 0 10px;
+  background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 38%,var(--coral-500) 62%,var(--amber-500) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero-subtitle{
+  font-size:clamp(14px,2.5vw,17px);color:var(--ink-soft);max-width:560px;margin:0 auto 28px;
+  line-height:1.7;
+}
+.hero-art{margin:20px auto 8px;max-width:680px;width:100%}
+.hero-img{
+  width:100%;height:auto;border-radius:20px;
+  box-shadow:0 24px 70px -24px rgba(30,27,75,0.18);
+  border:1px solid rgba(192,132,252,0.12);
+}
+.hero-tags{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:24px}
+.hero-tag{
+  font-size:12px;padding:5px 14px;border-radius:100px;font-weight:500;
+  background:rgba(255,255,255,0.5);border:1px solid var(--border);color:var(--ink-soft);
+}
+.hero-tag.lav{background:var(--lav-100);border-color:var(--lav-200);color:var(--lav-600)}
+.hero-tag.coral{background:var(--coral-100);border-color:var(--coral-200);color:var(--coral-400)}
+.hero-tag.mint{background:var(--mint-100);border-color:var(--mint-200);color:var(--mint-500)}
+.scroll-ind{
+  position:absolute;bottom:30px;left:50%;transform:translateX(-50%);
+  font-size:11px;letter-spacing:3px;color:var(--ink-muted);font-weight:500;
+  animation:bounce 2s infinite;
+}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-8px)}}
+/* ===== Main Content ===== */
+main{max-width:820px;margin:0 auto;padding:60px 24px 120px}
+.chapter{margin-bottom:80px;scroll-margin-top:80px}
+.chapter-num{
+  font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;
+  color:var(--lav-500);letter-spacing:2px;margin-bottom:8px;
+}
+.chapter-title{
+  font-family:'Noto Serif SC',serif;font-size:clamp(22px,4vw,30px);font-weight:700;
+  color:var(--ink);margin-bottom:24px;line-height:1.3;
+}
+h3{font-family:'Noto Serif SC',serif;font-size:19px;font-weight:600;color:var(--ink);margin:32px 0 14px}
+h4{font-size:15px;font-weight:600;color:var(--lav-600);margin:20px 0 10px}
+p{margin-bottom:16px;color:var(--ink-soft);line-height:1.85}
+strong{color:var(--ink);font-weight:600}
+a{color:var(--lav-600);text-decoration:none}
+a:hover{text-decoration:underline}
+/* ===== Components ===== */
+.insight-box{
+  background:linear-gradient(135deg,var(--mint-100) 0%,var(--lav-50) 100%);
+  border-left:4px solid var(--mint-400);border-radius:12px;padding:20px 24px;margin:24px 0;
+  box-shadow:0 4px 20px rgba(52,211,153,0.08);
+}
+.insight-box .insight-title{
+  font-weight:700;color:var(--mint-500);font-size:13px;letter-spacing:1px;
+  text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px;
+}
+.insight-box p{color:var(--ink-soft);margin-bottom:0}
+.insight-box .insight-title::before{content:'💡';font-size:16px}
+.research-q{
+  background:linear-gradient(135deg,#fff7ed 0%,var(--amber-100) 100%);
+  border:1px solid var(--amber-200);border-radius:12px;padding:20px 24px;margin:24px 0;
+}
+.research-q .rq-tag{
+  display:inline-block;background:var(--amber-400);color:white;font-size:11px;
+  font-weight:600;padding:3px 10px;border-radius:100px;margin-bottom:10px;letter-spacing:1px;
+}
+.research-q .rq-title{font-weight:700;color:var(--ink);font-size:15px;margin-bottom:8px}
+.research-q p{font-size:14px;color:var(--ink-soft);margin-bottom:0}
+.formula-card{
+  background:var(--paper);border:1px solid var(--border);border-radius:12px;
+  padding:20px 24px;margin:20px 0;box-shadow:0 2px 12px rgba(30,27,75,0.04);
+}
+.formula-card .fc-label{
+  font-size:11px;color:var(--ink-muted);font-weight:600;letter-spacing:1px;
+  text-transform:uppercase;margin-bottom:8px;
+}
+.formula-card .formula{font-size:15px;color:var(--ink);overflow-x:auto;padding:8px 0}
+.compare-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin:24px 0}
+.compare-card{
+  background:var(--paper);border:1px solid var(--border);border-radius:12px;
+  padding:20px;transition:all .2s;
+}
+.compare-card:hover{box-shadow:0 8px 30px rgba(30,27,75,0.08);transform:translateY(-2px)}
+.compare-card .cc-icon{font-size:28px;margin-bottom:10px}
+.compare-card .cc-title{font-weight:700;font-size:14px;color:var(--ink);margin-bottom:6px}
+.compare-card .cc-desc{font-size:13px;color:var(--ink-muted);line-height:1.6}
+.compare-card.tf{border-top:3px solid var(--coral-400)}
+.compare-card.df{border-top:3px solid var(--amber-400)}
+.compare-card.sf{border-top:3px solid var(--mint-400)}
+/* Code Block */
+.code-block{
+  background:#1a1625;border-radius:12px;overflow:hidden;margin:24px 0;
+  box-shadow:0 8px 30px rgba(30,27,75,0.15);
+}
+.code-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px;background:rgba(255,255,255,0.05);
+  border-bottom:1px solid rgba(255,255,255,0.08);
+}
+.code-header .ch-label{font-family:'JetBrains Mono',monospace;font-size:12px;color:#a78bfa;font-weight:500}
+.code-header .ch-tag{
+  font-size:10px;padding:2px 8px;border-radius:100px;font-weight:600;
+  background:rgba(167,139,250,0.15);color:#c4b5fd;
+}
+.code-block pre{
+  padding:16px 20px;overflow-x:auto;font-family:'JetBrains Mono',monospace;
+  font-size:13px;line-height:1.6;color:#e0e0e0;
+}
+.code-block pre .kw{color:#c084fc;font-weight:500}
+.code-block pre .str{color:#6ee7b7}
+.code-block pre .com{color:#6b7280;font-style:italic}
+.code-block pre .fn{color:#fbbf24}
+.code-block pre .num{color:#fb7185}
+.code-block pre .var{color:#93c5fd}
+/* SVG Container */
+.svg-container{
+  background:var(--paper);border:1px solid var(--border);border-radius:16px;
+  padding:24px;margin:28px 0;box-shadow:0 4px 20px rgba(30,27,75,0.04);
+  overflow-x:auto;
+}
+.svg-container .svg-caption{
+  text-align:center;font-size:12px;color:var(--ink-muted);margin-top:12px;
+  font-style:italic;
+}
+/* Table */
+.data-table{width:100%;border-collapse:collapse;margin:24px 0;font-size:13px}
+.data-table th{
+  background:var(--lav-100);color:var(--lav-600);font-weight:600;
+  padding:10px 12px;text-align:left;border-bottom:2px solid var(--lav-200);
+  font-size:12px;
+}
+.data-table td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--ink-soft)}
+.data-table tr:hover{background:var(--lav-50)}
+.data-table .best{color:var(--mint-500);font-weight:600}
+.data-table .ours{background:rgba(52,211,153,0.05)}
+/* Figure */
+figure{margin:28px 0}
+figure img{width:100%;border-radius:12px;border:1px solid var(--border);box-shadow:0 4px 20px rgba(30,27,75,0.06)}
+figcaption{text-align:center;font-size:12px;color:var(--ink-muted);margin-top:8px;font-style:italic}
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin:24px 0}
+.stat-card{
+  background:linear-gradient(135deg,var(--lav-50),var(--paper));
+  border:1px solid var(--lav-100);border-radius:12px;padding:20px;text-align:center;
+}
+.stat-card .stat-value{
+  font-family:'Noto Serif SC',serif;font-size:28px;font-weight:700;
+  background:linear-gradient(135deg,var(--lav-600),var(--coral-500));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.stat-card .stat-label{font-size:11px;color:var(--ink-muted);margin-top:4px;letter-spacing:1px}
+/* Footer */
+footer{
+  background:var(--ink);color:rgba(255,255,255,0.6);padding:40px 24px;text-align:center;
+}
+footer p{font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:8px}
+footer .footer-links{display:flex;gap:16px;justify-content:center;margin-top:12px}
+footer .footer-links a{font-size:12px;color:rgba(255,255,255,0.5)}
+/* Mobile */
+@media(max-width:640px){
+  .nav-links{display:none}
+  main{padding:40px 16px 80px}
+  .compare-grid{grid-template-columns:1fr}
+}
+
+/* === FORMAT FIXES v1 === */
+/* Stats grid 必须并行4列 */
+.stats-grid,.stats-row,.hero-stats,.stat-grid{
+  display:grid !important;
+  grid-template-columns:repeat(4,1fr) !important;
+  gap:12px !important;
+  max-width:720px !important;
+  margin:24px auto !important;
+}
+.stat-card,.stat-item,.stat-box{
+  text-align:center !important;
+  padding:16px !important;
+}
+/* figure 居中对齐 */
+.figure,.fig,.img-wrap{margin:24px auto !important;text-align:center !important}
+.figure img,.fig img,.img-wrap img,.figure figure img{display:block;margin:0 auto !important;max-width:100% !important}
+/* SVG 居中 */
+.svg-wrap,.svg-container{text-align:center !important;margin:24px auto !important}
+.svg-wrap svg,.svg-container svg{display:block;margin:0 auto !important;max-width:100% !important}
+/* hero 不要太大 */
+.hero{min-height:auto !important;padding:100px 24px 60px !important}
+/* 减少过度效果 - 移除非必要动画 */
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+.scroll-indicator{animation:bounce 2s infinite}
+/* 确保关键交互保留hover效果 */
+a:hover,button:hover,input:focus{transition:all .2s !important}
+
+</style>
+</head>
+<body>
+
+<!-- ===== Nav ===== -->
+<nav id="nav">
+<div class="nav-inner">
+<div class="nav-logo">📄 <span>LoL</span> 精读</div>
+<div class="nav-links"><a href="../index.html">« 合辑</a>
+<a href="#ch1">背景动机</a>
+<a href="#ch2">RoPE回顾</a>
+<a href="#ch3">Sink-Collapse</a>
+<a href="#ch4">核心方法</a>
+<a href="#ch5">无限流式生成</a>
+<a href="#ch6">实验结果</a>
+<a href="#ch7">消融研究</a>
+<a href="#ch8">讨论与局限</a>
+<a href="#ch9">总结</a>
+<a href="#ch10">科研问题</a>
+</div>
+</div>
+</nav>
+
+<!-- ===== Hero ===== -->
+<section class="hero">
+<div class="hero-wrap">
+<div class="hero-badge">arXiv 2601.16914 · Jan 2026 · ByteDance Seed &amp; UCLA</div>
+<h1>LoL: Longer than Longer</h1>
+<p class="hero-subtitle">通过多头RoPE抖动抑制Sink-Collapse，首次实现实时、流式、无限长度视频生成——单卡生成连续12小时视频</p>
+<div class="hero-art">
+<img src="assets/cover.webp" alt="LoL 封面" class="hero-img">
+</div>
+<div class="hero-tags">
+<span class="hero-tag lav">Sink-Collapse</span>
+<span class="hero-tag coral">多头RoPE抖动</span>
+<span class="hero-tag mint">无训练方法</span>
+<span class="hero-tag">12小时视频</span>
+<span class="hero-tag">20 FPS 实时</span>
+</div>
+</div>
+<div class="scroll-ind">SCROLL TO READ ↓</div>
+</section>
+
+<!-- ===== Main ===== -->
+<main>
+
+<!-- ===== Chapter 1 ===== -->
+<section class="chapter" id="ch1">
+<div class="chapter-num">CHAPTER 01</div>
+<h2 class="chapter-title">背景动机：超长视频生成的三重困境</h2>
+
+<p>视频生成领域正经历从双向扩散到自回归范式的深刻转变。Sora、Wan、CogVideoX 等系统虽然展现了惊人的时空动态建模能力，但它们均依赖<strong>双向注意力扩散 Transformer（DiT）</strong>——所有帧同时去噪，计算复杂度随序列长度二次增长，从根本上限制了长视频的生成。</p>
+
+<p>为突破这一瓶颈，近期工作转向自回归架构，逐帧顺序生成以支持更长的时间建模。Diffusion-Forcing 应用逐帧噪声调度；CausVid 通过非对称蒸馏将双向教师转化为流式学生；Self Forcing 通过分布对齐缓解训练-测试不匹配；LongLive 和 Self-Forcing++ 更将高质量生成扩展到数分钟级别。然而，这些方法共同面临一个关键失败模式：<strong>Sink-Collapse（注意力沉没坍塌）</strong>。</p>
+
+<div class="insight-box">
+<div class="insight-title">深度洞察：为什么从分钟到小时如此困难？</div>
+<p>从数分钟到数小时的跨越不仅仅是"生成更多帧"。现有方法在约132个潜帧（约33秒）处就会发生Sink-Collapse——生成的画面突然跳回到开头的"注意力沉没帧"。这不是简单的质量退化，而是一种<strong>结构性失败</strong>：模型的注意力机制在特定时间点发生集体坍塌，所有注意力头同时将过度权重分配给沉没帧。解决这个问题是实现小时级生成的关键。</p>
+</div>
+
+<!-- SVG 1: Sink-Collapse现象示意 -->
+<div class="svg-container">
+<svg viewBox="0 0 760 280" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:760px;margin:0 auto;display:block">
+<defs>
+<linearGradient id="frameGrad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#c084fc" stop-opacity="0.8"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0.8"/>
+</linearGradient>
+<linearGradient id="collapseGrad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#fb7185"/><stop offset="100%" stop-color="#f43f5e"/>
+</linearGradient>
+<linearGradient id="goodGrad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#6ee7b7"/><stop offset="100%" stop-color="#10b981"/>
+</linearGradient>
+<marker id="arr1" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+<path d="M0,0 L8,4 L0,8 Z" fill="#787887"/>
+</marker>
+</defs>
+
+<text x="380" y="20" text-anchor="middle" font-size="13" font-weight="600" fill="#1e1b4b" font-family="Noto Serif SC">Sink-Collapse 现象示意</text>
+
+<!-- Sink frames -->
+<rect x="30" y="45" width="80" height="50" rx="6" fill="#e9d5ff" stroke="#c084fc" stroke-width="2"/>
+<text x="70" y="65" text-anchor="middle" font-size="9" fill="#7e22ce" font-weight="600">Sink 帧</text>
+<text x="70" y="80" text-anchor="middle" font-size="8" fill="#7e22ce">f₁ f₂ f₃</text>
+
+<!-- Arrow -->
+<path d="M120,70 L155,70" stroke="#787887" stroke-width="1.5" marker-end="url(#arr1)"/>
+
+<!-- Good generation -->
+<rect x="165" y="45" width="300" height="50" rx="6" fill="#d1fae5" stroke="#34d399" stroke-width="1.5"/>
+<text x="315" y="65" text-anchor="middle" font-size="10" fill="#047857" font-weight="600">正常生成序列</text>
+<text x="315" y="80" text-anchor="middle" font-size="8" fill="#047857">f₄ ... f₁₃₁ — 多样化内容、流畅运动</text>
+
+<!-- Collapse point -->
+<line x1="475" y1="40" x2="475" y2="100" stroke="#f43f5e" stroke-width="2.5" stroke-dasharray="4,3"/>
+<text x="475" y="35" text-anchor="middle" font-size="9" fill="#f43f5e" font-weight="600">f=132 坍塌!</text>
+
+<!-- After collapse -->
+<rect x="490" y="45" width="240" height="50" rx="6" fill="#ffe4e6" stroke="#fb7185" stroke-width="2"/>
+<text x="610" y="65" text-anchor="middle" font-size="10" fill="#e11d48" font-weight="600">坍塌区域</text>
+<text x="610" y="80" text-anchor="middle" font-size="8" fill="#e11d48">跳回 sink 帧 → 重复内容 → 循环</text>
+
+<!-- L2 distance curve -->
+<text x="380" y="125" text-anchor="middle" font-size="11" fill="#4c4b5e" font-weight="600">Normalized L2 Distance to Sink Frames</text>
+
+<!-- Axes -->
+<line x1="60" y1="250" x2="720" y2="250" stroke="#787887" stroke-width="1"/>
+<line x1="60" y1="250" x2="60" y2="145" stroke="#787887" stroke-width="1"/>
+<text x="390" y="272" text-anchor="middle" font-size="9" fill="#787887">Frame Index →</text>
+<text x="35" y="198" text-anchor="middle" font-size="9" fill="#787887" transform="rotate(-90,35,198)">L2 Dist</text>
+
+<!-- Curve - good region -->
+<path d="M80,160 Q150,155 200,150 Q250,148 300,152 Q350,148 400,155 Q440,150 460,148" stroke="#10b981" stroke-width="2.5" fill="none"/>
+<!-- Curve - collapse drop -->
+<path d="M460,148 L480,230" stroke="#f43f5e" stroke-width="2.5" fill="none"/>
+<text x="485" y="238" font-size="8" fill="#f43f5e" font-weight="600">← 坍塌点</text>
+<!-- Curve - recovery -->
+<path d="M480,230 Q500,160 540,150 Q580,148 620,152 Q660,148 700,150" stroke="#f43f5e" stroke-width="2" fill="none" stroke-dasharray="4,2"/>
+
+<!-- Labels -->
+<text x="270" y="172" text-anchor="middle" font-size="8" fill="#10b981">正常: 距离保持稳定</text>
+<text x="600" y="172" text-anchor="middle" font-size="8" fill="#f43f5e">坍塌后跳回并循环</text>
+</svg>
+<p class="svg-caption">图1：Sink-Collapse现象示意。当生成到特定帧索引时，L2距离骤降至零，画面突然跳回到开头的注意力沉没帧。</p>
+</div>
+
+<p>这种困境的根源在于三个相互交织的因素：自回归生成的误差累积、注意力沉没帧机制的副作用、以及位置编码的内在周期性。LoL 论文系统地分析了这一问题，并提出了一种极其简洁的解决方案。</p>
+
+<div class="stats-grid">
+<div class="stat-card">
+<div class="stat-value">12h</div>
+<div class="stat-label">连续生成时长</div>
+</div>
+<div class="stat-card">
+<div class="stat-value">1.3B</div>
+<div class="stat-label">模型参数量</div>
+</div>
+<div class="stat-card">
+<div class="stat-value">20 FPS</div>
+<div class="stat-label">实时生成速度</div>
+</div>
+<div class="stat-card">
+<div class="stat-value">0</div>
+<div class="stat-label">额外训练开销</div>
+</div>
+</div>
+
+<div class="insight-box">
+<div class="insight-title">深度洞察：注意力沉没帧的双刃剑效应</div>
+<p>注意力沉没帧（Attention Sink）最初由 StreamingLLM 提出，用于在 LLM 中保持 KV 缓存的稳定性。在视频生成中，保留前几帧作为沉没帧可以增强时序对齐和生成稳定性。但这个机制本身就是一个<strong>定时炸弹</strong>——当 RoPE 位置编码的周期性导致远距离帧与沉没帧的相位重新对齐时，注意力机制会将"稳定"错误地转化为"复制"，导致画面突变。</p>
+</div>
+</section>
+
+<!-- ===== Chapter 2 ===== -->
+<section class="chapter" id="ch2">
+<div class="chapter-num">CHAPTER 02</div>
+<h2 class="chapter-title">RoPE 旋转位置编码回顾：周期性的代价</h2>
+
+<p>理解 Sink-Collapse 的根源，需要深入理解 <strong>Rotary Position Embedding (RoPE)</strong> 的工作原理。RoPE 由苏剑林提出，已成为 Transformer 架构中最广泛使用的位置编码方案之一。其核心思想是通过旋转查询和键向量来编码位置信息。</p>
+
+<h3>RoPE 的数学原理</h3>
+
+<p>对于位置索引 $t$ 和通道维度 $i$，RoPE 定义旋转角度 $\theta_i = \theta^{-2i/d}$，其中 $d$ 为隐藏维度，$\theta$（通常为10000）控制基频。旋转矩阵为：</p>
+
+<div class="formula-card">
+<div class="fc-label">RoPE 旋转矩阵</div>
+<div class="formula">
+$$R(t, i) = \begin{pmatrix} \cos(t \cdot \theta_i) & -\sin(t \cdot \theta_i) \\ \sin(t \cdot \theta_i) & \cos(t \cdot \theta_i) \end{pmatrix}$$
+</div>
+</div>
+
+<p>旋转后的查询和键向量为 $q'_m = R(m, i) \cdot q_m$，$k'_n = R(n, i) \cdot k_n$。计算注意力时，旋转形式的点积为：</p>
+
+<div class="formula-card">
+<div class="fc-label">RoPE 注意力点积 — 相对位置编码</div>
+<div class="formula">
+$$\langle q'_m, k'_n \rangle = \langle q_m, R(n - m) \cdot k_n \rangle$$
+</div>
+<p style="font-size:13px;color:var(--ink-soft);margin-top:8px">关键性质：注意力分数仅取决于位置差 $n - m$，天然编码了相对位置信息。但 $\cos$ 和 $\sin$ 的周期性意味着当 $n - m$ 增大到特定值时，旋转角度会重新对齐——这正是 Sink-Collapse 的数学根源。</p>
+</div>
+
+<!-- SVG 2: RoPE sinusoidal rotation visualization -->
+<div class="svg-container">
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:760px;margin:0 auto;display:block">
+<defs>
+<linearGradient id="ropeGrad1" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#c084fc"/><stop offset="100%" stop-color="#a855f7"/>
+</linearGradient>
+<linearGradient id="ropeGrad2" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#fb7185"/><stop offset="100%" stop-color="#f43f5e"/>
+</linearGradient>
+</defs>
+
+<text x="380" y="20" text-anchor="middle" font-size="13" font-weight="600" fill="#1e1b4b" font-family="Noto Serif SC">RoPE 周期性与相位重对齐</text>
+
+<!-- Axes -->
+<line x1="60" y1="250" x2="720" y2="250" stroke="#787887" stroke-width="1"/>
+<line x1="60" y1="250" x2="60" y2="40" stroke="#787887" stroke-width="1"/>
+<text x="390" y="280" text-anchor="middle" font-size="9" fill="#787887">位置差 (n - m)</text>
+<text x="30" y="145" text-anchor="middle" font-size="9" fill="#787887" transform="rotate(-90,30,145)">旋转角度</text>
+
+<!-- Sinusoidal waves - multiple frequencies -->
+<!-- Low frequency (slow oscillation) -->
+<path d="M60,145 Q130,80 200,145 Q270,210 340,145 Q410,80 480,145 Q550,210 620,145 Q690,80 720,120" stroke="#c084fc" stroke-width="2" fill="none" opacity="0.8"/>
+<text x="730" y="110" font-size="8" fill="#c084fc">低频</text>
+
+<!-- Medium frequency -->
+<path d="M60,145 Q90,100 120,145 Q150,190 180,145 Q210,100 240,145 Q270,190 300,145 Q330,100 360,145 Q390,190 420,145 Q450,100 480,145 Q510,190 540,145 Q570,100 600,145 Q630,190 660,145 Q690,100 720,145" stroke="#a855f7" stroke-width="1.5" fill="none" opacity="0.6"/>
+<text x="730" y="140" font-size="8" fill="#a855f7">中频</text>
+
+<!-- High frequency -->
+<path d="M60,145 Q72,110 84,145 Q96,180 108,145 Q120,110 132,145 Q144,180 156,145 Q168,110 180,145 Q192,180 204,145 Q216,110 228,145 Q240,180 252,145 Q264,110 276,145 Q288,180 300,145 Q312,110 324,145 Q336,180 348,145 Q360,110 372,145 Q384,180 396,145 Q408,110 420,145 Q432,180 444,145 Q456,110 468,145 Q480,180 492,145 Q504,110 516,145 Q528,180 540,145 Q552,110 564,145 Q576,180 588,145 Q600,110 612,145 Q624,180 636,145 Q648,110 660,145 Q672,180 684,145 Q696,110 708,145 Q714,130 720,145" stroke="#7e22ce" stroke-width="1" fill="none" opacity="0.4"/>
+<text x="730" y="148" font-size="8" fill="#7e22ce">高频</text>
+
+<!-- Phase re-alignment markers -->
+<rect x="445" y="42" width="80" height="18" rx="4" fill="#ffe4e6" stroke="#fb7185" stroke-width="1"/>
+<text x="485" y="55" text-anchor="middle" font-size="8" fill="#f43f5e" font-weight="600">相位重对齐!</text>
+<line x1="485" y1="60" x2="485" y2="245" stroke="#f43f5e" stroke-width="1.5" stroke-dasharray="4,3"/>
+
+<!-- Annotations -->
+<text x="485" y="268" text-anchor="middle" font-size="8" fill="#f43f5e">← Sink-Collapse 发生处 →</text>
+
+<!-- Legend -->
+<rect x="80" y="32" width="10" height="10" rx="2" fill="#c084fc"/>
+<text x="95" y="41" font-size="8" fill="#4c4b5e">维度 i=1 (低频)</text>
+<rect x="200" y="32" width="10" height="10" rx="2" fill="#a855f7"/>
+<text x="215" y="41" font-size="8" fill="#4c4b5e">维度 i=d/4 (中频)</text>
+<rect x="340" y="32" width="10" height="10" rx="2" fill="#7e22ce"/>
+<text x="355" y="41" font-size="8" fill="#4c4b5e">维度 i=d/2 (高频)</text>
+</svg>
+<p class="svg-caption">图2：RoPE 不同频率维度的正弦波形。当所有频率的相位在特定位置差处同时重新对齐时，远距离帧获得与沉没帧几乎相同的位置编码，导致 Sink-Collapse。</p>
+</div>
+
+<div class="insight-box">
+<div class="insight-title">深度洞察：RoPE 周期性不是缺陷而是特性——直到它成为灾难</div>
+<p>RoPE 的正弦周期性在短距离上是优势——它让模型感知相对位置。但在长距离上，$\cos(t \cdot \theta_i)$ 会在 $t = 2\pi / \theta_i$ 的整数倍处回到相同值。单个维度的相位重对齐影响有限，但当<strong>多个维度同时</strong>在相近位置发生相位重对齐时，就会产生"相位集中"（Phase Concentration），使远距离帧获得与沉没帧几乎相同的注意力权重。这就像钟表的时针、分针、秒针偶尔会在同一方向重合——概率虽低，但在足够长的时间线上必然发生。</p>
+</div>
+
+<p>值得注意的是，这种周期性在双向模型（如 RIFLEx 中的重复现象）中已有研究，但 RIFLEx 将其归因于<strong>单一时间维度</strong>并通过修改该维度的频率来解决。LoL 论文的关键发现之一是：在自回归设置中，Sink-Collapse 并非由单一维度导致，而是所有维度相位集中的<strong>集体效应</strong>，这使得 RIFLEx 式的单维度修复完全无效。</p>
+</section>
+
+<!-- ===== Chapter 3 ===== -->
+<section class="chapter" id="ch3">
+<div class="chapter-num">CHAPTER 03</div>
+<h2 class="chapter-title">Sink-Collapse 深度解析：双重机制的揭示</h2>
+
+<p>LoL 论文对 Sink-Collapse 进行了系统的双重机制分析，揭示了这一现象的精确数学根源。这一分析不仅解释了为什么现有方法失败，更为解决方案提供了直接指导。</p>
+
+<h3>机制一：头内相位集中（Intra-head Phase Concentration）</h3>
+
+<p>论文定义了<strong>相位相干核</strong>来量化所有 RoPE 频率维度的集体相位对齐程度。给定 RoPE 频率 $\omega_i = \theta^{-2i/d}$（$i = 1, \ldots, K$，$K = d/2$），对于相对位移 $\Delta = m - n$：</p>
+
+<div class="formula-card">
+<div class="fc-label">相位相干核（Phase Coherence Kernel）</div>
+<div class="formula">
+$$C(\Delta) = \left| \frac{1}{K} \sum_{i=1}^{K} e^{j \omega_i \Delta} \right|$$
+</div>
+</div>
+
+<p>生成帧 $g$ 相对于沉没帧 $s$ 的<strong>相位集中强度</strong>定义为 $R_{\text{sink}}(g) = C(g - s)$。当这个值达到局部最大值时，多个 RoPE 频率分量与沉没帧相位同步，导致 Sink-Collapse。</p>
+
+<div class="insight-box">
+<div class="insight-title">深度洞察：为什么不是全局最大值而是局部最大值？</div>
+<p>直觉上可能认为 Sink-Collapse 应在 $R_{\text{sink}}$ 的全局最大值处发生，但实际上它发生在<strong>局部最大值</strong>处。这是因为 Sink-Collapse 的触发不仅取决于相位对齐程度，还取决于当时生成内容的语义状态——某些局部最大值恰好与模型内部的注意力模式产生共振，使得坍塌更加"容易"发生。这也意味着单纯改变 RoPE 基频 $\theta$ 只能<strong>移动</strong>坍塌点而非消除它。</p>
+</div>
+
+<figure>
+<img src="assets/_precise_v2/fig2_phase.webp" alt="Phase concentration vs L2 distance">
+<figcaption>图3（论文Figure 2）：头内相位集中度与归一化L2距离的对比。Sink-Collapse几乎精确发生在相位集中的局部最大值处，跨不同提示词表现一致。</figcaption>
+</figure>
+
+<h3>机制二：头间注意力同质化（Inter-head Attention Homogenization）</h3>
+
+<p>现代 Transformer 依赖多头注意力来捕获多样化的表征子空间。论文的分析揭示了一个关键现象：Sink-Collapse 并非由单个注意力头引起，而是一种<strong>集体同步现象</strong>——多个注意力头同时表现出对沉没帧的高权重，导致注意力多样性全面退化。</p>
+
+<figure>
+<img src="assets/_precise_v2/fig2_phase.webp" alt="Inter-head attention homogenization">
+<figcaption>图4（论文Figure 3）：头间注意力同质化可视化。上排为正常帧，注意力均匀分布；下排为Sink-Collapse帧，几乎所有注意力头同时将大量权重分配给沉没帧。</figcaption>
+</figure>
+
+<!-- SVG 3: Phase concentration concept diagram -->
+<div class="svg-container">
+<svg viewBox="0 0 760 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:760px;margin:0 auto;display:block">
+<text x="380" y="20" text-anchor="middle" font-size="13" font-weight="600" fill="#1e1b4b" font-family="Noto Serif SC">相位集中与注意力坍塌的因果链</text>
+
+<!-- Step 1: Phase alignment -->
+<rect x="20" y="50" width="160" height="70" rx="8" fill="#f3e8ff" stroke="#c084fc" stroke-width="1.5"/>
+<text x="100" y="70" text-anchor="middle" font-size="10" fill="#7e22ce" font-weight="600">① 相位重对齐</text>
+<text x="100" y="87" text-anchor="middle" font-size="8" fill="#7e22ce">多频率维度</text>
+<text x="100" y="100" text-anchor="middle" font-size="8" fill="#7e22ce">同时达到相位对齐</text>
+<text x="100" y="113" text-anchor="middle" font-size="8" fill="#7e22ce">R_sink(g) = C(g-s) ↑</text>
+
+<!-- Arrow -->
+<path d="M185,85 L215,85" stroke="#9333ea" stroke-width="2" fill="none"/>
+<polygon points="215,81 223,85 215,89" fill="#9333ea"/>
+
+<!-- Step 2: Attention heads sync -->
+<rect x="228" y="50" width="160" height="70" rx="8" fill="#fef3c7" stroke="#fbbf24" stroke-width="1.5"/>
+<text x="308" y="70" text-anchor="middle" font-size="10" fill="#b45309" font-weight="600">② 头间同步</text>
+<text x="308" y="87" text-anchor="middle" font-size="8" fill="#b45309">多个注意力头</text>
+<text x="308" y="100" text-anchor="middle" font-size="8" fill="#b45309">同时分配高权重</text>
+<text x="308" y="113" text-anchor="middle" font-size="8" fill="#b45309">给沉没帧 f₁,f₂,f₃</text>
+
+<!-- Arrow -->
+<path d="M393,85 L423,85" stroke="#9333ea" stroke-width="2" fill="none"/>
+<polygon points="423,81 431,85 423,89" fill="#9333ea"/>
+
+<!-- Step 3: Collapse -->
+<rect x="436" y="50" width="160" height="70" rx="8" fill="#ffe4e6" stroke="#fb7185" stroke-width="1.5"/>
+<text x="516" y="70" text-anchor="middle" font-size="10" fill="#e11d48" font-weight="600">③ 帧坍塌</text>
+<text x="516" y="87" text-anchor="middle" font-size="8" fill="#e11d48">从所有子空间</text>
+<text x="516" y="100" text-anchor="middle" font-size="8" fill="#e11d48">复制沉没帧内容</text>
+<text x="516" y="113" text-anchor="middle" font-size="8" fill="#e11d48">→ 突变回初始场景</text>
+
+<!-- Solution arrow -->
+<rect x="620" y="45" width="120" height="80" rx="8" fill="#d1fae5" stroke="#34d399" stroke-width="2"/>
+<text x="680" y="65" text-anchor="middle" font-size="10" fill="#047857" font-weight="600">解法：抖动</text>
+<text x="680" y="82" text-anchor="middle" font-size="8" fill="#047857">扰动各头基频</text>
+<text x="680" y="95" text-anchor="middle" font-size="8" fill="#047857">打破相位对齐</text>
+<text x="680" y="108" text-anchor="middle" font-size="8" fill="#047857">保留多样性 ✓</text>
+<path d="M596,85 L616,85" stroke="#10b981" stroke-width="2" fill="none"/>
+<polygon points="616,81 624,85 616,89" fill="#10b981"/>
+
+<!-- Multi-head attention visualization -->
+<text x="380" y="160" text-anchor="middle" font-size="11" fill="#4c4b5e" font-weight="600">多头注意力权重分布对比</text>
+
+<!-- Normal frame -->
+<g transform="translate(80,175)">
+<text x="70" y="0" text-anchor="middle" font-size="9" fill="#10b981" font-weight="600">正常帧</text>
+<rect x="0" y="8" width="140" height="60" rx="4" fill="#f0fdf4" stroke="#86efac"/>
+<!-- Attention bars - distributed -->
+<rect x="8" y="15" width="18" height="12" rx="2" fill="#a7f3d0"/><text x="17" y="24" text-anchor="middle" font-size="6" fill="#047857">H1</text>
+<rect x="30" y="15" width="22" height="12" rx="2" fill="#a7f3d0"/><text x="41" y="24" text-anchor="middle" font-size="6" fill="#047857">H2</text>
+<rect x="56" y="15" width="15" height="12" rx="2" fill="#a7f3d0"/><text x="63" y="24" text-anchor="middle" font-size="6" fill="#047857">H3</text>
+<rect x="75" y="15" width="20" height="12" rx="2" fill="#a7f3d0"/><text x="85" y="24" text-anchor="middle" font-size="6" fill="#047857">H4</text>
+<rect x="99" y="15" width="14" height="12" rx="2" fill="#a7f3d0"/><text x="106" y="24" text-anchor="middle" font-size="6" fill="#047857">H5</text>
+<text x="70" y="40" text-anchor="middle" font-size="7" fill="#047857">权重均匀分布</text>
+<text x="70" y="52" text-anchor="middle" font-size="7" fill="#047857">各头关注不同子空间</text>
+</g>
+
+<!-- Collapse frame -->
+<g transform="translate(300,175)">
+<text x="70" y="0" text-anchor="middle" font-size="9" fill="#f43f5e" font-weight="600">坍塌帧</text>
+<rect x="0" y="8" width="140" height="60" rx="4" fill="#fff1f2" stroke="#fda4af"/>
+<!-- Attention bars - all pointing to sink -->
+<rect x="8" y="15" width="55" height="12" rx="2" fill="#fda4af"/><text x="35" y="24" text-anchor="middle" font-size="6" fill="#e11d48">H1→sink</text>
+<rect x="67" y="15" width="55" height="12" rx="2" fill="#fda4af"/><text x="94" y="24" text-anchor="middle" font-size="6" fill="#e11d48">H2→sink</text>
+<rect x="8" y="30" width="55" height="12" rx="2" fill="#fda4af"/><text x="35" y="39" text-anchor="middle" font-size="6" fill="#e11d48">H3→sink</text>
+<rect x="67" y="30" width="55" height="12" rx="2" fill="#fda4af"/><text x="94" y="39" text-anchor="middle" font-size="6" fill="#e11d48">H4→sink</text>
+<rect x="37" y="45" width="55" height="12" rx="2" fill="#fb7185"/><text x="64" y="54" text-anchor="middle" font-size="6" fill="#fff">H5→sink</text>
+</g>
+
+<!-- After jitter -->
+<g transform="translate(520,175)">
+<text x="70" y="0" text-anchor="middle" font-size="9" fill="#10b981" font-weight="600">抖动后</text>
+<rect x="0" y="8" width="140" height="60" rx="4" fill="#f0fdf4" stroke="#34d399" stroke-width="1.5"/>
+<rect x="8" y="15" width="25" height="12" rx="2" fill="#6ee7b7"/><text x="20" y="24" text-anchor="middle" font-size="6" fill="#047857">H1</text>
+<rect x="37" y="15" width="30" height="12" rx="2" fill="#a7f3d0"/><text x="52" y="24" text-anchor="middle" font-size="6" fill="#047857">H2</text>
+<rect x="71" y="15" width="18" height="12" rx="2" fill="#6ee7b7"/><text x="80" y="24" text-anchor="middle" font-size="6" fill="#047857">H3</text>
+<rect x="93" y="15" width="22" height="12" rx="2" fill="#a7f3d0"/><text x="104" y="24" text-anchor="middle" font-size="6" fill="#047857">H4</text>
+<rect x="8" y="30" width="20" height="12" rx="2" fill="#6ee7b7"/><text x="18" y="39" text-anchor="middle" font-size="6" fill="#047857">H5</text>
+<text x="70" y="52" text-anchor="middle" font-size="7" fill="#047857">相位多样性恢复 ✓</text>
+</g>
+</svg>
+<p class="svg-caption">图5：从相位集中到注意力坍塌的因果链，以及多头RoPE抖动的解法原理。</p>
+</div>
+
+<div class="insight-box">
+<div class="insight-title">深度洞察：为什么单维度修复（RIFLEx）在自回归中失效？</div>
+<p>RIFLEx 在双向模型中通过修改最接近重复周期的单一 RoPE 维度频率来解决问题。但在自回归设置中，Sink-Collapse 是<strong>所有维度集体相位对齐</strong>的结果。论文实验表明，无论是修改 RIFLEx 识别的维度还是任何其他单个维度，都无法有效缓解坍塌。修改 RoPE 基频 $\theta$ 也只能移动坍塌点而无法消除它。这揭示了双向和自回归模型中重复现象的根本差异：前者源于单维度，后者源于多维度的协同效应。</p>
+</div>
+</section>
+
+<!-- ===== Chapter 4 ===== -->
+<section class="chapter" id="ch4">
+<div class="chapter-num">CHAPTER 04</div>
+<h2 class="chapter-title">核心方法：多头 RoPE 抖动（Multi-Head RoPE Jitter）</h2>
+
+<p>基于以上双重机制分析，LoL 提出了一个极其简洁的解决方案：<strong>多头 RoPE 抖动</strong>。核心思想是：既然 Sink-Collapse 需要所有注意力头<strong>同时</strong>与沉没帧相位对齐，那么通过给不同注意力头施加微小的、随机的基频偏移，就能打破这种全局同步，从根本上阻止坍塌的发生。</p>
+
+<h3>算法描述</h3>
+
+<p>给定查询和键张量 $Q, K \in \mathbb{R}^{B \times T \times H \times D}$，基频 $\theta_0$ 和抖动尺度 $\sigma_\theta$：</p>
+
+<div class="formula-card">
+<div class="fc-label">Multi-Head RoPE Jitter 算法</div>
+<div class="formula">
+$$\text{对每个注意力头 } h = 1, \ldots, H:$$
+</div>
+<div class="formula" style="margin-top:4px">
+$$\epsilon_h \sim \mathcal{U}[-1, 1], \quad \hat{\theta}_h = \theta_0(1 + \sigma_\theta \epsilon_h)$$
+</div>
+<div class="formula" style="margin-top:4px">
+$$\omega_h = [\hat{\theta}_h^{\nu_0}, \ldots, \hat{\theta}_h^{\nu_{D/2-1}}], \quad (Q'_h, K'_h) = \text{RoPERotate}(Q_h, K_h, \omega_h)$$
+</div>
+</div>
+
+<p>其中 $\nu_i = -2i/d_{\text{time}}$ 为频率指数。关键在于：每个注意力头获得一个略微不同的基频 $\hat{\theta}_h$，使得不同头的相位对齐点在时间轴上分散开，不再同时触发坍塌。</p>
+
+<!-- Code Block 1: Algorithm Implementation -->
+<div class="code-block">
+<div class="code-header">
+<span class="ch-label">multi_head_rope_jitter.py</span>
+<span class="ch-tag">可信度: 高 — 论文算法忠实实现</span>
+</div>
+<pre>
+<span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+<span class="kw">class</span> <span class="fn">MultiHeadRoPEJitter</span>(nn.Module):
+    <span class="str">"""LoL: Multi-Head RoPE Jitter for mitigating sink-collapse.
+    
+    Shifts the base frequency of different attention heads by a
+    random margin, disrupting inter-head phase synchronization
+    that causes sink-collapse in autoregressive video generation.
+    """</span>
+    
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, dim, max_position=<span class="num">2048</span>, 
+                 base=<span class="num">10000.0</span>, sigma=<span class="num">0.8</span>):
+        <span class="fn">super</span>().__init__()
+        self.dim = dim
+        self.base = base
+        self.sigma = sigma  <span class="com"># jitter intensity σ_θ</span>
+        self.max_position = max_position
+        
+    <span class="kw">def</span> <span class="fn">forward</span>(self, q, k, num_heads):
+        <span class="str">"""Apply per-head RoPE with jittered base frequencies.
+        
+        Args:
+            q, k: [B, T, H, D] query and key tensors
+            num_heads: number of attention heads H
+        Returns:
+            q_rot, k_rot: rotated query and key tensors
+        """</span>
+        B, T, H, D = q.shape
+        freq_exponents = torch.arange(
+            <span class="num">0</span>, D // <span class="num">2</span>, device=q.device
+        ) * (-<span class="num">2.0</span> / D)  <span class="com"># ν_i = -2i/d</span>
+        
+        <span class="com"># Generate per-head jitter: ε_h ~ U[-1, 1]</span>
+        eps = torch.rand(H, device=q.device) * <span class="num">2</span> - <span class="num">1</span>
+        
+        <span class="com"># Jittered base: θ̂_h = θ₀(1 + σ_θ · ε_h)</span>
+        theta_hat = self.base * (<span class="num">1</span> + self.sigma * eps)
+        
+        <span class="com"># Per-head frequencies: ω_h = [θ̂^ν₀, ..., θ̂^ν_{D/2-1}]</span>
+        freqs = theta_hat[:, <span class="None">None</span>] ** freq_exponents[<span class="None">None</span>, :]
+        <span class="com"># freqs shape: [H, D/2]</span>
+        
+        <span class="com"># Build rotation angles: t * ω_h</span>
+        t = torch.arange(T, device=q.device).float()
+        <span class="com"># angles: [T, H, D/2]</span>
+        angles = t[:, <span class="None">None</span>, <span class="None">None</span>] * freqs[<span class="None">None</span>, :, :]
+        angles = angles.expand(B, -<span class="num">1</span>, -<span class="num">1</span>, -<span class="num">1</span>)
+        
+        <span class="com"># Apply rotation via complex multiplication</span>
+        cos_a = torch.cos(angles)
+        sin_a = torch.sin(angles)
+        
+        q_rot = <span class="fn">apply_rotary</span>(q, cos_a, sin_a)
+        k_rot = <span class="fn">apply_rotary</span>(k, cos_a, sin_a)
+        <span class="kw">return</span> q_rot, k_rot
+</pre>
+</div>
+
+<div class="insight-box">
+<div class="insight-title">深度洞察：为什么抖动强度 σ=0.8 是最优平衡点？</div>
+<p>抖动强度 $\sigma$ 控制了基频扰动的幅度。过小的 $\sigma$（如 0.1）不足以打破相位同步，坍塌仍然发生；过大的 $\sigma$ 会破坏位置编码的正常功能，导致运动动力学退化。$\sigma = 0.8$ 在消融实验中表现出最佳平衡：它使不同头的基频变化范围为 $[0.2\theta_0, 1.8\theta_0]$，足以将各头的相位对齐点分散到不同位置，同时保留足够的一致性来维持正常的注意力模式。</p>
+</div>
+
+<h3>为什么这个方法如此优雅？</h3>
+
+<div class="compare-grid">
+<div class="compare-card" style="border-top:3px solid var(--lav-400)">
+<div class="cc-icon">🎯</div>
+<div class="cc-title">精准靶向</div>
+<div class="cc-desc">直接针对根因——多头注意力的相位同步——进行干预。不修改模型结构，不改变训练过程。</div>
+</div>
+<div class="compare-card" style="border-top:3px solid var(--mint-400)">
+<div class="cc-icon">⚡</div>
+<div class="cc-title">零训练开销</div>
+<div class="cc-desc">纯推理时修改，仅在 RoPE 计算阶段增加一个简单的乘法操作，对计算开销几乎可以忽略。</div>
+</div>
+<div class="compare-card" style="border-top:3px solid var(--coral-400)">
+<div class="cc-icon">🔧</div>
+<div class="cc-title">即插即用</div>
+<div class="cc-desc">可直接应用于任何使用 RoPE 的自回归视频生成模型，包括 LongLive 和 Self-Forcing++。</div>
+</div>
+</div>
+
+<!-- SVG 4: Jitter mechanism visualization -->
+<div class="svg-container">
+<svg viewBox="0 0 760 240" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:760px;margin:0 auto;display:block">
+<text x="380" y="20" text-anchor="middle" font-size="13" font-weight="600" fill="#1e1b4b" font-family="Noto Serif SC">多头 RoPE 抖动机制</text>
+
+<!-- Original base frequency -->
+<text x="200" y="50" text-anchor="middle" font-size="11" fill="#4c4b5e" font-weight="600">原始（θ₀ = 10000）</text>
+<text x="560" y="50" text-anchor="middle" font-size="11" fill="#4c4b5e" font-weight="600">抖动后（σ = 0.8）</text>
+
+<!-- Original heads - all same -->
+<g transform="translate(40,60)">
+<rect x="0" y="0" width="320" height="150" rx="8" fill="#f3e8ff" stroke="#d8b4fe"/>
+<text x="160" y="18" text-anchor="middle" font-size="9" fill="#7e22ce">所有头共享相同 θ₀ → 相位同步 → 坍塌</text>
+
+<line x1="20" y1="45" x2="300" y2="45" stroke="#c084fc" stroke-width="1" opacity="0.3"/>
+<text x="15" y="50" font-size="7" fill="#7e22ce">H1</text>
+<rect x="30" y="38" width="270" height="14" rx="3" fill="#c084fc" opacity="0.3"/>
+
+<line x1="20" y1="70" x2="300" y2="70" stroke="#c084fc" stroke-width="1" opacity="0.3"/>
+<text x="15" y="75" font-size="7" fill="#7e22ce">H2</text>
+<rect x="30" y="63" width="270" height="14" rx="3" fill="#c084fc" opacity="0.3"/>
+
+<line x1="20" y1="95" x2="300" y2="95" stroke="#c084fc" stroke-width="1" opacity="0.3"/>
+<text x="15" y="100" font-size="7" fill="#7e22ce">H3</text>
+<rect x="30" y="88" width="270" height="14" rx="3" fill="#c084fc" opacity="0.3"/>
+
+<line x1="20" y1="120" x2="300" y2="120" stroke="#c084fc" stroke-width="1" opacity="0.3"/>
+<text x="15" y="125" font-size="7" fill="#7e22ce">H4</text>
+<rect x="30" y="113" width="270" height="14" rx="3" fill="#c084fc" opacity="0.3"/>
+
+<text x="160" y="147" text-anchor="middle" font-size="8" fill="#7e22ce">相位对齐点: 全部在 f=132 重合 ✗</text>
+</g>
+
+<!-- Arrow -->
+<path d="M370,135 L410,135" stroke="#9333ea" stroke-width="2.5" fill="none"/>
+<polygon points="410,131 418,135 410,139" fill="#9333ea"/>
+
+<!-- Jittered heads -->
+<g transform="translate(420,60)">
+<rect x="0" y="0" width="320" height="150" rx="8" fill="#d1fae5" stroke="#34d399"/>
+<text x="160" y="18" text-anchor="middle" font-size="9" fill="#047857">各头独立扰动 → 相位分散 → 坍塌抑制</text>
+
+<line x1="20" y1="45" x2="300" y2="45" stroke="#6ee7b7" stroke-width="1" opacity="0.3"/>
+<text x="15" y="50" font-size="7" fill="#047857">H1</text>
+<rect x="30" y="38" width="200" height="14" rx="3" fill="#6ee7b7" opacity="0.5"/>
+
+<line x1="20" y1="70" x2="300" y2="70" stroke="#34d399" stroke-width="1" opacity="0.3"/>
+<text x="15" y="75" font-size="7" fill="#047857">H2</text>
+<rect x="80" y="63" width="200" height="14" rx="3" fill="#34d399" opacity="0.5"/>
+
+<line x1="20" y1="95" x2="300" y2="95" stroke="#10b981" stroke-width="1" opacity="0.3"/>
+<text x="15" y="100" font-size="7" fill="#047857">H3</text>
+<rect x="130" y="88" width="180" height="14" rx="3" fill="#10b981" opacity="0.5"/>
+
+<line x1="20" y1="120" x2="300" y2="120" stroke="#059669" stroke-width="1" opacity="0.3"/>
+<text x="15" y="125" font-size="7" fill="#047857">H4</text>
+<rect x="50" y="113" width="220" height="14" rx="3" fill="#059669" opacity="0.5"/>
+
+<text x="160" y="147" text-anchor="middle" font-size="8" fill="#047857">相位对齐点: 分散在不同位置 ✓</text>
+</g>
+</svg>
+<p class="svg-caption">图6：多头RoPE抖动将原本同步的相位对齐点分散到不同时间位置，有效阻止注意力坍塌。</p>
+</div>
+</section>
+
+<!-- ===== Chapter 5 ===== -->
+<section class="chapter" id="ch5">
+<div class="chapter-num">CHAPTER 05</div>
+<h2 class="chapter-title">无限流式生成：从分钟到无穷</h2>
+
+<p>解决 Sink-Collapse 只是实现超长视频生成的第一步。LoL 还需要克服另外两个约束：RoPE 的序列长度限制和 VAE 解码的内存瓶颈。论文利用当前架构的两个内在特性实现了真正的无限生成。</p>
+
+<h3>关键支撑特性</h3>
+
+<div class="compare-grid">
+<div class="compare-card tf">
+<div class="cc-icon">📦</div>
+<div class="cc-title">3D 因果 VAE</div>
+<div class="cc-desc">Wan-2.1 采用的 3D 因果 VAE 确保了时间因果性，允许滑动窗口解码策略，极大减少内存和计算量。无需一次性解码整个序列。</div>
+</div>
+<div class="compare-card df">
+<div class="cc-icon">🪟</div>
+<div class="cc-title">局部注意力窗口</div>
+<div class="cc-desc">两种模型均采用对最近 N 个潜帧的局部注意力。RoPE 点积主要依赖相对位置差，因此局部窗口中的位置编码始终有效。</div>
+</div>
+</div>
+
+<p>基于这两个特性，LoL 的无限流式生成策略非常简洁：</p>
+
+<!-- Code Block 2: Streaming Generation Pipeline -->
+<div class="code-block">
+<div class="code-header">
+<span class="ch-label">streaming_generation.py</span>
+<span class="ch-tag">可信度: 高 — 基于论文Section 3.4</span>
+</div>
+<pre>
+<span class="kw">class</span> <span class="fn">InfiniteStreamingGenerator</span>:
+    <span class="str">"""Infinite-length streaming video generation.
+    
+    Combines multi-head RoPE jitter with dynamic noise
+    sampling and sliding-window VAE decoding.
+    """</span>
+    
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, model, rope_jitter, vae,
+                 window_size=<span class="num">12</span>, sink_frames=<span class="num">3</span>):
+        self.model = model
+        self.rope_jitter = rope_jitter
+        self.vae = vae
+        self.window_size = window_size  <span class="com"># local attention N</span>
+        self.sink_frames = sink_frames  <span class="com"># sink token count</span>
+        self.kv_cache = <span class="None">None</span>
+        self.frame_count = <span class="num">0</span>
+        
+    <span class="kw">def</span> <span class="fn">generate_next_frame</span>(self, prompt_embedding):
+        <span class="str">"""Generate a single frame with streaming updates."""</span>
+        <span class="com"># 1. Sample fresh initial noise</span>
+        noise = torch.randn(<span class="num">1</span>, self.vae.latent_channels,
+                           self.vae.h, self.vae.w)
+        
+        <span class="com"># 2. Apply multi-head RoPE jitter</span>
+        <span class="com"># (replaces standard RoPE in all DiT layers)</span>
+        self.rope_jitter.rejitter()  <span class="com"># new ε_h each frame</span>
+        
+        <span class="com"># 3. Autoregressive denoising (4 steps)</span>
+        latent = noise
+        <span class="kw">for</span> t <span class="kw">in</span> [<span class="num">1000</span>, <span class="num">750</span>, <span class="num">500</span>, <span class="num">250</span>]:
+            latent = self.model.denoise_step(
+                latent, t, 
+                kv_cache=self.kv_cache,
+                prompt=prompt_embedding
+            )
+        
+        <span class="com"># 4. Update KV cache (sliding window)</span>
+        new_kv = self.model.get_kv(latent)
+        <span class="kw">if</span> self.kv_cache <span class="kw">is</span> <span class="None">None</span>:
+            self.kv_cache = new_kv
+        <span class="kw">else</span>:
+            <span class="com"># Keep sink frames + most recent window</span>
+            self.kv_cache = torch.cat([
+                self.kv_cache[:self.sink_frames],  <span class="com"># sink</span>
+                self.kv_cache[self.sink_frames:][-self.window_size+self.sink_frames+<span class="num">1</span>:],
+                new_kv
+            ], dim=<span class="num">0</span>)
+        
+        <span class="com"># 5. Sliding-window VAE decode</span>
+        pixel_frame = self.vae.decode_sliding(latent)
+        self.frame_count += <span class="num">1</span>
+        
+        <span class="kw">return</span> pixel_frame
+    
+    <span class="kw">def</span> <span class="fn">generate_infinite</span>(self, prompt):
+        <span class="str">"""Yield frames indefinitely."""</span>
+        prompt_emb = self.encode_prompt(prompt)
+        <span class="kw">while</span> <span class="None">True</span>:  <span class="com"># truly infinite!</span>
+            frame = self.generate_next_frame(prompt_emb)
+            <span class="kw">yield</span> frame
+</pre>
+</div>
+
+<!-- SVG 5: Streaming Generation Architecture -->
+<div class="svg-container">
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:760px;margin:0 auto;display:block">
+<defs>
+<linearGradient id="kvGrad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#c084fc"/><stop offset="100%" stop-color="#a855f7"/>
+</linearGradient>
+<linearGradient id="noiseGrad2" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#e9d5ff"/><stop offset="100%" stop-color="#d8b4fe"/>
+</linearGradient>
+<linearGradient id="decodeGrad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#a7f3d0"/><stop offset="100%" stop-color="#34d399"/>
+</linearGradient>
+<marker id="arr3" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+<path d="M0,0 L8,4 L0,8 Z" fill="#9333ea"/>
+</marker>
+</defs>
+
+<text x="380" y="20" text-anchor="middle" font-size="13" font-weight="600" fill="#1e1b4b" font-family="Noto Serif SC">无限流式生成架构</text>
+
+<!-- KV Cache sliding window -->
+<rect x="30" y="40" width="700" height="35" rx="6" fill="#f3e8ff" stroke="#d8b4fe"/>
+<text x="45" y="57" font-size="9" fill="#7e22ce" font-weight="600">KV Cache:</text>
+<rect x="110" y="46" width="35" height="22" rx="3" fill="#c084fc" opacity="0.5"/>
+<text x="127" y="61" text-anchor="middle" font-size="7" fill="#fff" font-weight="600">Sink</text>
+<rect x="150" y="46" width="20" height="22" rx="3" fill="#e9d5ff" stroke="#c084fc"/>
+<rect x="173" y="46" width="20" height="22" rx="3" fill="#e9d5ff" stroke="#c084fc"/>
+<rect x="196" y="46" width="20" height="22" rx="3" fill="#e9d5ff" stroke="#c084fc"/>
+<rect x="219" y="46" width="20" height="22" rx="3" fill="#e9d5ff" stroke="#c084fc"/>
+<rect x="242" y="46" width="20" height="22" rx="3" fill="#e9d5ff" stroke="#c084fc"/>
+<rect x="265" y="46" width="20" height="22" rx="3" fill="#e9d5ff" stroke="#c084fc"/>
+<rect x="288" y="46" width="20" height="22" rx="3" fill="#e9d5ff" stroke="#c084fc"/>
+<rect x="311" y="46" width="20" height="22" rx="3" fill="#e9d5ff" stroke="#c084fc"/>
+<rect x="334" y="46" width="30" height="22" rx="3" fill="#6ee7b7" stroke="#10b981" stroke-width="2"/>
+<text x="349" y="61" text-anchor="middle" font-size="7" fill="#047857" font-weight="600">new</text>
+<path d="M370,57 L390,57" stroke="#10b981" stroke-width="1.5" marker-end="url(#arr3)"/>
+<text x="430" y="61" text-anchor="middle" font-size="8" fill="#7e22ce">← 滑动窗口 (N=12) →</text>
+<path d="M640,57 L660,57" stroke="#f43f5e" stroke-width="1.5" marker-end="url(#arr3)"/>
+<rect x="665" y="46" width="50" height="22" rx="3" fill="#ffe4e6" stroke="#fb7185"/>
+<text x="690" y="61" text-anchor="middle" font-size="7" fill="#e11d48">evict</text>
+
+<!-- Generation pipeline -->
+<text x="380" y="105" text-anchor="middle" font-size="11" fill="#4c4b5e" font-weight="600">单帧生成流程</text>
+
+<!-- Noise sampling -->
+<g transform="translate(30,115)">
+<rect x="0" y="0" width="100" height="50" rx="6" fill="url(#noiseGrad2)" opacity="0.4"/>
+<text x="50" y="20" text-anchor="middle" font-size="9" fill="#7e22ce" font-weight="600">噪声采样</text>
+<text x="50" y="35" text-anchor="middle" font-size="8" fill="#7e22ce">ε ~ N(0,I)</text>
+<text x="50" y="45" text-anchor="middle" font-size="7" fill="#7e22ce">动态采样</text>
+</g>
+
+<path d="M135,140 L155,140" stroke="#9333ea" stroke-width="1.5" marker-end="url(#arr3)"/>
+
+<!-- RoPE Jitter -->
+<g transform="translate(160,115)">
+<rect x="0" y="0" width="110" height="50" rx="6" fill="#fef3c7" stroke="#fbbf24"/>
+<text x="55" y="17" text-anchor="middle" font-size="9" fill="#b45309" font-weight="600">RoPE Jitter</text>
+<text x="55" y="32" text-anchor="middle" font-size="8" fill="#b45309">θ̂_h = θ₀(1+σε_h)</text>
+<text x="55" y="44" text-anchor="middle" font-size="7" fill="#b45309">每帧重新采样</text>
+</g>
+
+<path d="M275,140 L295,140" stroke="#9333ea" stroke-width="1.5" marker-end="url(#arr3)"/>
+
+<!-- DiT Denoise -->
+<g transform="translate(300,115)">
+<rect x="0" y="0" width="130" height="50" rx="6" fill="#e9d5ff" stroke="#c084fc"/>
+<text x="65" y="17" text-anchor="middle" font-size="9" fill="#7e22ce" font-weight="600">DiT 去噪</text>
+<text x="65" y="32" text-anchor="middle" font-size="8" fill="#7e22ce">4步: t=1000→250</text>
+<text x="65" y="44" text-anchor="middle" font-size="7" fill="#7e22ce">+ KV Cache attend</text>
+</g>
+
+<path d="M435,140 L455,140" stroke="#9333ea" stroke-width="1.5" marker-end="url(#arr3)"/>
+
+<!-- KV Update -->
+<g transform="translate(460,115)">
+<rect x="0" y="0" width="100" height="50" rx="6" fill="#f3e8ff" stroke="#c084fc"/>
+<text x="50" y="17" text-anchor="middle" font-size="9" fill="#7e22ce" font-weight="600">KV 更新</text>
+<text x="50" y="32" text-anchor="middle" font-size="8" fill="#7e22ce">追加新帧KV</text>
+<text x="50" y="44" text-anchor="middle" font-size="7" fill="#7e22ce">淘汰旧帧</text>
+</g>
+
+<path d="M565,140 L585,140" stroke="#10b981" stroke-width="1.5" marker-end="url(#arr3)"/>
+
+<!-- Sliding VAE decode -->
+<g transform="translate(590,115)">
+<rect x="0" y="0" width="140" height="50" rx="6" fill="url(#decodeGrad)" opacity="0.3"/>
+<text x="70" y="17" text-anchor="middle" font-size="9" fill="#047857" font-weight="600">滑动窗口 VAE 解码</text>
+<text x="70" y="32" text-anchor="middle" font-size="8" fill="#047857">3D 因果 VAE</text>
+<text x="70" y="44" text-anchor="middle" font-size="7" fill="#047857">无需全序列解码</text>
+</g>
+
+<!-- Output stream -->
+<path d="M660,165 L660,195" stroke="#10b981" stroke-width="2" marker-end="url(#arr3)"/>
+<text x="660" y="210" text-anchor="middle" font-size="10" fill="#10b981" font-weight="600">输出像素帧 → 流式播放</text>
+
+<!-- Time axis -->
+<text x="380" y="240" text-anchor="middle" font-size="10" fill="#787887">以上流程持续循环：t → t+1 → t+2 → ··· → ∞</text>
+
+<!-- Duration labels -->
+<g transform="translate(100,255)">
+<rect x="0" y="0" width="80" height="25" rx="4" fill="#ffe4e6" stroke="#fb7185"/>
+<text x="40" y="16" text-anchor="middle" font-size="8" fill="#e11d48" font-weight="600">旧方法: ≤4min</text>
+</g>
+<path d="M185,267 L240,267" stroke="#787887" stroke-width="1" marker-end="url(#arr3)"/>
+<g transform="translate(245,255)">
+<rect x="0" y="0" width="80" height="25" rx="4" fill="#d1fae5" stroke="#34d399"/>
+<text x="40" y="16" text-anchor="middle" font-size="8" fill="#047857" font-weight="600">LoL: 12h+</text>
+</g>
+<path d="M330,267 L385,267" stroke="#787887" stroke-width="1" marker-end="url(#arr3)"/>
+<g transform="translate(390,255)">
+<rect x="0" y="0" width="100" height="25" rx="4" fill="#f3e8ff" stroke="#c084fc"/>
+<text x="50" y="16" text-anchor="middle" font-size="8" fill="#7e22ce" font-weight="600">理论极限: ∞</text>
+</g>
+</svg>
+<p class="svg-caption">图7：LoL 无限流式生成架构。每帧独立采样噪声、应用 RoPE 抖动、去噪、更新 KV 缓存并滑动窗口解码。</p>
+</div>
+
+<div class="insight-box">
+<div class="insight-title">深度洞察：局部注意力是无限生成的隐藏推手</div>
+<p>很多人忽略了局部注意力在无限生成中的关键作用。全局注意力的 KV 缓存会线性增长导致内存爆炸，而局部注意力窗口（N=12）使 KV 缓存大小保持恒定。结合 RoPE 的相对位置特性——点积仅依赖相对位移——局部窗口内的位置编码永远不会"过期"。这意味着只要 Sink-Collapse 被抑制，模型理论上可以无限生成。LoL 的贡献在于<strong>解除了最后一个瓶颈</strong>，使这个理论潜力变为现实。</p>
+</div>
+</section>
+
+<!-- ===== Chapter 6 ===== -->
+<section class="chapter" id="ch6">
+<div class="chapter-num">CHAPTER 06</div>
+<h2 class="chapter-title">实验结果：全面超越的定量分析</h2>
+
+<p>论文在两个最先进的超长视频生成模型（LongLive 和 Self-Forcing++）上进行了全面评估，对比了多种位置编码扩展方法。</p>
+
+<h3>核心指标：Sink-Collapse 分数</h3>
+
+<p>论文采用比 RIFLEx 更严格的测量方式：在整个生成范围内计算归一化 L2 距离的最大下降幅度，包含两个指标：</p>
+
+<div class="compare-grid">
+<div class="compare-card" style="border-top:3px solid var(--coral-400)">
+<div class="cc-icon">📉</div>
+<div class="cc-title">Sink-Collapse Max (↓)</div>
+<div class="cc-desc">单个测试提示词中最大的距离下降幅度——衡量最坏情况。</div>
+</div>
+<div class="compare-card" style="border-top:3px solid var(--amber-400)">
+<div class="cc-icon">📊</div>
+<div class="cc-title">Sink-Collapse Avg (↓)</div>
+<div class="cc-desc">所有测试提示词的平均距离下降幅度——衡量平均情况。</div>
+</div>
+<div class="compare-card" style="border-top:3px solid var(--mint-400)">
+<div class="cc-icon">🏃</div>
+<div class="cc-title">Dynamic Degree (↑)</div>
+<div class="cc-desc">视频运动丰富度——过低意味着运动几乎停滞（PI 方法的典型问题）。</div>
+</div>
+</div>
+
+<h3>LongLive 上的主实验结果</h3>
+
+<table class="data-table">
+<thead>
+<tr>
+<th>Method</th>
+<th>SC-Max ↓</th>
+<th>SC-Avg ↓</th>
+<th>Dyn.Deg ↑</th>
+<th>Text Align</th>
+<th>Temp.Quality</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PE (朴素外推)</td>
+<td style="color:#f43f5e;font-weight:600">73.06</td>
+<td style="color:#f43f5e;font-weight:600">30.54</td>
+<td>34.62</td>
+<td>28.09</td>
+<td>88.56</td>
+</tr>
+<tr>
+<td>PI (位置插值)</td>
+<td>4.97</td>
+<td>2.27</td>
+<td style="color:#f43f5e;font-weight:600">0.35</td>
+<td>24.62</td>
+<td>85.25</td>
+</tr>
+<tr>
+<td>NTK</td>
+<td>41.11</td>
+<td>11.64</td>
+<td>28.72</td>
+<td>27.98</td>
+<td>87.95</td>
+</tr>
+<tr>
+<td>YARN</td>
+<td>11.17</td>
+<td>5.08</td>
+<td style="color:#f43f5e;font-weight:600">2.67</td>
+<td>28.02</td>
+<td>85.17</td>
+</tr>
+<tr>
+<td>RIFLEx</td>
+<td style="color:#f43f5e;font-weight:600">70.95</td>
+<td style="color:#f43f5e;font-weight:600">29.93</td>
+<td>35.11</td>
+<td>23.11</td>
+<td>88.61</td>
+</tr>
+<tr class="ours">
+<td><strong>Ours (LoL)</strong></td>
+<td class="best">16.67</td>
+<td class="best">3.93</td>
+<td class="best">35.27</td>
+<td class="best">27.80</td>
+<td class="best">88.69</td>
+</tr>
+</tbody>
+</table>
+
+<div class="insight-box">
+<div class="insight-title">深度洞察：LoL 的唯一解——同时满足两个矛盾目标</div>
+<p>此前所有方法都面临一个两难困境：<strong>抑制坍塌（PI/YARN）会导致运动停滞</strong>，而<strong>保持运动（PE/RIFLEx）则无法抑制坍塌</strong>。LoL 首次同时实现了低坍塌分数（SC-Avg=3.93）和高运动度（Dyn.Deg=35.27，与原始 PE 的 34.62 几乎相同）。这一突破的核心在于：抖动只是<strong>微妙地偏移</strong>了不同头的相位对齐点，而非像 PI 那样粗暴地压缩整个位置编码空间。</p>
+</div>
+
+<h3>与其他自回归模型的对比</h3>
+
+<table class="data-table">
+<thead>
+<tr>
+<th>Model</th>
+<th>75s Text↑</th>
+<th>75s Temp.Q↑</th>
+<th>75s Dyn.Deg↑</th>
+<th>100s Dyn.Deg↑</th>
+</tr>
+</thead>
+<tbody>
+<tr><td>NOVA</td><td>23.37</td><td>86.32</td><td>31.24</td><td>31.09</td></tr>
+<tr><td>MAGI-1</td><td>24.95</td><td>87.89</td><td>24.82</td><td>22.21</td></tr>
+<tr><td>SkyReels-V2</td><td>22.70</td><td>88.99</td><td>39.89</td><td>38.75</td></tr>
+<tr><td>CausVid</td><td>24.76</td><td>89.14</td><td>35.82</td><td>34.60</td></tr>
+<tr><td>Self Forcing</td><td>23.39</td><td>87.79</td><td>29.15</td><td>26.41</td></tr>
+<tr><td>Self-Forcing++</td><td>26.31</td><td>91.00</td><td>55.62</td><td>54.12</td></tr>
+<tr><td>LongLive</td><td>28.08</td><td>88.64</td><td>35.14</td><td>34.62</td></tr>
+<tr class="ours"><td><strong>SF++(LoL)</strong></td><td class="best">27.39</td><td class="best">93.08</td><td class="best">81.30</td><td class="best">81.20</td></tr>
+<tr class="ours"><td><strong>LongLive(LoL)</strong></td><td>27.85</td><td>88.78</td><td>35.77</td><td>35.27</td></tr>
+</tbody>
+</table>
+
+<figure>
+<img src="assets/_precise_v2/fig1_teaser.webp" alt="12-hour generated video">
+<figcaption>图8（论文Figure 1）：LoL 生成的12小时连续视频的时间切片——翼装飞行者穿越狭窄山谷，持续12小时保持视觉一致性和运动稳定性。</figcaption>
+</figure>
+
+<!-- SVG 6: Performance Comparison Radar -->
+<div class="svg-container">
+<svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:760px;margin:0 auto;display:block">
+<text x="380" y="20" text-anchor="middle" font-size="13" font-weight="600" fill="#1e1b4b" font-family="Noto Serif SC">方法性能对比全景图</text>
+
+<!-- Axes labels -->
+<text x="80" y="50" text-anchor="middle" font-size="10" fill="#4c4b5e" font-weight="600">Sink-Collapse 抑制</text>
+<text x="280" y="50" text-anchor="middle" font-size="10" fill="#4c4b5e" font-weight="600">运动丰富度</text>
+<text x="480" y="50" text-anchor="middle" font-size="10" fill="#4c4b5e" font-weight="600">文本对齐</text>
+<text x="680" y="50" text-anchor="middle" font-size="10" fill="#4c4b5e" font-weight="600">时间质量</text>
+
+<!-- Bar chart: Sink-Collapse suppression -->
+<g transform="translate(20,60)">
+<text x="60" y="0" text-anchor="middle" font-size="8" fill="#787887">SC-Avg ↓ (越低越好)</text>
+<rect x="5" y="10" width="18" height="30" rx="2" fill="#fecdd3"/><text x="14" y="50" text-anchor="middle" font-size="7" fill="#787887">PE</text>
+<text x="14" y="25" text-anchor="middle" font-size="7" fill="#f43f5e">30.5</text>
+<rect x="28" y="10" width="18" height="10" rx="2" fill="#fde68a"/><text x="37" y="50" text-anchor="middle" font-size="7" fill="#787887">PI</text>
+<text x="37" y="18" text-anchor="middle" font-size="7" fill="#b45309">2.3</text>
+<rect x="51" y="10" width="18" height="20" rx="2" fill="#fecdd3"/><text x="60" y="50" text-anchor="middle" font-size="7" fill="#787887">NTK</text>
+<text x="60" y="25" text-anchor="middle" font-size="7" fill="#f43f5e">11.6</text>
+<rect x="74" y="10" width="18" height="12" rx="2" fill="#fde68a"/><text x="83" y="50" text-anchor="middle" font-size="7" fill="#787887">YARN</text>
+<text x="83" y="18" text-anchor="middle" font-size="7" fill="#b45309">5.1</text>
+<rect x="97" y="10" width="18" height="30" rx="2" fill="#fecdd3"/><text x="106" y="50" text-anchor="middle" font-size="7" fill="#787887">RI</text>
+<text x="106" y="25" text-anchor="middle" font-size="7" fill="#f43f5e">29.9</text>
+<rect x="120" y="10" width="18" height="8" rx="2" fill="#6ee7b7"/><text x="129" y="50" text-anchor="middle" font-size="7" fill="#10b981" font-weight="600">LoL</text>
+<text x="129" y="16" text-anchor="middle" font-size="7" fill="#10b981">3.9</text>
+</g>
+
+<!-- Bar chart: Dynamic Degree -->
+<g transform="translate(220,60)">
+<text x="60" y="0" text-anchor="middle" font-size="8" fill="#787887">Dyn.Deg ↑ (越高越好)</text>
+<rect x="5" y="10" width="18" height="30" rx="2" fill="#a7f3d0"/><text x="14" y="50" text-anchor="middle" font-size="7" fill="#787887">PE</text>
+<text x="14" y="25" text-anchor="middle" font-size="7" fill="#047857">34.6</text>
+<rect x="28" y="30" width="18" height="10" rx="2" fill="#fda4af"/><text x="37" y="50" text-anchor="middle" font-size="7" fill="#787887">PI</text>
+<text x="37" y="38" text-anchor="middle" font-size="7" fill="#f43f5e">0.4</text>
+<rect x="51" y="12" width="18" height="28" rx="2" fill="#a7f3d0"/><text x="60" y="50" text-anchor="middle" font-size="7" fill="#787887">NTK</text>
+<text x="60" y="27" text-anchor="middle" font-size="7" fill="#047857">28.7</text>
+<rect x="74" y="28" width="18" height="12" rx="2" fill="#fda4af"/><text x="83" y="50" text-anchor="middle" font-size="7" fill="#787887">YARN</text>
+<text x="83" y="36" text-anchor="middle" font-size="7" fill="#f43f5e">2.7</text>
+<rect x="97" y="10" width="18" height="30" rx="2" fill="#a7f3d0"/><text x="106" y="50" text-anchor="middle" font-size="7" fill="#787887">RI</text>
+<text x="106" y="25" text-anchor="middle" font-size="7" fill="#047857">35.1</text>
+<rect x="120" y="10" width="18" height="30" rx="2" fill="#6ee7b7"/><text x="129" y="50" text-anchor="middle" font-size="7" fill="#10b981" font-weight="600">LoL</text>
+<text x="129" y="25" text-anchor="middle" font-size="7" fill="#10b981">35.3</text>
+</g>
+
+<!-- Bar chart: Text Alignment -->
+<g transform="translate(420,60)">
+<text x="60" y="0" text-anchor="middle" font-size="8" fill="#787887">Text Align ↑</text>
+<rect x="5" y="10" width="18" height="28" rx="2" fill="#a7f3d0"/><text x="14" y="50" text-anchor="middle" font-size="7" fill="#787887">PE</text>
+<text x="14" y="25" text-anchor="middle" font-size="7" fill="#047857">28.1</text>
+<rect x="28" y="14" width="18" height="24" rx="2" fill="#a7f3d0"/><text x="37" y="50" text-anchor="middle" font-size="7" fill="#787887">PI</text>
+<text x="37" y="28" text-anchor="middle" font-size="7" fill="#047857">24.6</text>
+<rect x="51" y="10" width="18" height="28" rx="2" fill="#a7f3d0"/><text x="60" y="50" text-anchor="middle" font-size="7" fill="#787887">NTK</text>
+<text x="60" y="25" text-anchor="middle" font-size="7" fill="#047857">28.0</text>
+<rect x="74" y="10" width="18" height="28" rx="2" fill="#a7f3d0"/><text x="83" y="50" text-anchor="middle" font-size="7" fill="#787887">YARN</text>
+<text x="83" y="25" text-anchor="middle" font-size="7" fill="#047857">28.0</text>
+<rect x="97" y="14" width="18" height="24" rx="2" fill="#a7f3d0"/><text x="106" y="50" text-anchor="middle" font-size="7" fill="#787887">RI</text>
+<text x="106" y="28" text-anchor="middle" font-size="7" fill="#047857">23.1</text>
+<rect x="120" y="10" width="18" height="28" rx="2" fill="#6ee7b7"/><text x="129" y="50" text-anchor="middle" font-size="7" fill="#10b981" font-weight="600">LoL</text>
+<text x="129" y="25" text-anchor="middle" font-size="7" fill="#10b981">27.8</text>
+</g>
+
+<!-- Bar chart: Temporal Quality -->
+<g transform="translate(620,60)">
+<text x="60" y="0" text-anchor="middle" font-size="8" fill="#787887">Temp.Quality ↑</text>
+<rect x="5" y="10" width="18" height="30" rx="2" fill="#a7f3d0"/><text x="14" y="50" text-anchor="middle" font-size="7" fill="#787887">PE</text>
+<text x="14" y="25" text-anchor="middle" font-size="7" fill="#047857">88.6</text>
+<rect x="28" y="16" width="18" height="24" rx="2" fill="#a7f3d0"/><text x="37" y="50" text-anchor="middle" font-size="7" fill="#787887">PI</text>
+<text x="37" y="28" text-anchor="middle" font-size="7" fill="#047857">85.3</text>
+<rect x="51" y="12" width="18" height="28" rx="2" fill="#a7f3d0"/><text x="60" y="50" text-anchor="middle" font-size="7" fill="#787887">NTK</text>
+<text x="60" y="27" text-anchor="middle" font-size="7" fill="#047857">88.0</text>
+<rect x="74" y="16" width="18" height="24" rx="2" fill="#a7f3d0"/><text x="83" y="50" text-anchor="middle" font-size="7" fill="#787887">YARN</text>
+<text x="83" y="28" text-anchor="middle" font-size="7" fill="#047857">85.2</text>
+<rect x="97" y="10" width="18" height="30" rx="2" fill="#a7f3d0"/><text x="106" y="50" text-anchor="middle" font-size="7" fill="#787887">RI</text>
+<text x="106" y="25" text-anchor="middle" font-size="7" fill="#047857">88.6</text>
+<rect x="120" y="10" width="18" height="30" rx="2" fill="#6ee7b7"/><text x="129" y="50" text-anchor="middle" font-size="7" fill="#10b981" font-weight="600">LoL</text>
+<text x="129" y="25" text-anchor="middle" font-size="7" fill="#10b981">88.7</text>
+</g>
+
+<!-- Legend -->
+<text x="380" y="200" text-anchor="middle" font-size="9" fill="#787887">LoL 同时在坍塌抑制（绿色柱）和运动丰富度上达到最优——突破了此前的两难困境</text>
+
+<!-- Key insight callout -->
+<rect x="100" y="215" width="560" height="80" rx="10" fill="#f0fdf4" stroke="#34d399" stroke-width="1.5"/>
+<text x="380" y="238" text-anchor="middle" font-size="11" fill="#047857" font-weight="600">关键发现：LoL 的独特优势</text>
+<text x="380" y="256" text-anchor="middle" font-size="10" fill="#047857">PI/YARN 通过压缩位置编码空间抑制坍塌，但牺牲运动；PE/RIFLEx 保持运动但坍塌严重。</text>
+<text x="380" y="272" text-anchor="middle" font-size="10" fill="#047857">LoL 通过微妙扰动相位对齐点，既打破同步又保留位置编码的完整功能。</text>
+</svg>
+<p class="svg-caption">图9：各方法在四项核心指标上的对比。LoL 独特地实现了坍塌抑制与运动丰富度的双赢。</p>
+</div>
+</section>
+
+<!-- ===== Chapter 7 ===== -->
+<section class="chapter" id="ch7">
+<div class="chapter-num">CHAPTER 07</div>
+<h2 class="chapter-title">消融研究：深入理解每个设计选择</h2>
+
+<p>论文进行了四组消融实验，逐一验证每个关键设计选择的必要性，进一步支持了 Sink-Collapse 多维度集体效应的分析结论。</p>
+
+<h3>消融1：单维度修复是否有效？</h3>
+
+<p>修改 RIFLEx 识别的维度（k=8）及其邻近维度的频率，观察 Sink-Collapse 是否缓解：</p>
+
+<figure>
+<img src="assets/_precise_v2/fig5_ablation.webp" alt="Ablation on single dimension">
+<figcaption>图10（论文Figure 5a）：修改不同单维度频率的结果。无论修改哪个维度，Sink-Collapse 均无法有效缓解，进一步证明坍塌不是单一维度导致的。</figcaption>
+</figure>
+
+<div class="insight-box">
+<div class="insight-title">深度洞察：单维度修复的逻辑陷阱</div>
+<p>RIFLEx 的思路是"找到导致重复的最近频率维度并修改它"。但这隐含了一个假设：重复是由单一维度的周期性主导的。论文的实验证伪了这一假设——即使同时修改 k=6 到 k=10 五个维度，Sink-Collapse 依然发生。这说明坍塌是一个<strong>涌现性质</strong>（emergent property），来自所有维度的集体相位行为，无法通过局部修改来解决。这与深度学习中许多"非局部"现象（如注意力坍塌、表征坍塌）有着深刻的结构相似性。</p>
+</div>
+
+<h3>消融2：改变 RoPE 基频 θ 能否解决？</h3>
+
+<p>将基频从 6000 变化到 20000，观察效果：</p>
+
+<figure>
+<img src="assets/_precise_v2/fig7_l2distance.webp" alt="Different RoPE base values">
+<figcaption>图11（论文Figure 7）：不同 θ 值下的相位集中与 L2 距离对比。改变 θ 只能移动坍塌点的位置，无法从根本上消除它。</figcaption>
+</figure>
+
+<h3>消融3：抖动强度 σ 的影响</h3>
+
+<p>系统地测试不同抖动强度的效果：</p>
+
+<figure>
+<img src="assets/_precise_v2/fig6_jitter.webp" alt="Jitter intensity ablation">
+<figcaption>图12（论文Figure 6）：（a）不同抖动强度 σ 的效果——σ=0.8 达到最佳平衡；（b）不同抖动头数比例的效果——抖动所有头最优。</figcaption>
+</figure>
+
+<!-- Code Block 3: Phase Concentration Analysis -->
+<div class="code-block">
+<div class="code-header">
+<span class="ch-label">phase_analysis.py</span>
+<span class="ch-tag">可信度: 高 — 论文 Eq.(5) 的计算实现</span>
+</div>
+<pre>
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+<span class="kw">def</span> <span class="fn">compute_phase_concentration</span>(
+    rope_base=<span class="num">10000.0</span>, 
+    dim=<span class="num">64</span>, 
+    max_frame=<span class="num">800</span>
+):
+    <span class="str">"""Compute phase coherence kernel C(Δ) from Eq.(5).
+    
+    C(Δ) = |1/K * Σ exp(j·ωᵢ·Δ)|
+    
+    High values indicate multi-frequency phase alignment
+    with sink frames, predicting sink-collapse locations.
+    """</span>
+    K = dim // <span class="num">2</span>
+    
+    <span class="com"># RoPE frequencies: ωᵢ = θ^(-2i/d)</span>
+    freq_exponents = np.arange(K) * (-<span class="num">2.0</span> / dim)
+    omega = rope_base ** freq_exponents  <span class="com"># [K]</span>
+    
+    <span class="com"># Compute C(Δ) for all frame displacements</span>
+    delta = np.arange(<span class="num">1</span>, max_frame)  <span class="com"># relative displacement</span>
+    
+    <span class="com"># Phase: exp(j·ωᵢ·Δ) for each frequency</span>
+    phase = np.outer(delta, omega)  <span class="com"># [T, K]</span>
+    complex_phase = np.exp(<span class="num">1j</span> * phase)
+    
+    <span class="com"># Coherence: |mean over K dimensions|</span>
+    C_delta = np.abs(complex_phase.mean(axis=<span class="num">1</span>))
+    
+    <span class="com"># Find local maxima (potential collapse points)</span>
+    local_maxima = []
+    <span class="kw">for</span> i <span class="kw">in</span> range(<span class="num">1</span>, len(C_delta) - <span class="num">1</span>):
+        <span class="kw">if</span> (C_delta[i] > C_delta[i-<span class="num">1</span>] <span class="kw">and</span> 
+            C_delta[i] > C_delta[i+<span class="num">1</span>]):
+            local_maxima.append((i+<span class="num">1</span>, C_delta[i]))
+    
+    <span class="com"># Sort by concentration intensity</span>
+    local_maxima.sort(key=<span class="kw">lambda</span> x: x[<span class="num">1</span>], reverse=<span class="None">True</span>)
+    
+    <span class="kw">return</span> C_delta, local_maxima
+
+<span class="com"># Usage: predict collapse locations</span>
+C, peaks = compute_phase_concentration(
+    rope_base=<span class="num">10000</span>, dim=<span class="num">64</span>, max_frame=<span class="num">500</span>
+)
+<span class="fn">print</span>(<span class="str">"Top predicted collapse points:"</span>)
+<span class="kw">for</span> frame, intensity <span class="kw">in</span> peaks[:<span class="num">5</span>]:
+    <span class="fn">print</span>(<span class="str">f"  Frame {frame}: C(Δ) = {intensity:.4f}"</span>)
+<span class="com"># Expected output includes frames near 132 and 201</span>
+</pre>
+</div>
+
+<div class="insight-box">
+<div class="insight-title">深度洞察：消融实验的元启示——简单方法为何能成功</div>
+<p>消融实验共同指向一个深层结论：Sink-Collapse 的根源是多维度的集体相位同步，而非任何单一因素。这意味着"对症下药"的局部修改（改单维度、调基频）注定失败，而"打破集体同步"的全局策略才能奏效。LoL 的抖动方法之所以成功，恰恰因为它是一个<strong>分布层面的干预</strong>——通过给每个头注入独立的随机性，确保不可能所有头同时达到相位对齐。这类似于 MCMC 中的 Metropolis-Hastings 技巧：适当的随机扰动反而能增强系统的遍历性。</p>
+</div>
+
+<h3>消融4：抖动注意力头的比例</h3>
+
+<p>论文还测试了只抖动部分注意力头的效果。结果表明，随着抖动头比例的增加，Sink-Collapse 逐渐缓解，抖动所有头效果最佳。这进一步证实了问题的集体性质——只要有一个未抖动的头保持同步相位，它就可能成为坍塌的"薄弱点"。</p>
+
+<div class="insight-box">
+<div class="insight-title">深度洞察：随机种子的鲁棒性验证</div>
+<p>论文使用三个不同随机种子进行实验并报告聚合结果与标准差。这一细节很重要：如果抖动效果高度依赖于随机种子的选择，那么方法的可靠性就值得怀疑。实验显示标准差很小，说明抖动方法是<strong>统计上鲁棒</strong>的——无论具体扰动如何，只要扰动足够大且覆盖所有头，坍塌就能被有效抑制。这为实际部署提供了信心。</p>
+</div>
+</section>
+
+<!-- ===== Chapter 8 ===== -->
+<section class="chapter" id="ch8">
+<div class="chapter-num">CHAPTER 08</div>
+<h2 class="chapter-title">讨论与局限性：通往更好视频生成的道路</h2>
+
+<p>LoL 虽然取得了突破性进展，但论文作者坦诚地讨论了多个局限性和未来方向，这些思考同样具有重要价值。</p>
+
+<h3>当前局限</h3>
+
+<div class="compare-grid">
+<div class="compare-card" style="border-top:3px solid var(--coral-400)">
+<div class="cc-icon">🧠</div>
+<div class="cc-title">缺乏长期记忆</div>
+<div class="cc-desc">模型没有维护长期记忆的机制。如果物体离开画面后重新出现，或长时间被遮挡，主体一致性可能失败。这在多小时视频中尤为明显。</div>
+</div>
+<div class="compare-card" style="border-top:3px solid var(--amber-400)">
+<div class="cc-icon">📦</div>
+<div class="cc-title">基础模型容量有限</div>
+<div class="cc-desc">依赖 Wan2.1-T2V-1.3B 蒸馏模型，参数量仅1.3B。对于12小时的超长视频，视觉多样性可能不足。更大的模型有望带来显著改善。</div>
+</div>
+<div class="compare-card" style="border-top:3px solid var(--lav-400)">
+<div class="cc-icon">🔄</div>
+<div class="cc-title">抑制而非根除</div>
+<div class="cc-desc">由于 RoPE 的内在周期性，LoL 只能"显著抑制"坍塌而非完全消除。在极端情况下仍可能出现微弱的重复模式。</div>
+</div>
+</div>
+
+<figure>
+<img src="assets/_precise/Figure_11_12-hour_visualization_p16.webp" alt="12-hour jellyfish video">
+<figcaption>图13（论文Figure 11）：12小时水母视频的时间切片。尽管展示了持续的视觉一致性，但长期记忆缺失仍然是潜在问题。</figcaption>
+</figure>
+
+<figure>
+<img src="assets/_precise/Figure_13_1-hour_visualization_p17.webp" alt="1-hour prompt switching">
+<figcaption>图14（论文Figure 13）：1小时带提示词切换的视频。LoL 兼容场景切换，展示了在复杂提示词变化下的稳定性。</figcaption>
+</figure>
+
+<div class="insight-box">
+<div class="insight-title">深度洞察：RoPE 的周期性困境——一个更深层的架构问题</div>
+<p>LoL 揭示了一个更深层的问题：RoPE 的周期性本质上与无限序列生成存在张力。正弦/余弦函数的周期意味着"足够长的序列总会触发相位重对齐"，而多头注意力的集体效应使问题更加严重。未来可能需要从根本上重新思考位置编码——例如非周期性编码（如对数编码）、可学习的自适应编码、或者完全抛弃显式位置编码。这是一个具有广泛影响的开放问题，不仅影响视频生成，也影响长上下文 LLM。</p>
+</div>
+
+<h3>未来方向</h3>
+
+<p>论文指出了多个有前景的研究方向：</p>
+
+<p><strong>1. 非周期性位置编码</strong>：探索不具有正弦周期性的位置编码方案，从根本上解决相位重对齐问题。</p>
+
+<p><strong>2. 训练策略增强</strong>：在训练阶段利用相位集中信息，在局部最大值处屏蔽沉没帧，引导模型学习更鲁棒的注意力模式。</p>
+
+<p><strong>3. 稀疏/线性注意力</strong>：结合 Sana-Video 等方法的块线性注意力机制，进一步提升效率和可扩展性。</p>
+
+<p><strong>4. 更强的基础模型</strong>：在更大参数量（如 7B、14B）的视频生成模型上验证和扩展方法。</p>
+
+<p><strong>5. 控制信号集成</strong>：通过更强的控制信号（如轨迹指令、深度图）增强可控性。</p>
+
+<div class="insight-box">
+<div class="insight-title">深度洞察：无训练方法的范式价值</div>
+<p>LoL 作为无训练方法的价值不仅在于节省计算资源，更在于它提供了一种<strong>即时修复</strong>的能力：任何使用 RoPE 的自回归视频模型都可以立即受益。这与 LLM 领域的推理时优化（如 Speculative Decoding、KV Cache Compression）形成了有趣的呼应。在基础模型快速迭代的时代，不需要重新训练就能改善已有模型的推理时方法具有极高的实践价值——它们可以"搭乘"基础模型升级的便车，持续获益。</p>
+</div>
+</section>
+
+<!-- ===== Chapter 9 ===== -->
+<section class="chapter" id="ch9">
+<div class="chapter-num">CHAPTER 09</div>
+<h2 class="chapter-title">总结：从不可能到日常的12小时视频</h2>
+
+<p>LoL 论文完成了一次优雅的科学叙事：从观察到问题（Sink-Collapse）、分析根因（RoPE 周期性 + 多头注意力同质化）、提出解决方案（多头 RoPE 抖动）、到实现突破性结果（首次12小时连续视频生成）。整个方法仅需修改几行 RoPE 计算代码，无需任何额外训练。</p>
+
+<figure>
+<img src="assets/_precise/Figure_10_More_visualization_p16.webp" alt="Multi-layer attention visualization">
+<figcaption>图15（论文Figure 10）：跨层多头注意力热图。复制行为贯穿模型各层和各头，证实了 Sink-Collapse 的结构性本质。</figcaption>
+</figure>
+
+<figure>
+<img src="assets/_precise/Figure_14_10-minute_visualization_p17.webp" alt="10-minute with scene transitions">
+<figcaption>图16（论文Figure 14）：10分钟带大量场景切换的视频。即使在频繁语义切换的极端设置下，LoL 也能保持稳定性。</figcaption>
+</figure>
+
+<div class="stats-grid">
+<div class="stat-card">
+<div class="stat-value">3.93</div>
+<div class="stat-label">SC-Avg (最佳)</div>
+</div>
+<div class="stat-card">
+<div class="stat-value">35.27</div>
+<div class="stat-label">Dyn.Deg (最佳)</div>
+</div>
+<div class="stat-card">
+<div class="stat-value">~0</div>
+<div class="stat-label">额外计算开销</div>
+</div>
+<div class="stat-card">
+<div class="stat-value">2</div>
+<div class="stat-label">适配模型数</div>
+</div>
+</div>
+
+<p>这篇论文的核心启示超越了视频生成领域本身：<strong>理解问题的精确数学机制，往往能发现极其简洁的解决方案</strong>。在深度学习日益复杂的今天，LoL 用几行代码解决了数百万参数模型的根本缺陷，这种"四两拨千斤"的优雅正是好的研究应有的样子。</p>
+
+<div class="insight-box">
+<div class="insight-title">深度洞察：从 StreamingLLM 到 LoL 的技术传承</div>
+<p>LoL 的技术线索可以追溯到 StreamingLLM（2024）发现的"注意力沉没"现象——LLM 中前几个 token 会获得异常高的注意力权重。LongLive 将这一概念引入视频生成以增强稳定性，但引入了新的坍塌问题。LoL 则揭示并解决了这一副作用。这条从"发现现象→迁移应用→揭示新问题→解决新问题"的技术传承链，展示了基础研究如何通过跨领域迁移和问题深化来推动进步。</p>
+</div>
+</section>
+
+<!-- ===== Chapter 10: Research Questions ===== -->
+<section class="chapter" id="ch10">
+<div class="chapter-num">RESEARCH QUESTIONS</div>
+<h2 class="chapter-title">开放科研问题</h2>
+
+<div class="research-q">
+<div class="rq-tag">Q1</div>
+<div class="rq-title">能否设计非周期性位置编码彻底解决 Sink-Collapse？</div>
+<p><strong>理论分析：</strong>RoPE 的正弦周期性是 Sink-Collapse 的数学根源。对数编码 $\theta_i = \log(1 + i)$、多项式编码 $\theta_i = (1 + i)^{-\alpha}$ 或可学习的自适应编码可能从根本上消除周期性相位重对齐。但需要验证这些替代方案是否保留 RoPE 在短距离上的优秀相对位置感知能力。</p>
+<p><strong>调查方向：</strong>系统比较周期性 vs 非周期性编码在不同序列长度下的注意力模式；分析非周期性编码对模型训练收敛性的影响；探索混合方案——短距离用 RoPE、长距离用非周期性编码。</p>
+</div>
+
+<div class="research-q">
+<div class="rq-tag">Q2</div>
+<div class="rq-title">Sink-Collapse 现象在更大规模模型（7B+）中是否依然存在？</div>
+<p><strong>理论分析：</strong>LoL 基于 1.3B 模型实验。更大的模型通常具有更多的注意力头和更丰富的表征子空间，理论上可能对相位同步有更强的"抵抗力"——即使多数头同步，仍可能有少数头维持多样性。但也可能因为更深的网络层导致更严重的注意力同质化。</p>
+<p><strong>调查方向：</strong>在 Wan-7B、CogVideoX-9B 等模型上复现 Sink-Collapse 实验；分析注意力头数量与坍塌严重程度的关系；研究模型规模是否改变了单维度 vs 多维度坍塌的主导性。</p>
+</div>
+
+<div class="research-q">
+<div class="rq-tag">Q3</div>
+<div class="rq-title">训练时屏蔽沉没帧能否从根本上解决问题？</div>
+<p><strong>理论分析：</strong>LoL 论文提到可以在训练时在相位集中最大值处屏蔽沉没帧。这类似于 Transformer 中的 dropout 策略——随机丢弃某些注意力连接以增强鲁棒性。如果模型在训练时就"学会"不依赖沉没帧，可能无需推理时的抖动。</p>
+<p><strong>调查方向：</strong>设计基于 $C(\Delta)$ 的自适应屏蔽策略；比较训练时屏蔽 vs 推理时抖动的效果差异；探索两者结合是否能进一步提升性能。</p>
+</div>
+
+<div class="research-q">
+<div class="rq-tag">Q4</div>
+<div class="rq-title">LoL 的抖动策略能否推广到长上下文 LLM？</div>
+<p><strong>理论分析：</strong>Sink-Collapse 在视频生成中的表现——远距离 token 获得与初始 token 近似的位置编码——在 LLM 长上下文推理中同样可能发生（虽然表现形式不同）。多头 RoPE 抖动可能有助于改善 LLM 在超长上下文（100K+）中的注意力模式退化问题。</p>
+<p><strong>调查方向：</strong>在 LLaMA、Qwen 等模型的长上下文设置下测试多头 RoPE 抖动；分析 LLM 中是否也存在类似的多头注意力同质化现象；评估抖动对 perplexity 和下游任务的影响。</p>
+</div>
+
+<div class="research-q">
+<div class="rq-tag">Q5</div>
+<div class="rq-title">如何在无限生成中引入可控的长期记忆？</div>
+<p><strong>理论分析：</strong>LoL 的局部注意力窗口（N=12）虽保证了无限生成的可行性，但也完全丧失了长期记忆。对于多小时视频，需要某种"摘要化"的长期记忆来维持全局一致性。这与 LLM 中的 RAG、外部记忆模块有深层联系。</p>
+<p><strong>调查方向：</strong>设计轻量级的帧级/场景级摘要模块，维护在 KV 缓存之外；参考 MemoryFormer 等工作探索"记忆压缩"策略；研究在保持实时生成速度的同时引入长期记忆的可行性。</p>
+</div>
+</section>
+
+</main>
+
+<!-- ===== Footer ===== -->
+<footer>
+<p>LoL: Longer than Longer, Scaling Video Generation to Hour</p>
+<p>Justin Cui, Jie Wu, Ming Li, Tao Yang, Xiaojie Li, Rui Wang, Andrew Bai, Yuanhao Ban, Cho-Jui Hsieh</p>
+<p>UCLA &amp; ByteDance Seed &amp; University of Central Florida · arXiv: 2601.16914</p>
+<div class="footer-links">
+<a href="https://arxiv.org/abs/2601.16914" target="_blank">arXiv</a>
+</div>
+</footer>
+
+<script>
+// Nav scroll effect
+const nav = document.getElementById('nav');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 50);
+});
+</script>
+</body>
+</html>

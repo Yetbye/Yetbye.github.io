@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SANA-WM: 高效分钟级世界建模的混合线性扩散Transformer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- MathJax 3.x with three-layer CDN fallback and skipHtmlTags -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true
+  },
+  chtml: { scale: 1.05 },
+  startup: { typeset: true },
+  options: {
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+  }
+};
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js" onerror="this.remove();document.write('<script src=\"https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js\"><\/script>')"></script>
+<script>
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    if (!window.MathJax || !window.MathJax.startup || !window.MathJax.startup.promise) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+      document.head.appendChild(s);
+    }
+  }, 5000);
+});
+</script>
+
+<style>
+:root {
+  --lav-50:#faf5ff;--lav-100:#f3e8ff;--lav-200:#e9d5ff;--lav-300:#d8b4fe;
+  --lav-400:#c084fc;--lav-500:#a855f7;--lav-600:#9333ea;--lav-700:#7e22ce;
+  --coral-100:#ffe4e6;--coral-200:#fecdd3;--coral-300:#fda4af;--coral-400:#fb7185;--coral-500:#f43f5e;
+  --mint-100:#d1fae5;--mint-200:#a7f3d0;--mint-300:#6ee7b7;--mint-400:#34d399;--mint-500:#10b981;
+  --warm-100:#fef3c7;--warm-200:#fde68a;--amber-500:#f59e0b;
+  --ink:#1e1b4b;--ink-soft:#4c4b5e;--ink-muted:#787887;
+  --paper:#ffffff;--paper-warm:#faf8f5;--paper-cream:#fdf6e3;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans SC',sans-serif;background:var(--paper-warm);color:var(--ink);line-height:1.8;overflow-x:hidden}
+h1,h2,h3,h4{font-family:'Noto Serif SC',serif;font-weight:700}
+
+/* Navigation */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(250,248,245,0.85);backdrop-filter:blur(16px) saturate(1.5);border-bottom:1px solid rgba(192,132,252,0.15);padding:10px 24px}
+nav .nav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+nav .logo{font-family:'Noto Serif SC',serif;font-weight:900;font-size:18px;background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+nav .nav-links{display:flex;gap:6px;flex-wrap:wrap}
+nav .nav-links a{font-size:12px;color:var(--ink-soft);text-decoration:none;padding:4px 10px;border-radius:100px;transition:all .2s}
+nav .nav-links a:hover{background:var(--lav-100);color:var(--lav-600)}
+
+/* Hero */
+.hero{position:relative;min-height:auto;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:120px 24px 80px;background:linear-gradient(135deg,#faf5ff 0%,#f3e8ff 18%,#fdf4e3 50%,#fffbeb 100%)}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 520px 320px at 12% 22%,rgba(192,132,252,0.16),transparent 60%),radial-gradient(ellipse 520px 320px at 88% 78%,rgba(251,191,36,0.13),transparent 60%)}
+.hero-wrap{position:relative;z-index:2;width:100%;max-width:780px;text-align:center}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,0.6);backdrop-filter:blur(12px) saturate(1.5);border:1px solid rgba(192,132,252,0.3);color:var(--lav-600);padding:7px 20px;border-radius:100px;font-family:'Noto Sans SC',sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;margin-bottom:20px;box-shadow:0 4px 20px rgba(192,132,252,0.12)}
+.hero h1{font-family:'Noto Serif SC',serif;font-size:clamp(2.8rem,8vw,5rem);font-weight:900;letter-spacing:-0.03em;line-height:1.1;margin:12px 0 10px;background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 38%,var(--coral-500) 62%,var(--amber-500) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:clamp(0.95rem,2.5vw,1.25rem);color:var(--ink-soft);font-weight:400;line-height:1.6;margin-bottom:8px}
+.hero-art{margin:20px auto 8px;max-width:760px;width:100%}
+.hero-img{width:100%;height:auto;border-radius:24px;box-shadow:0 24px 70px -24px rgba(30,27,75,0.18);border:1px solid rgba(192,132,252,0.12)}
+.hero-caption{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--ink-muted);margin-top:8px}
+.scroll-indicator{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:4px;color:var(--ink-muted);text-transform:uppercase;animation:bounce 2s infinite}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+
+/* Content */
+.content{max-width:820px;margin:0 auto;padding:60px 24px}
+section{margin-bottom:80px;scroll-margin-top:80px}
+.section-tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--lav-600);background:var(--lav-50);padding:4px 14px;border-radius:100px;margin-bottom:12px}
+h2{font-size:clamp(1.6rem,4vw,2.2rem);margin-bottom:16px;color:var(--ink);line-height:1.3}
+h3{font-size:clamp(1.15rem,3vw,1.45rem);margin:24px 0 12px;color:var(--lav-700)}
+p{margin-bottom:14px;color:var(--ink-soft);font-size:15px;line-height:1.85}
+strong{color:var(--ink);font-weight:600}
+em{color:var(--lav-600);font-style:normal;font-weight:500}
+
+/* Formula */
+.formula{background:var(--paper-cream);border-left:3px solid var(--lav-400);padding:16px 20px;margin:16px 0;border-radius:0 12px 12px 0;overflow-x:auto}
+.formula-label{font-size:11px;font-weight:700;color:var(--lav-600);margin-bottom:6px;letter-spacing:1px}
+
+/* Insight box */
+.insight{background:linear-gradient(135deg,var(--mint-100) 0%,var(--mint-50,#ecfdf5) 100%);border:1px solid var(--mint-300);border-left:4px solid var(--mint-400);padding:18px 22px;margin:20px 0;border-radius:0 16px 16px 0}
+.insight-title{font-weight:700;color:var(--mint-500);font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.insight-title::before{content:'';display:inline-block;width:16px;height:16px;background:var(--mint-400);border-radius:50%;flex-shrink:0}
+.insight p{color:var(--ink-soft);font-size:14px;margin:0}
+
+/* Deep insight (lavender) */
+.deep-insight{background:linear-gradient(135deg,var(--lav-50) 0%,var(--lav-100) 100%);border:1px solid var(--lav-300);border-left:4px solid var(--lav-500);padding:18px 22px;margin:20px 0;border-radius:0 16px 16px 0}
+.deep-insight-title{font-weight:700;color:var(--lav-600);font-size:13px;margin-bottom:8px}
+
+/* Code block */
+.code-block{background:#1e1b4b;border-radius:12px;padding:20px 24px;margin:20px 0;overflow-x:auto;position:relative}
+.code-block::before{content:attr(data-label);position:absolute;top:-10px;left:20px;background:var(--lav-500);color:white;font-size:10px;font-weight:700;padding:2px 12px;border-radius:100px;letter-spacing:1px}
+.code-block pre{margin:0}
+.code-block code{font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.65;color:#e0e0e0}
+.code-block .kw{color:#c084fc}
+.code-block .str{color:#6ee7b7}
+.code-block .com{color:#787887}
+.code-block .fn{color:#fbbf24}
+.code-block .num{color:#fb7185}
+
+/* Figure */
+.figure{margin:24px 0;text-align:center}
+.figure img{max-width:100%;border-radius:12px;box-shadow:0 8px 30px -12px rgba(30,27,75,0.15);border:1px solid rgba(192,132,252,0.1)}
+.figure-caption{font-size:12px;color:var(--ink-muted);margin-top:8px;line-height:1.5}
+
+/* Table */
+.result-table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}
+.result-table th{background:var(--lav-100);color:var(--lav-700);padding:8px 10px;text-align:center;font-weight:600;border-radius:6px}
+.result-table td{padding:8px 10px;text-align:center;border-bottom:1px solid var(--lav-100)}
+.result-table tr:hover{background:var(--lav-50)}
+.result-table .best{color:var(--mint-500);font-weight:700}
+.result-table .ours{background:var(--mint-50,#ecfdf5)}
+
+/* Research question */
+.rq-card{background:linear-gradient(135deg,var(--warm-100) 0%,#fefce8 100%);border:1px solid var(--warm-200);border-left:4px solid var(--amber-500);padding:18px 22px;margin:16px 0;border-radius:0 16px 16px 0}
+.rq-tag{display:inline-block;background:var(--amber-500);color:white;font-size:10px;font-weight:700;padding:2px 10px;border-radius:100px;margin-bottom:8px;letter-spacing:1px}
+.rq-card h4{font-size:15px;color:var(--ink);margin-bottom:8px}
+.rq-card p{font-size:14px;margin:0}
+
+/* Compare cards */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:20px 0}
+.compare-card{padding:16px;border-radius:12px;border:1px solid}
+.compare-card.bad{border-color:var(--coral-300);background:var(--coral-100)}
+.compare-card.mid{border-color:var(--warm-200);background:var(--warm-100)}
+.compare-card.good{border-color:var(--mint-300);background:var(--mint-100)}
+.compare-card h4{font-size:13px;margin-bottom:8px}
+.compare-card p{font-size:12px;margin:0;line-height:1.6}
+
+/* SVG container */
+.svg-container{margin:24px 0;text-align:center;overflow-x:auto}
+.svg-container svg{max-width:100%;height:auto}
+.svg-caption{font-size:12px;color:var(--ink-muted);margin-top:6px}
+
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0}
+.stat-card{background:var(--paper);border:1px solid var(--lav-200);border-radius:12px;padding:16px;text-align:center}
+.stat-card .num{font-size:28px;font-weight:900;background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.stat-card .label{font-size:11px;color:var(--ink-muted);margin-top:4px}
+
+/* Summary */
+.summary-box{background:linear-gradient(135deg,var(--lav-50),var(--coral-100));border:1px solid var(--lav-200);border-radius:16px;padding:24px;margin:20px 0}
+
+/* Footer */
+footer{text-align:center;padding:40px 24px;border-top:1px solid var(--lav-100);color:var(--ink-muted);font-size:12px}
+footer a{color:var(--lav-600);text-decoration:none}
+
+/* Responsive */
+@media(max-width:768px){
+  .compare-grid{grid-template-columns:1fr}
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
+  nav .nav-links{display:none}
+}
+
+/* === FORMAT FIXES v1 === */
+/* Stats grid 必须并行4列 */
+.stats-grid,.stats-row,.hero-stats,.stat-grid{
+  display:grid !important;
+  grid-template-columns:repeat(4,1fr) !important;
+  gap:12px !important;
+  max-width:720px !important;
+  margin:24px auto !important;
+}
+.stat-card,.stat-item,.stat-box{
+  text-align:center !important;
+  padding:16px !important;
+}
+/* figure 居中对齐 */
+.figure,.fig,.img-wrap{margin:24px auto !important;text-align:center !important}
+.figure img,.fig img,.img-wrap img,.figure figure img{display:block;margin:0 auto !important;max-width:100% !important}
+/* SVG 居中 */
+.svg-wrap,.svg-container{text-align:center !important;margin:24px auto !important}
+.svg-wrap svg,.svg-container svg{display:block;margin:0 auto !important;max-width:100% !important}
+/* hero 不要太大 */
+.hero{min-height:auto !important;padding:100px 24px 60px !important}
+/* 减少过度效果 - 移除非必要动画 */
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+.scroll-indicator{animation:bounce 2s infinite}
+/* 确保关键交互保留hover效果 */
+a:hover,button:hover,input:focus{transition:all .2s !important}
+
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav>
+<div class="nav-inner">
+  <span class="logo">SANA-WM</span>
+  <div class="nav-links"><a href="../index.html">« 合辑</a>
+    <a href="#overview">概览</a>
+    <a href="#architecture">架构</a>
+    <a href="#attention">注意力机制</a>
+    <a href="#camera">相机控制</a>
+    <a href="#data">数据管线</a>
+    <a href="#training">训练策略</a>
+    <a href="#experiments">实验</a>
+    <a href="#insights">洞察</a>
+    <a href="#questions">开放问题</a>
+  </div>
+</div>
+</nav>
+
+<!-- Hero -->
+<div class="hero">
+<div class="hero-wrap">
+  <div class="hero-badge">arXiv 2026 &middot; NVIDIA</div>
+  <h1>SANA-WM</h1>
+  <p class="hero-sub">高效分钟级世界建模的混合线性扩散Transformer</p>
+  <p class="hero-sub" style="font-size:14px;color:var(--ink-muted)">Efficient Minute-Scale World Modeling with Hybrid Linear Diffusion Transformer</p>
+
+  <div class="stats-grid" style="max-width:720px;margin:24px auto">
+    <div class="stat-card">
+      <div class="num">2.6B</div>
+      <div class="label">模型参数</div>
+    </div>
+    <div class="stat-card">
+      <div class="num">720p</div>
+      <div class="label">输出分辨率</div>
+    </div>
+    <div class="stat-card">
+      <div class="num">60s</div>
+      <div class="label">视频时长</div>
+    </div>
+    <div class="stat-card">
+      <div class="num">36x</div>
+      <div class="label">吞吐提升</div>
+    </div>
+  </div>
+
+  <div class="hero-art">
+    <img class="hero-img" src="assets/cover.webp" alt="SANA-WM Hero Image">
+    <p class="hero-caption">Figure 1 | SANA-WM：从一张图片生成无限世界 — 精准相机控制下的分钟级720p世界建模</p>
+  </div>
+</div>
+<div class="scroll-indicator">SCROLL</div>
+</div>
+
+<!-- Content -->
+<div class="content">
+
+<!-- ============================================================ -->
+<!-- Section 1: Overview -->
+<!-- ============================================================ -->
+<section id="overview">
+  <span class="section-tag">OVERVIEW</span>
+  <h2>论文概览：一分钟看懂SANA-WM</h2>
+
+  <p><strong>SANA-WM</strong> 是NVIDIA在2026年5月推出的高效开源世界模型。仅有<strong>2.6B参数</strong>，却能原生生成<strong>一分钟级别的720p高保真视频</strong>，并实现精确的六自由度（6-DoF）相机轨迹控制。它的核心设计理念是"效率优先"——在数据、训练和推理三个维度同时追求极致效率。</p>
+
+  <p>现有分钟级世界模型通常面临三大困境：需要大规模工业级模型（LingBot-World使用14B+14B双模型）、海量训练数据、以及多GPU推理（8卡H100才能运行）。SANA-WM以不到十分之一的参数量和单GPU推理能力，在相机控制精度上全面超越这些基线，同时提供高达<strong>36倍的吞吐量提升</strong>。</p>
+
+  <div class="insight">
+    <div class="insight-title">核心效率指标</div>
+    <p>训练：仅需213K公开视频片段 + 64块H100训练15天。推理：单H100（51.1GB）即可生成60秒720p视频；蒸馏变体在单张RTX 5090上仅需34秒。这一效率水平使得学术团队和小型实验室也能开展分钟级世界模型研究。</p>
+  </div>
+
+  <!-- SVG 1: Four Pillars Overview -->
+  <div class="svg-container">
+    <svg viewBox="0 0 800 400" xmlns="http://www.w3.org/2003/svg" style="max-width:750px">
+      <defs>
+        <linearGradient id="bgGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#faf5ff;stop-opacity:1"/>
+          <stop offset="100%" style="stop-color:#f3e8ff;stop-opacity:1"/>
+        </linearGradient>
+        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#9333ea"/>
+        </marker>
+      </defs>
+      <rect width="800" height="400" rx="16" fill="url(#bgGrad1)" stroke="#e9d5ff" stroke-width="1"/>
+
+      <!-- Title -->
+      <text x="400" y="35" text-anchor="middle" font-family="Noto Serif SC, serif" font-size="18" font-weight="700" fill="#1e1b4b">SANA-WM 四大核心支柱</text>
+
+      <!-- Pillar 1 -->
+      <rect x="30" y="55" width="170" height="150" rx="12" fill="white" stroke="#c084fc" stroke-width="2"/>
+      <rect x="30" y="55" width="170" height="32" rx="12" fill="#9333ea"/>
+      <text x="115" y="77" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" fill="white">混合线性注意力</text>
+      <text x="115" y="108" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#4c4b5e">GDN + Softmax</text>
+      <text x="115" y="128" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#4c4b5e">帧级循环状态</text>
+      <text x="115" y="148" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#4c4b5e">$O(D^2)$ 内存</text>
+      <text x="115" y="178" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#9333ea">15 GDN + 5 Softmax</text>
+      <text x="115" y="195" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#9333ea">= 20 Blocks</text>
+
+      <!-- Pillar 2 -->
+      <rect x="215" y="55" width="170" height="150" rx="12" fill="white" stroke="#c084fc" stroke-width="2"/>
+      <rect x="215" y="55" width="170" height="32" rx="12" fill="#9333ea"/>
+      <text x="300" y="77" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" fill="white">双分支相机控制</text>
+      <text x="300" y="108" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#4c4b5e">UCPE 粗粒度</text>
+      <text x="300" y="128" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#4c4b5e">Plucker 细粒度</text>
+      <text x="300" y="148" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#4c4b5e">6-DoF 精确控制</text>
+      <text x="300" y="178" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#9333ea">Latent: UCPE</text>
+      <text x="300" y="195" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#9333ea">Raw: Plucker</text>
+
+      <!-- Pillar 3 -->
+      <rect x="400" y="55" width="170" height="150" rx="12" fill="white" stroke="#c084fc" stroke-width="2"/>
+      <rect x="400" y="55" width="170" height="32" rx="12" fill="#9333ea"/>
+      <text x="485" y="77" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" fill="white">两阶段生成管线</text>
+      <text x="485" y="108" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#4c4b5e">Stage-1: 主生成器</text>
+      <text x="485" y="128" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#4c4b5e">Stage-2: 长视频细化</text>
+      <text x="485" y="148" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#4c4b5e">17B LTX-2 Refiner</text>
+      <text x="485" y="178" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#9333ea">LoRA rank-384</text>
+      <text x="485" y="195" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#9333ea">3-step distilled</text>
+
+      <!-- Pillar 4 -->
+      <rect x="585" y="55" width="185" height="150" rx="12" fill="white" stroke="#c084fc" stroke-width="2"/>
+      <rect x="585" y="55" width="185" height="32" rx="12" fill="#9333ea"/>
+      <text x="677" y="77" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" fill="white">鲁棒数据标注</text>
+      <text x="677" y="108" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#4c4b5e">VIPE + Pi3X + MoGe-2</text>
+      <text x="677" y="128" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#4c4b5e">度量尺度6-DoF位姿</text>
+      <text x="677" y="148" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#4c4b5e">3DGS增强</text>
+      <text x="677" y="178" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#9333ea">213K clips</text>
+      <text x="677" y="195" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#9333ea">7 sources</text>
+
+      <!-- Bottom stats -->
+      <rect x="30" y="230" width="740" height="60" rx="12" fill="white" stroke="#e9d5ff" stroke-width="1"/>
+      <text x="120" y="258" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" fill="#1e1b4b">训练效率</text>
+      <text x="120" y="278" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#9333ea">64 H100 x 15天</text>
+
+      <line x1="230" y1="240" x2="230" y2="280" stroke="#e9d5ff" stroke-width="1"/>
+      <text x="330" y="258" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" fill="#1e1b4b">推理效率</text>
+      <text x="330" y="278" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#9333ea">1 H100 = 60s视频</text>
+
+      <line x1="430" y1="240" x2="430" y2="280" stroke="#e9d5ff" stroke-width="1"/>
+      <text x="530" y="258" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" fill="#1e1b4b">内存占用</text>
+      <text x="530" y="278" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#9333ea">51.1 GB 单卡</text>
+
+      <line x1="630" y1="240" x2="630" y2="280" stroke="#e9d5ff" stroke-width="1"/>
+      <text x="710" y="258" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" fill="#1e1b4b">蒸馏速度</text>
+      <text x="710" y="278" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#9333ea">RTX5090 34s</text>
+
+      <!-- Bottom description -->
+      <text x="400" y="320" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="12" fill="#787887">ONE IMAGE. INFINITE WORLDS.</text>
+      <text x="400" y="345" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#787887">给定一张初始图片 + 文本描述 + 6-DoF相机轨迹，SANA-WM生成一分钟级720p世界</text>
+      <text x="400" y="375" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#787887">单GPU即可完成推理，RTX 5090上34秒生成一个60秒片段</text>
+    </svg>
+    <p class="svg-caption">图：SANA-WM四大核心设计支柱及关键性能指标概览</p>
+  </div>
+
+  <div class="figure">
+    <img src="assets/_precise_v2/fig1_teaser.webp" alt="Figure 1: SANA-WM Teaser" style="max-width:720px">
+    <p class="figure-caption">Figure 1 | SANA-WM演示：从一张图片和动作轨迹，生成一分钟级720p可控世界。64 GPU训练，单GPU推理。</p>
+  </div>
+
+  <div class="deep-insight">
+    <div class="deep-insight-title">深度洞察：为什么"原生训练"比"蒸馏扩展"更重要</div>
+    <p>SANA-WM论文明确指出，从短视频生成器蒸馏出长视频模型是一个"诱人但有缺陷"的替代方案。短视频教师模型在分钟级场景持久性和轨迹跟随方面提供的监督信号极其有限。SANA-WM选择原生训练一分钟级模型，虽然训练成本更高，但避免了蒸馏带来的质量天花板，为后续的数据和模型扩展保留了更大的提升空间。</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- Section 2: Architecture -->
+<!-- ============================================================ -->
+<section id="architecture">
+  <span class="section-tag">ARCHITECTURE</span>
+  <h2>系统架构：混合GDN/Softmax设计</h2>
+
+  <p>SANA-WM基于SANA-Video构建，采用<strong>20层Transformer块</strong>（$d_{model}=2240$，20个注意力头，$D=112$每头维度）。其核心创新在于<strong>混合GDN/Softmax注意力</strong>：将15个帧级Gated DeltaNet (GDN) 块与5个标准Softmax注意力块交替排列（位于第3、7、11、15、19层），在效率和长距离建模能力之间找到最优平衡。</p>
+
+  <div class="figure">
+    <img src="assets/_precise_v2/fig2_architecture.webp" alt="Figure 2: SANA-WM Architecture" style="max-width:750px">
+    <p class="figure-caption">Figure 2 | SANA-WM架构总览。文本、视频和位姿Token交替通过GDN和Softmax注意力块。几何感知组件（UCPE注意力和Plucker混合）被集成以实现位姿条件生成，后跟细化器提升视觉质量。</p>
+  </div>
+
+  <h3>LTX2-VAE：高压缩率编码器</h3>
+  <p>SANA-WM用LTX2-VAE替换了基线VAE，利用其卓越的时空压缩比。LTX2的表示比ST-DC-AE小<strong>2.0倍</strong>，比Wan2.1-VAE小<strong>8.0倍</strong>。这使得720p一分钟视频的潜在表示变得可计算。LTX2 VAE使用$C=128$潜在通道，每8个原始帧压缩为1个潜在帧。</p>
+
+  <div class="deep-insight">
+    <div class="deep-insight-title">深度洞察：压缩率与质量的根本张力</div>
+    <p>LTX2-VAE的高压缩率是SANA-WM能在单GPU上进行分钟级推理的关键前提——它将潜在Token数控制在可计算范围内。但高压缩也意味着每个潜在帧必须承载更大的语义信息密度，对模型的建模能力提出了更高要求。混合GDN/Softmax架构正是为了应对这一挑战而设计：GDN提供高效的信息积累，Softmax确保关键信息不被遗忘。</p>
+  </div>
+
+  <h3>混合GDN/Softmax的层间交替策略</h3>
+  <p>SANA-WM在训练稳定后，将每第四个块替换为标准Softmax注意力（位于第3、7、11、15、19层），同时保留原始QKV和输出投影。这一设计的核心逻辑是：</p>
+
+  <div class="compare-grid">
+    <div class="compare-card good">
+      <h4>GDN块 (75%)</h4>
+      <p>提供高效的帧级循环上下文聚合，内存 $O(D^2)$ 恒定，支持分钟级建模而不OOM</p>
+    </div>
+    <div class="compare-card good">
+      <h4>Softmax块 (25%)</h4>
+      <p>提供精确的长距离召回能力，锚定长期空间一致性，增强场景记忆</p>
+    </div>
+    <div class="compare-card mid">
+      <h4>注意力Sink机制</h4>
+      <p>推理时首个潜在帧作Sink Token，局部窗口注意力保持内存恒定</p>
+    </div>
+  </div>
+
+  <!-- SVG 2: Hybrid Attention Architecture -->
+  <div class="svg-container">
+    <svg viewBox="0 0 800 380" xmlns="http://www.w3.org/2003/svg" style="max-width:750px">
+      <defs>
+        <linearGradient id="gdnGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" style="stop-color:#c084fc;stop-opacity:0.8"/>
+          <stop offset="100%" style="stop-color:#a855f7;stop-opacity:0.8"/>
+        </linearGradient>
+        <linearGradient id="smGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" style="stop-color:#fb7185;stop-opacity:0.8"/>
+          <stop offset="100%" style="stop-color:#f43f5e;stop-opacity:0.8"/>
+        </linearGradient>
+      </defs>
+      <rect width="800" height="380" rx="16" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1"/>
+      <text x="400" y="28" text-anchor="middle" font-family="Noto Serif SC, serif" font-size="16" font-weight="700" fill="#1e1b4b">混合GDN/Softmax层间交替架构</text>
+
+      <!-- Input tokens -->
+      <rect x="30" y="50" width="120" height="40" rx="8" fill="#1e1b4b"/>
+      <text x="90" y="75" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="white">输入Token序列</text>
+
+      <!-- Arrow -->
+      <line x1="155" y1="70" x2="180" y2="70" stroke="#9333ea" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+      <!-- Layer stack -->
+      <g transform="translate(185, 40)">
+        <!-- Layer 0: GDN -->
+        <rect x="0" y="0" width="80" height="22" rx="4" fill="url(#gdnGrad)"/>
+        <text x="40" y="15" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="white">Layer 0</text>
+        <text x="40" y="32" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="8" fill="#9333ea">GDN</text>
+
+        <!-- Layer 1: GDN -->
+        <rect x="85" y="0" width="80" height="22" rx="4" fill="url(#gdnGrad)"/>
+        <text x="125" y="15" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="white">Layer 1</text>
+        <text x="125" y="32" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="8" fill="#9333ea">GDN</text>
+
+        <!-- Layer 2: GDN -->
+        <rect x="170" y="0" width="80" height="22" rx="4" fill="url(#gdnGrad)"/>
+        <text x="210" y="15" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="white">Layer 2</text>
+        <text x="210" y="32" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="8" fill="#9333ea">GDN</text>
+
+        <!-- Layer 3: Softmax -->
+        <rect x="255" y="0" width="80" height="22" rx="4" fill="url(#smGrad)" stroke="#f43f5e" stroke-width="1.5"/>
+        <text x="295" y="15" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="white">Layer 3</text>
+        <text x="295" y="32" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="8" fill="#f43f5e" font-weight="700">Softmax</text>
+
+        <!-- Layer 4: GDN -->
+        <rect x="340" y="0" width="80" height="22" rx="4" fill="url(#gdnGrad)"/>
+        <text x="380" y="15" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="white">Layer 4</text>
+        <text x="380" y="32" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="8" fill="#9333ea">GDN</text>
+
+        <!-- Layer 5-6: GDN -->
+        <rect x="425" y="0" width="50" height="22" rx="4" fill="url(#gdnGrad)"/>
+        <text x="450" y="15" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="8" fill="white">5-6</text>
+
+        <!-- Layer 7: Softmax -->
+        <rect x="480" y="0" width="80" height="22" rx="4" fill="url(#smGrad)" stroke="#f43f5e" stroke-width="1.5"/>
+        <text x="520" y="15" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="white">Layer 7</text>
+        <text x="520" y="32" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="8" fill="#f43f5e" font-weight="700">Softmax</text>
+
+        <!-- Dots -->
+        <text x="580" y="15" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#787887">...</text>
+
+        <!-- Layer 19: Softmax -->
+        <rect x="600" y="0" width="80" height="22" rx="4" fill="url(#smGrad)" stroke="#f43f5e" stroke-width="1.5"/>
+        <text x="640" y="15" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="white">Layer 19</text>
+        <text x="640" y="32" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="8" fill="#f43f5e" font-weight="700">Softmax</text>
+
+        <!-- Total -->
+        <text x="350" y="55" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#787887">20层 = 15 GDN (75%) + 5 Softmax (25%) &middot; Softmax位于 {3, 7, 11, 15, 19}</text>
+      </g>
+
+      <!-- GDN Block detail -->
+      <rect x="30" y="110" width="350" height="120" rx="10" fill="white" stroke="#c084fc" stroke-width="1.5"/>
+      <text x="205" y="130" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" fill="#1e1b4b">GDN块内部结构</text>
+
+      <!-- GDN flow -->
+      <rect x="45" y="140" width="70" height="20" rx="4" fill="#e9d5ff"/>
+      <text x="80" y="154" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#7e22ce">RMSNorm</text>
+      <text x="122" y="154" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#9333ea">$\to$</text>
+      <rect x="130" y="140" width="50" height="20" rx="4" fill="#e9d5ff"/>
+      <text x="155" y="154" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#7e22ce">ReLU</text>
+      <text x="187" y="154" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#9333ea">$\to$</text>
+      <rect x="195" y="140" width="70" height="20" rx="4" fill="#e9d5ff"/>
+      <text x="230" y="154" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#7e22ce">键缩放</text>
+      <text x="272" y="154" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#9333ea">$\to$</text>
+      <rect x="280" y="140" width="85" height="20" rx="4" fill="#c084fc"/>
+      <text x="322" y="154" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="white" font-weight="700">Gated Delta</text>
+
+      <text x="205" y="178" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">帧级循环: $S_t = S_{t-1} M_t + U_t$</text>
+      <text x="205" y="195" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#787887">衰减门 $\gamma$ + 更新门 $\beta$ + 键缩放 $1/\sqrt{DS}$</text>
+      <text x="205" y="215" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#787887">内存恒定: $S_t \in \mathbb{R}^{D \times D}$，与序列长度无关</text>
+
+      <!-- Softmax Block detail -->
+      <rect x="420" y="110" width="350" height="120" rx="10" fill="white" stroke="#f43f5e" stroke-width="1.5"/>
+      <text x="595" y="130" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" fill="#1e1b4b">Softmax块内部结构</text>
+
+      <rect x="435" y="140" width="70" height="20" rx="4" fill="#ffe4e6"/>
+      <text x="470" y="154" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#f43f5e">Q/K/V投影</text>
+      <text x="512" y="154" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#9333ea">$\to$</text>
+      <rect x="520" y="140" width="70" height="20" rx="4" fill="#ffe4e6"/>
+      <text x="555" y="154" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#f43f5e">FlashAttn</text>
+      <text x="597" y="154" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#9333ea">$\to$</text>
+      <rect x="605" y="140" width="70" height="20" rx="4" fill="#f43f5e"/>
+      <text x="640" y="154" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="white" font-weight="700">精确注意力</text>
+
+      <text x="595" y="178" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#4c4b5e">全序列精确注意力计算</text>
+      <text x="595" y="195" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#787887">提供精确长距离信息召回</text>
+      <text x="595" y="215" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#787887">锚定空间一致性，增强场景记忆</text>
+
+      <!-- Comparison bar -->
+      <rect x="30" y="250" width="740" height="110" rx="10" fill="white" stroke="#e9d5ff" stroke-width="1"/>
+      <text x="400" y="272" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" fill="#1e1b4b">内存复杂度 vs 序列长度</text>
+
+      <!-- X axis -->
+      <line x1="80" y1="340" x2="720" y2="340" stroke="#e9d5ff" stroke-width="1"/>
+      <text x="80" y="355" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#787887">5s</text>
+      <text x="240" y="355" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#787887">15s</text>
+      <text x="400" y="355" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#787887">30s</text>
+      <text x="560" y="355" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#787887">45s</text>
+      <text x="700" y="355" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#787887">60s</text>
+
+      <!-- Softmax line: quadratic growth, OOM at 60s -->
+      <polyline points="80,330 160,310 240,285 320,250 400,210 480,160 540,110 560,80" fill="none" stroke="#f43f5e" stroke-width="2.5" stroke-dasharray="6,3"/>
+      <text x="570" y="78" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#f43f5e" font-weight="700">全Softmax: OOM @ 60s</text>
+
+      <!-- GDN line: compact growth -->
+      <polyline points="80,330 240,326 400,320 560,314 700,308" fill="none" stroke="#10b981" stroke-width="3"/>
+      <text x="710" y="306" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#10b981" font-weight="700">GDN混合: 近似线性</text>
+
+      <!-- Legend -->
+      <rect x="100" y="282" width="14" height="3" rx="1" fill="#f43f5e"/>
+      <text x="120" y="287" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#f43f5e">全Softmax KV缓存 (二次增长)</text>
+      <rect x="100" y="296" width="14" height="3" rx="1" fill="#10b981"/>
+      <text x="120" y="301" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#10b981">GDN混合 (近似恒定)</text>
+    </svg>
+    <p class="svg-caption">图：混合GDN/Softmax架构设计 — GDN提供恒定内存的帧级循环，Softmax提供精确长距离召回，两者交替实现分钟级建模</p>
+  </div>
+
+  <div class="insight">
+    <div class="insight-title">为什么Softmax不能全部替换</div>
+    <p>Softmax注意力虽然复杂度高，但它的"精确注意力"能力是线性注意力无法完全替代的。在长视频生成中，模型需要偶尔"回看"远处帧的信息以维持场景一致性。SANA-WM的混合设计本质上是在"高效近似"（GDN）和"精确计算"（Softmax）之间找到了最优平衡点。实验表明，全GDN或全Softmax都次于这种混合方案。</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- Section 3: Attention Mechanism -->
+<!-- ============================================================ -->
+<section id="attention">
+  <span class="section-tag">ATTENTION</span>
+  <h2>混合注意力：GDN + Softmax的优雅融合</h2>
+
+  <p>SANA-WM在长上下文建模上面临的根本挑战是：标准Softmax注意力的内存和计算复杂度随上下文长度<strong>二次增长</strong>。对于一分钟720p视频，纯Softmax注意力将导致OOM。因此，SANA-WM引入了帧级Gated DeltaNet (GDN)作为高效替代方案。</p>
+
+  <h3>从累积线性注意力到GDN的演进</h3>
+  <p>SANA-Video使用的累积线性注意力虽然内存恒定，但存在根本缺陷：<strong>缺乏显式衰减或显著性机制</strong>。陈旧特征与新特征积累相同权重，在分钟级别会导致状态漂移和训练不稳定。</p>
+
+  <div class="formula">
+    <div class="formula-label">公式 (1): 累积线性注意力 (SANA-Video基线)</div>
+    $$A_t^{LA} = A_{t-1}^{LA} + V_t \varphi(K_t)^\top, \quad O_t^{LA} = A_t^{LA} \varphi(Q_t)$$
+    <p style="font-size:12px;color:#787887;margin-top:6px">状态 $A_t \in \mathbb{R}^{D \times D}$ 每帧更新一次，内存恒定，但无衰减机制 — 分钟级会漂移</p>
+  </div>
+
+  <div class="formula">
+    <div class="formula-label">公式 (2): Token级Gated DeltaNet (GDN原始形式)</div>
+    $$S_i = \gamma_i S_{i-1} + (v_i - \gamma_i S_{i-1} \hat{k}_i) \beta_i \hat{k}_i^\top, \quad o_i = S_i \hat{q}_i$$
+    <p style="font-size:12px;color:#787887;margin-top:6px">引入衰减门 $\gamma_i \in (0, 1]$ 和更新门 $\beta_i \in [0, 1]$，实现选择性遗忘和更新</p>
+  </div>
+
+  <h3>帧级GDN：SANA-WM的关键创新</h3>
+  <p>标准GDN每个Token执行一次循环步骤。SANA-WM将其扩展为<strong>每潜在帧执行一次</strong>，一次性消费帧内所有$S$个空间Token。这不仅减少了循环开销，更利于GPU并行化。</p>
+
+  <div class="formula">
+    <div class="formula-label">公式 (3): 帧级GDN状态更新</div>
+    $$S_t = S_{t-1} M_t + U_t, \quad M_t = \gamma_t (I - \hat{K}_t \beta_t \hat{K}_t^\top), \quad U_t = V_t \beta_t \hat{K}_t^\top, \quad O_t = S_t \hat{Q}_t$$
+    <p style="font-size:12px;color:#787887;margin-top:6px">状态保持 $D \times D$，每步处理整个空间帧的所有 $S$ 个Token</p>
+  </div>
+
+  <h3>代数稳定性：空间爆炸问题的解决</h3>
+  <p>由于 $S_t$ 反复乘以 $M_t$，变换应该是非扩张的。但朴素实现中，$I - A_t$ 的特征值可以因 $O(S)$ 的迹而变得大于1，导致训练不稳定。SANA-WM提出关键的<strong>键缩放策略</strong>：</p>
+
+  <div class="formula">
+    <div class="formula-label">公式 (5): 键缩放策略 — 确保非扩张性</div>
+    $$\hat{K}_t = \bar{K}_t \cdot \frac{1}{\sqrt{D \cdot S}}$$
+    <p style="font-size:12px;color:#787887;margin-top:6px">$1/\sqrt{D}$ 匹配Token级GDN的L2键归一化，额外的 $1/\sqrt{S}$ 对空间Token取平均</p>
+  </div>
+
+  <div class="formula">
+    <div class="formula-label">关键推论: 非扩张性保证</div>
+    $$\text{tr}(\hat{K}_t \beta_t \hat{K}_t^\top) \le 1 \implies \|M_t\|_2 \le \gamma_t \le 1$$
+    <p style="font-size:12px;color:#787887;margin-top:6px">RMS归一化键 + $\beta \in [0,1]$ + 缩放因子确保转移矩阵非扩张</p>
+  </div>
+
+  <!-- SVG 3: Key Scaling Stability -->
+  <div class="svg-container">
+    <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2003/svg" style="max-width:650px">
+      <rect width="700" height="280" rx="16" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1"/>
+      <text x="350" y="28" text-anchor="middle" font-family="Noto Serif SC, serif" font-size="15" font-weight="700" fill="#1e1b4b">GDN键缩放训练稳定性对比</text>
+
+      <!-- Axes -->
+      <line x1="80" y1="240" x2="650" y2="240" stroke="#787887" stroke-width="1"/>
+      <line x1="80" y1="50" x2="80" y2="240" stroke="#787887" stroke-width="1"/>
+      <text x="365" y="270" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#787887">训练步数</text>
+      <text x="35" y="145" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#787887" transform="rotate(-90,35,145)">Loss</text>
+
+      <!-- Grid lines -->
+      <line x1="80" y1="100" x2="650" y2="100" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4"/>
+      <line x1="80" y1="170" x2="650" y2="170" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4"/>
+
+      <!-- No scaling - diverges immediately -->
+      <polyline points="100,200 130,180 160,100 175,50" fill="none" stroke="#f43f5e" stroke-width="2.5"/>
+      <text x="180" y="55" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#f43f5e" font-weight="700">无缩放 $\to$ NaN@Step 1</text>
+
+      <!-- L2 scaling - diverges at step 16 -->
+      <polyline points="100,195 150,180 200,165 250,150 300,130 320,100 340,50" fill="none" stroke="#f59e0b" stroke-width="2.5"/>
+      <text x="345" y="55" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#f59e0b" font-weight="700">$1/\sqrt{D}$ $\to$ NaN@Step 16</text>
+
+      <!-- 1/sqrt(DS) scaling - stable convergence -->
+      <polyline points="100,190 170,170 240,155 310,142 380,130 450,120 520,112 590,106 650,102" fill="none" stroke="#10b981" stroke-width="3"/>
+      <text x="620" y="98" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#10b981" font-weight="700">$1/\sqrt{DS}$ $\checkmark$ 稳定收敛</text>
+
+      <!-- Legend -->
+      <rect x="100" y="135" width="14" height="3" rx="1" fill="#f43f5e"/>
+      <text x="120" y="140" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#f43f5e">无缩放</text>
+      <rect x="100" y="155" width="14" height="3" rx="1" fill="#f59e0b"/>
+      <text x="120" y="160" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#f59e0b">$1/\sqrt{D}$ (L2)</text>
+      <rect x="100" y="175" width="14" height="3" rx="1" fill="#10b981"/>
+      <text x="120" y="180" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#10b981">$1/\sqrt{D \cdot S}$ (Ours)</text>
+    </svg>
+    <p class="svg-caption">图：不同键缩放策略下的训练稳定性对比。只有 $1/\sqrt{DS}$ 缩放确保稳定收敛。</p>
+  </div>
+
+  <div class="code-block" data-label="可信度: 高 | 来自论文 Eq.3-5">
+    <pre><code><span class="com"># Frame-wise GDN with algebraic stabilization (Eq. 3-5)</span>
+<span class="kw">def</span> <span class="fn">frame_gdn_step</span>(S_prev, Q_t, K_t, V_t, gamma_t, beta_t, D, S):
+    <span class="com"># Key stabilization: 1/sqrt(D*S) scaling</span>
+    K_bar = relu(rms_norm(K_t))       <span class="com"># [D, S]</span>
+    K_hat = K_bar / sqrt(D * S)       <span class="com"># 键缩放 (Eq. 5)</span>
+
+    <span class="com"># Per-token update gates</span>
+    beta = diag(beta_t)               <span class="com"># [S, S] 对角矩阵</span>
+
+    <span class="com"># Transition matrix (Eq. 3)</span>
+    M_t = gamma_t * (I - K_hat @ beta @ K_hat.T)  <span class="com"># [D, D]</span>
+
+    <span class="com"># Additive update</span>
+    U_t = V_t @ beta @ K_hat.T        <span class="com"># [D, D]</span>
+
+    <span class="com"># State transition</span>
+    S_t = S_prev @ M_t + U_t          <span class="com"># [D, D], 内存恒定!</span>
+
+    <span class="com"># Output</span>
+    Q_hat = relu(rms_norm(Q_t))
+    O_t = S_t @ Q_hat                 <span class="com"># [D, S]</span>
+
+    <span class="kw">return</span> S_t, O_t</code></pre>
+  </div>
+
+  <h3>双向扫描与Chunk-Causal推理</h3>
+  <p>训练时使用双向GDN：前向和反向时间扫描求和，获取完整上下文。推理时使用<strong>Chunk-Causal模式</strong>：将潜在帧分块，前向扫描保持全局，反向扫描在块边界重置。这让每个块拥有局部未来上下文而无信息泄漏。</p>
+
+  <div class="deep-insight">
+    <div class="deep-insight-title">深度洞察：Chunk-Causal是质量和效率的实用折中</div>
+    <p>双向GDN在训练时提供完整上下文，但推理时无法使用（需要未来帧）。纯因果（Causal）模式每个块只能看到过去，质量受限。Chunk-Causal模式巧妙地在块内引入反向扫描，为每个块提供"近未来"上下文，同时保持全局因果性。这种设计使得自回归推理时每个块的质量接近双向模式。</p>
+  </div>
+
+  <div class="deep-insight">
+    <div class="deep-insight-title">深度洞察：帧级vs Token级GDN的效率权衡</div>
+    <p>标准GDN每个Token执行一次循环步骤，对于有S个空间Token的帧，每帧需要S次状态更新。SANA-WM的帧级GDN将S次Token更新合并为一次矩阵运算，虽然单步计算量更大，但减少了循环开销且更利于GPU并行化。关键的$1/\sqrt{DS}$缩放确保了这种"大步"更新的数值稳定性。实验表明帧级GDN在质量上与Token级GDN持平，但训练效率提升约2倍。</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- Section 4: Camera Control -->
+<!-- ============================================================ -->
+<section id="camera">
+  <span class="section-tag">CAMERA CONTROL</span>
+  <h2>双分支相机控制：粗细结合的6-DoF精确控制</h2>
+
+  <p>精确的动作条件世界建模要求生成视频忠实跟随连续的动作轨迹，而非仅仅与文本提示对齐。SANA-WM采用<strong>双速率几何条件化</strong>设计：潜帧级UCPE分支捕获全局6-DoF姿态，原始帧级Plucker混合分支补偿每个VAE时间步内的精细运动。</p>
+
+  <h3>粗粒度分支：Ray-Local UCPE</h3>
+  <p>对于每个潜帧Token，SANA-WM构建光线局部坐标系。给定相机到世界坐标系变换 $T_c^{2w} = [R_t | o_t]$ 和内参矩阵 $A_t$，将对应像素反投影并变换到世界空间，得到光线中心 $o_t \in \mathbb{R}^3$ 和单位方向 $d_{t,s} \in \mathbb{R}^3$。然后构建光线局部基，将相机位姿变换分解为几何通道和标准RoPE通道：</p>
+
+  <div class="formula">
+    <div class="formula-label">公式 (6): UCPE注意力变换</div>
+    $$\tilde{Q}_i^c = (D_i^\top \oplus \text{RoPE}_i) Q_i^c$$
+    $$(\tilde{K}_i^c, \tilde{V}_i^c) = (D_i^{-1} \oplus \text{RoPE}_i)(K_i^c, V_i^c)$$
+    <p style="font-size:12px;color:#787887;margin-top:6px">$D_i$ 为光线局部齐次变换矩阵，$\oplus$ 表示UCPE和RoPE通道组的块对角组合</p>
+  </div>
+
+  <h3>细粒度分支：Raw-Frame Plucker混合</h3>
+  <p>粗UCPE分支在潜帧速率操作，但每个潜在Token汇总了<strong>8个原始帧</strong>及其各自的相机位姿。对于原始帧$r$和像素$p$，SANA-WM计算逐像素Plucker光线图 $\rho_{r,p} = (d_{r,p}, o_r \times d_{r,p}) \in \mathbb{R}^6$。8个原始帧的光线图被打包为<strong>48通道张量</strong>，通过零初始化3D Patch嵌入器注入。</p>
+
+  <!-- SVG 4: Dual Branch Camera Control -->
+  <div class="svg-container">
+    <svg viewBox="0 0 750 350" xmlns="http://www.w3.org/2003/svg" style="max-width:700px">
+      <defs>
+        <linearGradient id="coarseGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#c084fc;stop-opacity:1"/>
+          <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1"/>
+        </linearGradient>
+        <linearGradient id="fineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#34d399;stop-opacity:1"/>
+          <stop offset="100%" style="stop-color:#10b981;stop-opacity:1"/>
+        </linearGradient>
+        <marker id="arr2" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#9333ea"/>
+        </marker>
+      </defs>
+      <rect width="750" height="350" rx="16" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1"/>
+      <text x="375" y="30" text-anchor="middle" font-family="Noto Serif SC, serif" font-size="16" font-weight="700" fill="#1e1b4b">双分支相机控制架构</text>
+
+      <!-- Input: Camera Pose -->
+      <rect x="20" y="60" width="120" height="50" rx="8" fill="#1e1b4b"/>
+      <text x="80" y="82" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="white">6-DoF相机位姿</text>
+      <text x="80" y="100" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#c084fc">T_c2w = [R|o]</text>
+
+      <!-- Split arrow -->
+      <line x1="145" y1="75" x2="200" y2="105" stroke="#9333ea" stroke-width="2" marker-end="url(#arr2)"/>
+      <line x1="145" y1="95" x2="200" y2="245" stroke="#10b981" stroke-width="2"/>
+
+      <!-- Coarse Branch -->
+      <rect x="200" y="70" width="220" height="100" rx="10" fill="white" stroke="#c084fc" stroke-width="2"/>
+      <rect x="200" y="70" width="220" height="28" rx="10" fill="url(#coarseGrad)"/>
+      <text x="310" y="90" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" fill="white">粗粒度：UCPE分支</text>
+      <text x="310" y="115" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">潜帧级（Latent-frame rate）</text>
+      <text x="310" y="132" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">光线局部坐标系构建</text>
+      <text x="310" y="149" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">UCPE通道 + RoPE通道</text>
+      <text x="310" y="163" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#9333ea">D_i^T + RoPE_i</text>
+
+      <!-- Fine Branch -->
+      <rect x="200" y="210" width="220" height="100" rx="10" fill="white" stroke="#10b981" stroke-width="2"/>
+      <rect x="200" y="210" width="220" height="28" rx="10" fill="url(#fineGrad)"/>
+      <text x="310" y="230" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" fill="white">细粒度：Plucker混合</text>
+      <text x="310" y="255" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">原始帧级（Raw-frame rate）</text>
+      <text x="310" y="272" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">逐像素Plucker光线图</text>
+      <text x="310" y="289" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">8帧 x 6通道 = 48通道</text>
+      <text x="310" y="303" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#10b981">rho = (d, o x d) in R^6</text>
+
+      <!-- Merge -->
+      <line x1="425" y1="120" x2="490" y2="175" stroke="#9333ea" stroke-width="2" marker-end="url(#arr2)"/>
+      <line x1="425" y1="260" x2="490" y2="195" stroke="#10b981" stroke-width="2" marker-end="url(#arr2)"/>
+
+      <!-- Output -->
+      <rect x="490" y="150" width="220" height="70" rx="10" fill="#1e1b4b" stroke="#c084fc" stroke-width="2"/>
+      <text x="600" y="178" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" fill="white">合成相机条件输出</text>
+      <text x="600" y="198" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#c084fc">零初始化投影 $\to$ 加法注入</text>
+      <text x="600" y="213" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#c084fc">preserves pretrained init</text>
+
+      <!-- Annotation -->
+      <text x="375" y="340" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#787887">粗粒度捕获全局轨迹结构，细粒度补偿VAE时间步内的精细运动</text>
+    </svg>
+    <p class="svg-caption">图：SANA-WM双分支相机控制架构 — UCPE粗粒度 + Plucker细粒度的融合设计</p>
+  </div>
+
+  <div class="figure">
+    <img src="assets/_precise_v2/fig6_training_stability.webp" alt="Table 4: Camera Ablation" style="max-width:720px">
+    <p class="figure-caption">Table 4 | 相机条件消融（OmniWorld）。双分支UCPE+Plucker达到最低Pi3X误差（RotErr 6.21, TransErr 0.1162）和竞争力FVD。</p>
+  </div>
+
+  <div class="insight">
+    <div class="insight-title">为何需要双分支设计</div>
+    <p>LTX2-VAE将每8个原始帧压缩为1个潜在帧。如果仅在潜帧速率控制相机，每8帧之间的运动细节会丢失。UCPE分支负责全局轨迹的宏观结构（如转弯方向、移动距离），Plucker分支则补偿每帧之间的微观运动差异（如相机抖动、微调视角），两者互补实现精确的6-DoF跟随。</p>
+  </div>
+
+  <div class="deep-insight">
+    <div class="deep-insight-title">深度洞察：零初始化设计保持预训练知识</div>
+    <p>UCPE和Plucker分支都采用零初始化投影，确保新增组件在训练初期不影响预训练模型的行为。这是渐进式微调中常见的"identity initialization"策略。对于SANA-WM这种在有限数据（213K）上训练的场景尤为重要——如果新组件在训练初期就干扰预训练权重，可能导致灾难性遗忘。零初始化让模型在训练初期完全依赖已学到的能力，逐步学习新的相机控制能力。</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- Section 5: Data Pipeline -->
+<!-- ============================================================ -->
+<section id="data">
+  <span class="section-tag">DATA</span>
+  <h2>数据管线：213K高质量训练语料</h2>
+
+  <p>训练相机可控的世界模型需要具有可靠几何、多样运动和长时域场景覆盖的数据。SANA-WM构建了一套<strong>鲁棒标注管线</strong>，从7个开源视频源重新标注度量尺度相机位姿，产出213K片段语料。</p>
+
+  <div class="figure">
+    <img src="assets/_precise_v2/fig3_data_pipeline.webp" alt="Figure 3: Data Pipeline" style="max-width:700px">
+    <p class="figure-caption">Figure 3 | 数据构建管线。收集开源视频和静态3D场景，标注度量尺度相机位姿，用3DGS渲染增强DL3DV场景，过滤/标注生成213K片段训练语料。</p>
+  </div>
+
+  <h3>位姿标注引擎：VIPE + Pi3X + MoGe-2</h3>
+  <p>SANA-WM的位姿标注基于VIPE构建，但替换了其原始深度估计后端。原始VIPE使用Metric3D-Small进行单帧深度估计，在长视频上不稳定。SANA-WM的改进方案：</p>
+
+  <div class="compare-grid">
+    <div class="compare-card good">
+      <h4>Pi3X</h4>
+      <p>多帧一致3D结构恢复，解决长视频深度不一致问题</p>
+    </div>
+    <div class="compare-card good">
+      <h4>MoGe-2</h4>
+      <p>逐帧度量尺度锚定，提供精确的绝对尺度</p>
+    </div>
+    <div class="compare-card mid">
+      <h4>融合策略</h4>
+      <p>最小二乘对齐 + EMA时序平滑 + 逐帧内参优化</p>
+    </div>
+  </div>
+
+  <div class="figure">
+    <img src="assets/_precise_v2/table1_training_data.webp" alt="Table 1: Training Data" style="max-width:700px">
+    <p class="figure-caption">Table 1 | 过滤后的训练数据概览。包含7个数据源，共计212,975个训练片段。</p>
+  </div>
+
+  <h3>3DGS增强管线</h3>
+  <p>DL3DV仅包含静态3D捕获而非原生一分钟视频。SANA-WM为每个场景拟合一个FCGS 3D高斯重建，设计多样的一分钟相机路径（包括轨道、螺旋、推拉、飞行、随机走等），渲染长视频并用DiFix3D细化。每场景生成40条候选轨迹：10条贴近原始训练视角，30条来自多样运动族。</p>
+
+  <h3>过滤与标注策略</h3>
+  <p>SANA-WM遵循SANA-Video的基本视觉过滤（美学质量、运动幅度、光流一致性、场景切换检测），并增加相机特有过滤器：视场角（$25^\circ$-$120^\circ$）、焦距一致性（$f_x/f_y$差异 $\le 0.20$）、位姿平滑度和尺度变化（变异系数 $\le 2.0$）。对于标注，使用<strong>场景静态描述</strong>而非动作描述，防止文本泄露轨迹监督。</p>
+
+  <div class="deep-insight">
+    <div class="deep-insight-title">深度洞察：数据标注的质量决定模型上限</div>
+    <p>SANA-WM的位姿标注管线设计精巧：(1) Pi3X保证长时间序列的深度一致性；(2) MoGe-2提供精确度量尺度，避免"相对尺度"漂移；(3) 逐帧内参优化处理网络视频的非方形像素和变焦距；(4) 3DGS增强将静态3D场景扩展为长视频数据。这套管线使得213K数据的质量远超同等规模的原始网络视频，是模型高效训练的基石。</p>
+  </div>
+
+  <div class="insight">
+    <div class="insight-title">关键设计决策：场景静态描述</div>
+    <p>当动作条件可用时，SANA-WM使用仅描述物体、布局和外观的场景静态字幕，避免包含"向左平移"或"向前移动"等相机动作语言。这迫使模型通过位姿分支而非文本分支学习运动控制，确保相机控制能力的独立性和泛化性。如果字幕包含运动描述，模型可能走捷径从文本学习运动，导致相机控制分支形同虚设。</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- Section 6: Training Strategy & Refiner -->
+<!-- ============================================================ -->
+<section id="training">
+  <span class="section-tag">TRAINING</span>
+  <h2>训练策略与两阶段细化器</h2>
+
+  <h3>渐进式训练：四阶段递进</h3>
+  <p>SANA-WM采用四阶段渐进式训练策略，从短片段到分钟级视频逐步扩展，引入架构组件的同时保持训练稳定性。</p>
+
+  <!-- SVG 5: Progressive Training Pipeline -->
+  <div class="svg-container">
+    <svg viewBox="0 0 800 320" xmlns="http://www.w3.org/2003/svg" style="max-width:750px">
+      <defs>
+        <linearGradient id="stageGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" style="stop-color:#a855f7;stop-opacity:1"/>
+          <stop offset="100%" style="stop-color:#f43f5e;stop-opacity:1"/>
+        </linearGradient>
+        <marker id="arr3" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#9333ea"/>
+        </marker>
+      </defs>
+      <rect width="800" height="320" rx="16" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1"/>
+
+      <text x="400" y="30" text-anchor="middle" font-family="Noto Serif SC, serif" font-size="16" font-weight="700" fill="#1e1b4b">渐进式训练策略 (Progressive Training)</text>
+
+      <!-- Stage 1 -->
+      <rect x="20" y="55" width="175" height="110" rx="10" fill="white" stroke="#c084fc" stroke-width="2"/>
+      <rect x="20" y="55" width="175" height="28" rx="10" fill="url(#stageGrad)"/>
+      <text x="107" y="75" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" font-weight="700" fill="white">Stage 1: VAE适配</text>
+      <text x="107" y="100" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">LTX2-VAE替换</text>
+      <text x="107" y="115" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">高压缩率 2.0x更小</text>
+      <text x="107" y="130" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">30K步全模型微调</text>
+      <text x="107" y="150" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#9333ea">5s clips, ~2.75 days</text>
+
+      <!-- Arrow -->
+      <line x1="198" y1="110" x2="215" y2="110" stroke="#9333ea" stroke-width="2" marker-end="url(#arr3)"/>
+
+      <!-- Stage 2 -->
+      <rect x="218" y="55" width="175" height="110" rx="10" fill="white" stroke="#c084fc" stroke-width="2"/>
+      <rect x="218" y="55" width="175" height="28" rx="10" fill="url(#stageGrad)"/>
+      <text x="305" y="75" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" font-weight="700" fill="white">Stage 2: 混合架构</text>
+      <text x="305" y="100" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">GDN + Softmax混合</text>
+      <text x="305" y="115" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">15 GDN + 5 Softmax</text>
+      <text x="305" y="130" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">短片段快速诊断</text>
+      <text x="305" y="150" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#9333ea">5s clips, ~2 days</text>
+
+      <!-- Arrow -->
+      <line x1="396" y1="110" x2="413" y2="110" stroke="#9333ea" stroke-width="2" marker-end="url(#arr3)"/>
+
+      <!-- Stage 3 -->
+      <rect x="416" y="55" width="175" height="110" rx="10" fill="white" stroke="#c084fc" stroke-width="2"/>
+      <rect x="416" y="55" width="175" height="28" rx="10" fill="url(#stageGrad)"/>
+      <text x="503" y="75" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" font-weight="700" fill="white">Stage 3: 分钟级+控制</text>
+      <text x="503" y="100" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">1分钟视频扩展</text>
+      <text x="503" y="115" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">双分支相机控制</text>
+      <text x="503" y="130" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">CP=2, 961帧</text>
+      <text x="503" y="150" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#9333ea">1min, ~8 days</text>
+
+      <!-- Arrow -->
+      <line x1="594" y1="110" x2="611" y2="110" stroke="#9333ea" stroke-width="2" marker-end="url(#arr3)"/>
+
+      <!-- Stage 4 -->
+      <rect x="614" y="55" width="165" height="110" rx="10" fill="white" stroke="#c084fc" stroke-width="2"/>
+      <rect x="614" y="55" width="165" height="28" rx="10" fill="url(#stageGrad)"/>
+      <text x="696" y="75" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" font-weight="700" fill="white">Stage 4: 蒸馏SFT</text>
+      <text x="696" y="100" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">Chunk-Causal微调</text>
+      <text x="696" y="115" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">Self-Forcing蒸馏</text>
+      <text x="696" y="130" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#4c4b5e">4步去噪</text>
+      <text x="696" y="150" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#9333ea">1min, ~2.5 days</text>
+
+      <!-- Details -->
+      <rect x="20" y="185" width="760" height="120" rx="10" fill="white" stroke="#e9d5ff" stroke-width="1"/>
+      <text x="400" y="210" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="13" font-weight="700" fill="#1e1b4b">训练超参数汇总 (Table 7)</text>
+
+      <!-- Table headers -->
+      <text x="100" y="235" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#787887">阶段</text>
+      <text x="220" y="235" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#787887">数据</text>
+      <text x="340" y="235" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#787887">时长</text>
+      <text x="450" y="235" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#787887">批大小</text>
+      <text x="560" y="235" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#787887">学习率</text>
+      <text x="670" y="235" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#787887">步数</text>
+
+      <!-- Row data -->
+      <text x="100" y="260" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">Stage 1</text>
+      <text x="220" y="260" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#4c4b5e">SANA-Video SFT</text>
+      <text x="340" y="260" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#4c4b5e">5s</text>
+      <text x="450" y="260" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">1/GPU</text>
+      <text x="560" y="260" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">5e-5</text>
+      <text x="670" y="260" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">30K</text>
+
+      <text x="100" y="280" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">Stage 2</text>
+      <text x="220" y="280" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#4c4b5e">SANA-Video SFT</text>
+      <text x="340" y="280" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#4c4b5e">5s</text>
+      <text x="450" y="280" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">1/GPU</text>
+      <text x="560" y="280" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">5e-5</text>
+      <text x="670" y="280" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">30K</text>
+
+      <text x="100" y="300" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">Stage 3</text>
+      <text x="220" y="300" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#4c4b5e">SANA-WM 213K</text>
+      <text x="340" y="300" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="9" fill="#4c4b5e">1min</text>
+      <text x="450" y="300" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">0.5/GPU</text>
+      <text x="560" y="300" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">1e-5</text>
+      <text x="670" y="300" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">31K</text>
+    </svg>
+    <p class="svg-caption">图：SANA-WM四阶段渐进式训练管线及关键超参数</p>
+  </div>
+
+  <div class="figure">
+    <img src="assets/_precise_v2/fig6_training_stability.webp" alt="Table 3: Progressive Ablation" style="max-width:700px">
+    <p class="figure-caption">Table 3 | 渐进式训练消融（VBench-I2V）。LTX2 VAE质量中性但效率大幅提升3.4x；混合注意力将Total提升至0.853。</p>
+  </div>
+
+  <h3>Context-Parallel训练：紧凑通信</h3>
+  <p>961帧训练需要Context-Parallel (CP)。SANA-WM的巧妙之处在于利用GDN仿射更新的代数性质：每个分片计算转移复合$C_p$和输入复合$H_p$，仅需通信紧凑摘要即可恢复精确初始状态。</p>
+
+  <div class="formula">
+    <div class="formula-label">公式 (12-13): Context-Parallel前缀组合</div>
+    $$C_p = \prod_{t \in \mathcal{I}_p} M_t, \quad S^{(p)}_{end} = S^{(p)}_{start} C_p + H_p$$
+    $$\bar{S}_0 = 0, \quad \bar{S}_{p+1} = \bar{S}_p C_p + H_p, \quad S^{(p)}_{start} = \bar{S}_p$$
+    <p style="font-size:12px;color:#787887;margin-top:6px">all-gather紧凑摘要（而非完整激活），通信开销与分片内帧数无关</p>
+  </div>
+
+  <div class="code-block" data-label="可信度: 高 | 来自论文 Eq.12-13">
+    <pre><code><span class="com"># Context-Parallel prefix composition for GDN</span>
+<span class="kw">def</span> <span class="fn">cp_gdn_prefix</span>(shard_states, shard_transitions, shard_inputs):
+    <span class="com">"""
+    shard_states: [P] 初始状态 S_start^(p)
+    shard_transitions: [P, T/P, D, D] 每分片的转移矩阵乘积 C_p
+    shard_inputs: [P, D, D] 每分片的输入复合 H_p
+    """</span>
+    P = len(shard_transitions)
+
+    <span class="com"># Exclusive prefix scan (Eq. 13)</span>
+    S_bar = zeros(D, D)  <span class="com"># S_0 = 0</span>
+    start_states = []
+    <span class="kw">for</span> p <span class="kw">in</span> range(P):
+        start_states.append(S_bar)  <span class="com"># S^(p)_start = S_bar_p</span>
+        S_bar = S_bar @ shard_transitions[p] + shard_inputs[p]
+        <span class="com"># S_bar_{p+1} = S_bar_p * C_p + H_p</span>
+
+    <span class="com"># Each shard computes: S^(p)_end = S^(p)_start * C_p + H_p</span>
+    <span class="com"># Communication: all-gather [D, D] matrices (compact!)</span>
+    <span class="kw">return</span> start_states</code></pre>
+  </div>
+
+  <div class="deep-insight">
+    <div class="deep-insight-title">深度洞察：Context-Parallel训练的通信优化</div>
+    <p>961帧训练需要Context-Parallel (CP)。SANA-WM的巧妙之处在于利用GDN仿射更新的代数性质：每个分片计算转移复合$C_p$和输入复合$H_p$，仅需通信紧凑摘要（$D \times D$矩阵）而非完整激活即可恢复精确初始状态。这使得CP通信开销与分片内帧数无关，是GDN架构相比标准注意力在分布式训练中的独特优势。</p>
+  </div>
+
+  <h3>两阶段细化器：截断Sigma流匹配</h3>
+  <p>为进一步提升视觉质量，SANA-WM采用独立的第二阶段细化器，基于<strong>17B LTX-2模型</strong>，通过<strong>LoRA（rank-384）</strong>适配器微调。</p>
+
+  <div class="formula">
+    <div class="formula-label">公式 (7-11): 截断Sigma流匹配训练</div>
+    $$x_1 = (1 - \sigma_{start}) x_l + \sigma_{start} \epsilon, \quad \epsilon \sim \mathcal{N}(0, I)$$
+    $$\alpha = \frac{\sigma_t}{\sigma_{start}}, \quad x_t = (1 - \alpha) x_h + \alpha x_1$$
+    $$v^\star = \frac{x_1 - x_h}{\sigma_{start}}, \quad \mathcal{L}_{refiner} = \mathbb{E} \|v_\theta(x_t, \sigma_t, c) - v^\star\|_2^2$$
+    <p style="font-size:12px;color:#787887;margin-top:6px">$\sigma_{start} = 0.909375$，从含噪源点向高保真目标学习速度场</p>
+  </div>
+
+  <div class="figure">
+    <img src="assets/_precise_v2/fig8_qualitative.webp" alt="Figure 8: Refiner Comparison" style="max-width:700px">
+    <p class="figure-caption">Figure 8 | SANA-WM与SANA-WM+细化器的定性比较。红框标注了细化器改善视觉保真度、物体结构和时序一致性的区域。</p>
+  </div>
+
+  <div class="figure">
+    <img src="assets/table_Table_5_p12.webp" alt="Table 5: Refiner Ablation" style="max-width:700px">
+    <p class="figure-caption">Table 5 | 细化器消融。原始LTX-2.3短视频细化器在分钟级别大幅降低感知质量；SANA-WM的长视频适配细化器显著改善VBench Overall和时序退化指标。</p>
+  </div>
+
+  <div class="code-block" data-label="可信度: 高 | 来自论文 Section A">
+    <pre><code><span class="com"># Long-video refiner: truncated-sigma flow matching</span>
+<span class="kw">class</span> <span class="fn">LongVideoRefiner</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, base_model=<span class="str">"LTX-2"</span>, lora_rank=<span class="num">384</span>):
+        self.model = load_model(base_model)  <span class="com"># 17B LTX-2</span>
+        self.lora = LoRA(rank=lora_rank, targets=[<span class="str">"QKV_O"</span>, <span class="str">"FFN"</span>])
+        self.sigma_start = <span class="num">0.909375</span>
+        self.sigmas = [<span class="num">0.909375</span>, <span class="num">0.725</span>, <span class="num">0.421875</span>, <span class="num">0</span>]  <span class="com"># 3-step distilled</span>
+
+    <span class="kw">def</span> <span class="fn">train_step</span>(self, x_l, x_h, text, camera, ref_image):
+        <span class="com"># Perturb stage-1 latent</span>
+        eps = torch.randn_like(x_l)
+        x_1 = (<span class="num">1</span> - self.sigma_start) * x_l + self.sigma_start * eps
+
+        <span class="com"># Sample noise level (shifted-logit-normal, truncated)</span>
+        sigma_t = sample_truncated_logit_normal(max_val=self.sigma_start)
+        alpha = sigma_t / self.sigma_start
+
+        <span class="com"># Interpolate and predict velocity</span>
+        x_t = (<span class="num">1</span> - alpha) * x_h + alpha * x_1
+        v_star = (x_1 - x_h) / self.sigma_start
+
+        <span class="com"># Reference conditioning (excluded from loss)</span>
+        ref_tokens = encode(ref_image)  <span class="com"># clean slice as KV anchors</span>
+        input_seq = concat([ref_tokens, x_t])
+
+        v_pred = self.model(input_seq, sigma_t, text, camera)
+        loss = MSE(v_pred, v_star)
+        <span class="kw">return</span> loss</code></pre>
+  </div>
+
+  <div class="insight">
+    <div class="insight-title">关键发现：短视频细化器无法直接用于长视频</div>
+    <p>Table 5的消融表明，直接将LTX-2.3原始细化器应用于60秒序列会导致质量大幅下降（VBench从80.62降至71.37），且相机控制精度也显著恶化。SANA-WM的长视频适配细化器通过LoRA在合成数据+真实视频上训练，成功将$\Delta IQ$从3.73降至1.17，证明了长视频细化需要专门的适配。</p>
+  </div>
+
+  <div class="deep-insight">
+    <div class="deep-insight-title">深度洞察：LoRA适配蒸馏模型的精巧策略</div>
+    <p>直接微调蒸馏后的few-step细化器不稳定。SANA-WM的策略是：在多步非蒸馏LTX-2基础上训练LoRA，然后零样本合并到蒸馏版。这将LoRA学到的长视频行为转移到蒸馏推理流程，同时保留蒸馏的高效采样计划（仅3个Euler去噪步）。最终，细化器以极低的额外延迟（约20%吞吐量下降）显著提升了视觉保真度。</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- Section 7: Experiments -->
+<!-- ============================================================ -->
+<section id="experiments">
+  <span class="section-tag">EXPERIMENTS</span>
+  <h2>实验结果：全面超越开源基线</h2>
+
+  <h3>评估基准</h3>
+  <p>SANA-WM构建了一个<strong>60秒世界模型基准</strong>：80张由Nano Banana Pro生成的初始图像，覆盖游戏、室内、城市户外、自然户外四大场景类别（每类20张），每张图像配对Simple和Hard两种轨迹。</p>
+
+  <div class="figure">
+    <img src="assets/_precise_v2/fig4_trajectories.webp" alt="Figure 4: Benchmark Trajectories" style="max-width:500px">
+    <p class="figure-caption">Figure 4 | 基准轨迹模板示例。BEV路径展示Simple（平滑单向平面路径）和Hard（环路、交叉、长程返回）两种难度。</p>
+  </div>
+
+  <h3>主结果对比</h3>
+
+  <div class="figure">
+    <img src="assets/_precise_v2/table2_quantitative.webp" alt="Table 2: Main Results" style="max-width:750px">
+    <p class="figure-caption">Table 2 | 一分钟基准的定量比较。SANA-WM在动作跟随精度上全面领先，视觉质量可比LingBot-World（14B+14B），吞吐量提升36倍。</p>
+  </div>
+
+  <!-- SVG 6: Performance Comparison -->
+  <div class="svg-container">
+    <svg viewBox="0 0 700 320" xmlns="http://www.w3.org/2003/svg" style="max-width:650px">
+      <rect width="700" height="320" rx="16" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1"/>
+      <text x="350" y="28" text-anchor="middle" font-family="Noto Serif SC, serif" font-size="15" font-weight="700" fill="#1e1b4b">关键性能指标对比 (Simple-Trajectory)</text>
+
+      <text x="350" y="50" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#787887">旋转误差 (deg, lower=better) | VBench Overall (higher=better) | 吞吐量 (videos/hr, higher=better)</text>
+
+      <!-- Group 1: Rotation Error -->
+      <text x="120" y="80" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#787887">旋转误差 (deg)</text>
+      <rect x="50" y="90" width="70" height="18" rx="3" fill="#c084fc" opacity="0.3"/>
+      <text x="60" y="103" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">Infinite 16.55</text>
+      <rect x="50" y="112" width="42" height="18" rx="3" fill="#c084fc" opacity="0.5"/>
+      <text x="60" y="125" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">LingBot 10.47</text>
+      <rect x="50" y="134" width="77" height="18" rx="3" fill="#c084fc" opacity="0.3"/>
+      <text x="60" y="147" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">HY-WP 17.89</text>
+      <rect x="50" y="156" width="55" height="18" rx="3" fill="#c084fc" opacity="0.4"/>
+      <text x="60" y="169" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">Matrix 12.96</text>
+      <rect x="50" y="178" width="32" height="18" rx="3" fill="#10b981" opacity="0.8"/>
+      <text x="60" y="191" font-family="JetBrains Mono, monospace" font-size="9" fill="#10b981" font-weight="700">SANA 7.59 *</text>
+
+      <!-- Group 2: VBench Overall -->
+      <text x="300" y="80" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#787887">VBench Overall</text>
+      <rect x="230" y="90" width="63" height="18" rx="3" fill="#c084fc" opacity="0.4"/>
+      <text x="240" y="103" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">Infinite 79.18</text>
+      <rect x="230" y="112" width="66" height="18" rx="3" fill="#10b981" opacity="0.6"/>
+      <text x="240" y="125" font-family="JetBrains Mono, monospace" font-size="9" fill="#10b981">LingBot 81.82</text>
+      <rect x="230" y="134" width="55" height="18" rx="3" fill="#c084fc" opacity="0.3"/>
+      <text x="240" y="147" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">HY-WP 68.82</text>
+      <rect x="230" y="156" width="62" height="18" rx="3" fill="#c084fc" opacity="0.4"/>
+      <text x="240" y="169" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">Matrix 78.53</text>
+      <rect x="230" y="178" width="63" height="18" rx="3" fill="#10b981" opacity="0.7"/>
+      <text x="240" y="191" font-family="JetBrains Mono, monospace" font-size="9" fill="#10b981" font-weight="700">SANA 79.29</text>
+      <rect x="230" y="200" width="65" height="18" rx="3" fill="#10b981" opacity="0.9"/>
+      <text x="240" y="213" font-family="JetBrains Mono, monospace" font-size="9" fill="#10b981" font-weight="700">SANA+R 80.62 *</text>
+
+      <!-- Group 3: Throughput -->
+      <text x="490" y="80" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#787887">吞吐量 (视频/时)</text>
+      <rect x="420" y="90" width="24" height="18" rx="3" fill="#c084fc" opacity="0.3"/>
+      <text x="430" y="103" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">Inf 5.9</text>
+      <rect x="420" y="112" width="3" height="18" rx="1" fill="#c084fc" opacity="0.5"/>
+      <text x="430" y="125" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">LB 0.6</text>
+      <rect x="420" y="134" width="5" height="18" rx="1" fill="#c084fc" opacity="0.3"/>
+      <text x="430" y="147" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">HY 1.1</text>
+      <rect x="420" y="156" width="13" height="18" rx="2" fill="#c084fc" opacity="0.4"/>
+      <text x="430" y="169" font-family="JetBrains Mono, monospace" font-size="9" fill="#4c4b5e">MG 3.1</text>
+      <rect x="420" y="178" width="100" height="18" rx="3" fill="#10b981" opacity="0.8"/>
+      <text x="430" y="191" font-family="JetBrains Mono, monospace" font-size="9" fill="#10b981" font-weight="700">SANA 24.1 *</text>
+      <rect x="420" y="200" width="90" height="18" rx="3" fill="#10b981" opacity="0.7"/>
+      <text x="430" y="213" font-family="JetBrains Mono, monospace" font-size="9" fill="#10b981" font-weight="700">SANA+R 22.0</text>
+
+      <!-- Summary -->
+      <rect x="50" y="230" width="600" height="75" rx="10" fill="white" stroke="#10b981" stroke-width="2"/>
+      <text x="350" y="252" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="12" font-weight="700" fill="#1e1b4b">SANA-WM 关键优势总结</text>
+      <text x="150" y="275" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#4c4b5e">旋转误差: <tspan fill="#10b981" font-weight="700">7.59 deg</tspan> (最优)</text>
+      <text x="350" y="275" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#4c4b5e">VBench: <tspan fill="#10b981" font-weight="700">80.62</tspan> (可比SOTA)</text>
+      <text x="550" y="275" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#4c4b5e">吞吐: <tspan fill="#10b981" font-weight="700">24.1</tspan> 视频/时 (36x)</text>
+      <text x="350" y="293" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#787887">单GPU (51.1GB) 推理，RTX 5090 + NVFP4 蒸馏版仅需34秒</text>
+    </svg>
+    <p class="svg-caption">图：SANA-WM与主流基线在旋转误差、视觉质量和吞吐量上的对比</p>
+  </div>
+
+  <h3>消融实验</h3>
+
+  <div class="figure">
+    <img src="assets/_precise_v2/fig7_efficiency.webp" alt="Figure 7: Efficiency" style="max-width:700px">
+    <p class="figure-caption">Figure 7 | 效率消融与扩展。(a) 60s单GPU延迟分布；(b) H100延迟和内存扩展：循环变体紧凑增长，全Softmax在60s时OOM。</p>
+  </div>
+
+  <div class="deep-insight">
+    <div class="deep-insight-title">深度洞察：循环变体vs全Softmax的内存鸿沟</div>
+    <p>Figure 7(b)清楚展示了GDN混合架构的核心价值：在序列长度从5s扩展到60s的过程中，GDN循环变体的内存增长近乎线性（因GDN状态保持$D \times D$恒定），而全Softmax的KV缓存呈二次增长并在60s处OOM。这一对比从实验层面验证了混合架构对于分钟级建模的必要性——没有GDN，单GPU推理根本不可能。</p>
+  </div>
+
+  <div class="deep-insight">
+    <div class="deep-insight-title">深度洞察：融合Triton内核的系统级优化</div>
+    <p>SANA-WM使用OpenAI Triton实现了融合内核，将RMSNorm、ReLU、键缩放、UCPE/RoPE准备和GDN循环扫描融合在一起，显著减少内存带宽瓶颈并支持autograd。这一系统级优化贡献了约1.5x至2x的效率提升，是工程实现的关键差异化。在世界模型领域，算法创新和系统优化同等重要。</p>
+  </div>
+
+  <h3>定性比较</h3>
+
+  <div class="figure">
+    <img src="assets/_precise_v2/fig5_qualitative.webp" alt="Figure 5: Qualitative" style="max-width:750px">
+    <p class="figure-caption">Figure 5 | 四个Hard-Trajectory 60秒视频的定性比较。绿框标注SANA-WM，左下角显示透明动作叠加。SANA-WM在困难动作下保持场景一致性和视角结构，而基线常出现模糊、布局变化或崩溃。</p>
+  </div>
+
+  <div class="figure">
+    <img src="assets/_precise_v2/fig11_hard_traj.webp" alt="Figure 11: Additional Qualitative" style="max-width:700px">
+    <p class="figure-caption">Figure 11 | 更多Hard-Trajectory 60秒视频定性比较。SANA-WM更好地保持全局布局和物体身份。</p>
+  </div>
+
+  <div class="figure">
+    <img src="assets/_precise_v2/fig12_3d_demo.webp" alt="Figure 12: 3D Reconstruction" style="max-width:650px">
+    <p class="figure-caption">Figure 12 | SANA-WM生成视频的3D重建演示。恢复的结构和相机路径表明视频包含连贯的3D线索。</p>
+  </div>
+
+  <div class="insight">
+    <div class="insight-title">关键观察：长时域场景记忆能力</div>
+    <p>SANA-WM在60秒Hard-Trajectory视频中展示了更稳定的场景记忆能力——当相机执行大角度旋转、螺旋上升或环路返回时，场景布局和物体身份保持一致。相比之下，基线方法常在30-40秒后出现明显退化。这证明了混合GDN/Softmax架构在长时域建模上的优势。</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- Section 8: Key Insights -->
+<!-- ============================================================ -->
+<section id="insights">
+  <span class="section-tag">INSIGHTS</span>
+  <h2>深度洞察：关键设计决策解析</h2>
+
+  <div class="deep-insight">
+    <div class="deep-insight-title">洞察 1: 帧级 vs Token级GDN的效率权衡</div>
+    <p>标准GDN每个Token执行一次循环步骤，对于有S个空间Token的帧，每帧需要S次状态更新。SANA-WM的帧级GDN将S次Token更新合并为一次矩阵运算，虽然单步计算量更大，但减少了循环开销且更利于并行化。关键的$1/\sqrt{DS}$缩放确保了这种"大步"更新的数值稳定性。</p>
+  </div>
+
+  <div class="deep-insight">
+    <div class="deep-insight-title">洞察 2: LTX2-VAE的压缩率是单GPU推理的前提</div>
+    <p>LTX2-VAE的表示比ST-DC-AE小2.0倍，比Wan2.1-VAE小8.0倍。正是这种激进压缩使得720p一分钟视频的潜在Token数变得可计算（在单H100的51.1GB内存内）。但这也意味着每个潜在帧承载更大的语义信息密度，对模型容量提出了更高要求——这解释了为什么2.6B参数是必要的最小规模。</p>
+  </div>
+
+  <div class="deep-insight">
+    <div class="deep-insight-title">洞察 3: 自蒸馏 + 注意力Sink的部署优化路径</div>
+    <p>Stage 4的部署路径依次为：60步H100自回归生成 $\to$ 4步蒸馏 $\to$ 注意力Sink（首个潜帧作Sink Token + 局部窗口注意力）$\to$ NVFP4量化。每一步都保持质量基本不变的同时显著降低延迟和内存，最终使RTX 5090上34秒生成60秒视频成为可能。这是一条精心设计的效率优化链。</p>
+  </div>
+
+  <div class="deep-insight">
+    <div class="deep-insight-title">洞察 4: 3DGS增强解决静态场景数据稀缺</div>
+    <p>DL3DV等数据集仅包含静态3D捕获。通过FCGS重建 + 多样轨迹渲染 + DiFix3D细化，SANA-WM将静态数据扩展为长视频训练数据。这种增强策略对于稀缺的带位姿标注长视频数据尤为重要，贡献了约15K额外训练片段。在数据稀缺的世界模型领域，这类增强策略可能是关键的竞争优势。</p>
+  </div>
+
+  <div class="deep-insight">
+    <div class="deep-insight-title">洞察 5: 场景静态字幕防止运动信息泄漏</div>
+    <p>如果字幕包含"向左平移"等运动描述，模型可能从文本而非相机控制分支学习运动。使用场景静态字幕迫使所有运动信息通过6-DoF位姿分支传递，确保相机控制的独立性和泛化性。这是一个在数据层面确保模型行为的重要设计决策，体现了"数据决定模型行为"的工程哲学。</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- Section 9: Open Research Questions -->
+<!-- ============================================================ -->
+<section id="questions">
+  <span class="section-tag">OPEN QUESTIONS</span>
+  <h2>开放科研问题</h2>
+
+  <div class="rq-card">
+    <div class="rq-tag">问题 1</div>
+    <h4>GDN/Softmax混合比例的最优解是什么？</h4>
+    <p><strong>理论分析：</strong>SANA-WM使用75% GDN + 25% Softmax的固定比例。从信息论角度，GDN的$O(D^2)$状态压缩了历史信息，但压缩率随序列长度增加而降低。Softmax层的作用是"信息解压缩"——精确召回被GDN压缩掉的长距离信息。</p>
+    <p><strong>调查方向：</strong>是否存在一种自适应机制，根据序列长度、场景复杂度或记忆需求动态调整混合比例？例如，在环路返回区域（需要更多场景记忆）增加Softmax层的比例，或使用门控机制动态选择每层使用GDN还是Softmax。</p>
+  </div>
+
+  <div class="rq-card">
+    <div class="rq-tag">问题 2</div>
+    <h4>能否用线性注意力完全替代Softmax？</h4>
+    <p><strong>理论分析：</strong>GDN已经展示了强大的长程建模能力，但25%的Softmax层仍然不可或缺。核心瓶颈在于线性注意力的$D \times D$状态矩阵在表达能力上受限于秩约束——它无法精确存储任意的键-值对映射。</p>
+    <p><strong>调查方向：</strong>是否存在一种增强型线性注意力机制（如改进的记忆检索、外部记忆模块、或高阶状态更新）能够在保持$O(D^2)$内存的同时完全消除Softmax依赖？RetNet、GLA等新架构是否提供了可行路径？</p>
+  </div>
+
+  <div class="rq-card">
+    <div class="rq-tag">问题 3</div>
+    <h4>分钟级世界模型需要显式3D场景记忆吗？</h4>
+    <p><strong>理论分析：</strong>SANA-WM依赖隐式记忆（GDN状态和Softmax KV缓存）维持场景一致性。论文承认其缺乏显式3D场景记忆，这在环路返回场景中尤为明显——当相机返回先前访问过的位置时，模型需要"回忆"该位置的外观。</p>
+    <p><strong>调查方向：</strong>融合NeRF/3DGS等显式3D表示作为外部记忆能否进一步提升环路返回时的一致性？如何设计高效的"写入-读取"机制，将生成的帧实时更新到3D记忆中？这可能是通往真正持久化世界模型的关键路径。</p>
+  </div>
+
+  <div class="rq-card">
+    <div class="rq-tag">问题 4</div>
+    <h4>相机控制能否扩展到更丰富的动作空间？</h4>
+    <p><strong>理论分析：</strong>SANA-WM专注于6-DoF相机控制。但真正的交互式世界模型需要支持混合动作空间：相机运动 + 键盘/手柄输入 + 语言指令 + 物理交互。UCPE和Plucker的几何归纳偏置与自由形式语言条件之间存在本质张力。</p>
+    <p><strong>调查方向：</strong>如何自然地扩展到混合动作空间？一种可能的路径是将不同模态的控制信号投影到统一的"动作嵌入空间"，然后通过类似UCPE的注意力机制注入模型。这需要设计新的动作表示和条件化架构。</p>
+  </div>
+
+  <div class="rq-card">
+    <div class="rq-tag">问题 5</div>
+    <h4>数据效率的天花板在哪里？</h4>
+    <p><strong>理论分析：</strong>SANA-WM仅用213K数据（远少于工业模型的数百万视频）就达到了竞争力性能。这一数据效率在多大程度上归因于高质量位姿标注（信息密度高）、LTX2的高压缩率（减少冗余Token）、还是混合架构本身的样本效率（GDN的记忆机制）？</p>
+    <p><strong>调查方向：</strong>如果增加数据规模（如1M-10M），模型性能还能如何提升？是否存在边际递减效应？另外，合成数据（如3DGS渲染、游戏引擎生成）在多大程度上可以替代真实视频数据？这关系到世界模型训练的可扩展性。</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- Section 10: Summary -->
+<!-- ============================================================ -->
+<section id="summary">
+  <span class="section-tag">SUMMARY</span>
+  <h2>总结：效率优先的分钟级世界建模</h2>
+
+  <div class="summary-box">
+    <h3 style="margin-bottom:12px;color:var(--lav-700)">SANA-WM的核心贡献</h3>
+    <p><strong>1. 原生一分钟训练的世界模型</strong>：首个以2.6B参数原生训练的720p一分钟可控世界模型，训练成本（64 H100 x 15天）和推理成本（单GPU）远低于工业基线。</p>
+    <p><strong>2. 效率导向的混合架构</strong>：帧级GDN提供恒定内存的循环上下文，周期性Softmax块保持精确长距离召回。双分支UCPE+Plucker控制实现粗细结合的精确6-DoF轨迹跟随。</p>
+    <p><strong>3. 长视频细化器</strong>：基于LTX-2的LoRA适配细化器（rank-384），通过截断Sigma流匹配在3个蒸馏步内提升分钟级视频的视觉保真度和时序一致性。</p>
+    <p><strong>4. 鲁棒数据管线</strong>：7个数据源 $\to$ VIPE+Pi3X+MoGe-2位姿标注 $\to$ 3DGS增强 $\to$ 场景静态字幕 $\to$ 213K高质量训练语料。</p>
+  </div>
+
+  <div class="compare-grid">
+    <div class="compare-card good">
+      <h4>优势</h4>
+      <p>单GPU分钟级推理，最高36x吞吐提升，213K数据训练，精确6-DoF控制，开源2.6B模型</p>
+    </div>
+    <div class="compare-card mid">
+      <h4>局限</h4>
+      <p>规模受限（2.6B），缺乏显式3D记忆，动态场景可漂移，罕见视角表现待提升</p>
+    </div>
+    <div class="compare-card good">
+      <h4>未来方向</h4>
+      <p>扩大模型/数据规模，探索机器人动作控制，强化持久场景记忆，开发实时流式细化器</p>
+    </div>
+  </div>
+</section>
+
+<!-- References -->
+<section>
+  <span class="section-tag">REFERENCES</span>
+  <h2>关键引用</h2>
+  <p style="font-size:13px;line-height:2">
+    <strong>[10]</strong> LTX-Video/LTX2: 高压缩视频VAE，SANA-WM的编码器基础<br>
+    <strong>[11]</strong> Gated DeltaNet: 带衰减门和Delta规则校正的循环线性注意力<br>
+    <strong>[12]</strong> UCPE: 统一相机位置编码，用于几何感知注意力<br>
+    <strong>[13]</strong> VIPE: 相机位姿标注引擎<br>
+    <strong>[14]</strong> Pi3X: 多帧一致3D结构恢复<br>
+    <strong>[15]</strong> MoGe-2: 度量尺度深度先验<br>
+    <strong>[25]</strong> SANA-Video: SANA-WM的基础模型<br>
+    <strong>[28]</strong> Self-Forcing: 自蒸馏去噪加速<br>
+    <strong>[64]</strong> Plucker coordinates: 光线几何表示<br>
+    <strong>[68]</strong> FlashAttention: 高效Softmax注意力实现<br>
+    <strong>[94]</strong> FCGS: 3D高斯Splatting重建<br>
+    <strong>[95]</strong> DiFix3D: 3DGS渲染视频细化<br>
+    <strong>[96]</strong> VBench: 视频生成质量评估基准<br>
+    <strong>[99]</strong> Umeyama alignment: Sim(3)对齐算法
+  </p>
+</section>
+
+</div>
+
+<!-- Footer -->
+<footer>
+  <p>基于论文 <a href="https://arxiv.org/abs/2605.15178" target="_blank">arXiv:2605.15178</a> 撰写 &middot; NVIDIA 2026</p>
+  <p style="margin-top:8px">SANA-WM: Efficient Minute-Scale World Modeling with Hybrid Linear Diffusion Transformer</p>
+  <p style="margin-top:8px">Haoyi Zhu, Haozhe Liu, Yuyang Zhao, Tian Ye, Junsong Chen, Jincheng Yu, Tong He, Song Han, Enze Xie</p>
+</footer>
+
+</body>
+</html>

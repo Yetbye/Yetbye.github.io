@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ultra Flash: 实时高分辨率流式视频生成 | 论文精读</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- MathJax v5 Standard Config with Options Block and Retry Typeset -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true
+  },
+  options: {
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+  },
+  chtml: { scale: 1.05 },
+  startup: {
+    typeset: true,
+    pageReady: function() {
+      return MathJax.startup.defaultPageReady().then(function() {
+        if (MathJax.typesetPromise) {
+          return MathJax.typesetPromise();
+        }
+      });
+    }
+  }
+};
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"
+  onerror="document.getElementById('mathjax-fallback').src='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'">
+</script>
+<script id="mathjax-fallback"></script>
+<script>
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    if (!window.MathJax || !window.MathJax.startup || !window.MathJax.startup.promise) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+      document.head.appendChild(s);
+    } else {
+      if (window.MathJax.typesetPromise && window.MathJax.startup) {
+        MathJax.startup.promise.then(function() {
+          MathJax.typesetPromise().catch(function(){});
+        });
+      }
+    }
+  }, 5000);
+});
+</script>
+
+<style>
+:root {
+  --lav-50:#faf5ff;--lav-100:#f3e8ff;--lav-200:#e9d5ff;--lav-300:#d8b4fe;
+  --lav-400:#c084fc;--lav-500:#a855f7;--lav-600:#9333ea;--lav-700:#7e22ce;
+  --coral-100:#ffe4e6;--coral-200:#fecdd3;--coral-300:#fda4af;--coral-400:#fb7185;--coral-500:#f43f5e;
+  --mint-100:#d1fae5;--mint-200:#a7f3d0;--mint-300:#6ee7b7;--mint-400:#34d399;--mint-500:#10b981;
+  --warm-100:#fef3c7;--warm-200:#fde68a;--warm-300:#fcd34d;--warm-400:#fbbf24;--warm-500:#f59e0b;
+  --ink:#1e1b4b;--ink-soft:#4c4b5e;--ink-muted:#787887;
+  --paper:#ffffff;--paper-warm:#faf8f5;--paper-cream:#fdfbf7;
+  --shadow-sm:0 2px 8px rgba(30,27,75,0.06);
+  --shadow-md:0 8px 30px rgba(30,27,75,0.08);
+  --shadow-lg:0 20px 60px rgba(30,27,75,0.12);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;font-size:16px}
+body{
+  font-family:'Noto Sans SC',sans-serif;color:var(--ink);background:var(--paper-cream);
+  line-height:1.75;overflow-x:hidden;
+}
+h1,h2,h3,h4,h5,h6{font-family:'Noto Serif SC',serif;font-weight:700;letter-spacing:-0.02em}
+
+/* Navigation */
+.nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(253,251,247,0.82);backdrop-filter:blur(20px) saturate(1.5);
+  border-bottom:1px solid rgba(192,132,252,0.12);transition:all .3s ease;
+}
+.nav-inner{max-width:1200px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;justify-content:space-between}
+.nav-brand{font-family:'Noto Serif SC',serif;font-size:15px;font-weight:700;color:var(--lav-600);text-decoration:none}
+.nav-links{display:flex;gap:4px;flex-wrap:wrap}
+.nav-links a{
+  font-size:12px;color:var(--ink-soft);text-decoration:none;padding:6px 12px;border-radius:8px;
+  transition:all .2s;font-weight:500;
+}
+.nav-links a:hover{background:var(--lav-100);color:var(--lav-600)}
+
+/* Hero */
+.hero{
+  position:relative;min-height:96vh;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;padding:120px 24px 80px;
+  background:linear-gradient(135deg,#faf5ff 0%,#f3e8ff 18%,#fdf4e3 50%,#fffbeb 100%);
+}
+.hero::before{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 520px 320px at 12% 22%,rgba(192,132,252,0.16),transparent 60%),
+    radial-gradient(ellipse 520px 320px at 88% 78%,rgba(251,191,36,0.13),transparent 60%);
+}
+.hero-wrap{position:relative;z-index:2;width:100%;max-width:780px;text-align:center}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,0.6);backdrop-filter:blur(12px) saturate(1.5);
+  border:1px solid rgba(192,132,252,0.3);color:var(--lav-600);
+  padding:7px 20px;border-radius:100px;
+  font-family:'Noto Sans SC',sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;
+  margin-bottom:20px;box-shadow:0 4px 20px rgba(192,132,252,0.12);
+}
+.hero h1{
+  font-size:clamp(2.4rem,7vw,4.2rem);font-weight:900;
+  letter-spacing:-0.03em;line-height:1.15;margin:12px 0 10px;
+  background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 38%,var(--coral-500) 62%,var(--warm-400) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero-sub{
+  font-size:clamp(1rem,2.5vw,1.3rem);color:var(--ink-soft);font-weight:400;
+  margin-bottom:8px;font-family:'Noto Sans SC',sans-serif;
+}
+.hero-tagline{
+  font-size:13px;color:var(--ink-muted);font-weight:500;letter-spacing:1px;
+  margin-bottom:24px;
+}
+.hero-art{margin:20px auto 8px;max-width:760px;width:100%}
+.hero-img{
+  width:100%;height:auto;border-radius:24px;
+  box-shadow:0 24px 70px -24px rgba(30,27,75,0.18);
+  border:1px solid rgba(192,132,252,0.12);
+}
+.hero-caption{font-size:11px;color:var(--ink-muted);margin-top:8px}
+.scroll-ind{
+  position:absolute;bottom:30px;left:50%;transform:translateX(-50%);
+  font-size:10px;letter-spacing:3px;color:var(--ink-muted);font-weight:600;
+  animation:bounce 2s infinite;
+}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+
+/* Content */
+.content{max-width:820px;margin:0 auto;padding:60px 24px}
+.chapter{margin-bottom:80px;scroll-margin-top:80px}
+.chapter-num{
+  display:inline-block;font-family:'JetBrains Mono',monospace;font-size:11px;
+  color:var(--lav-500);font-weight:600;letter-spacing:2px;margin-bottom:8px;
+}
+.chapter h2{
+  font-size:clamp(1.6rem,4vw,2.2rem);margin-bottom:24px;
+  background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.chapter h3{font-size:1.25rem;margin:28px 0 12px;color:var(--ink)}
+.chapter p{margin-bottom:16px;color:var(--ink-soft);font-size:15px;line-height:1.85}
+.chapter strong{color:var(--ink);font-weight:600}
+.chapter em{color:var(--lav-600);font-style:normal;font-weight:500}
+
+/* Figure */
+.fig{margin:28px 0;border-radius:16px;overflow:hidden;box-shadow:var(--shadow-md);background:var(--paper)}
+.fig img{width:100%;display:block}
+.fig-caption{padding:12px 16px;font-size:12px;color:var(--ink-muted);line-height:1.5;background:var(--paper-warm)}
+
+/* Insight Box */
+.insight-box{
+  background:linear-gradient(135deg,var(--mint-100) 0%,rgba(209,250,229,0.5) 100%);
+  border-left:4px solid var(--mint-400);border-radius:12px;
+  padding:20px 24px;margin:24px 0;box-shadow:var(--shadow-sm);
+}
+.insight-box .ib-title{
+  font-family:'Noto Serif SC',serif;font-weight:700;font-size:14px;
+  color:var(--mint-500);margin-bottom:8px;display:flex;align-items:center;gap:6px;
+}
+.insight-box .ib-title::before{content:'';width:8px;height:8px;background:var(--mint-400);border-radius:50%}
+.insight-box p{color:var(--ink-soft);font-size:14px;margin:0}
+
+/* Math Block */
+.math-block{
+  background:var(--paper);border:1px solid rgba(192,132,252,0.15);
+  border-radius:12px;padding:20px 24px;margin:20px 0;
+  box-shadow:var(--shadow-sm);overflow-x:auto;
+}
+.math-label{
+  font-size:11px;color:var(--lav-500);font-weight:600;
+  font-family:'JetBrains Mono',monospace;margin-bottom:8px;letter-spacing:1px;
+}
+
+/* Code Block */
+.code-block{
+  background:#1e1b2e;border-radius:12px;overflow:hidden;margin:24px 0;
+  box-shadow:var(--shadow-md);
+}
+.code-header{
+  background:rgba(255,255,255,0.05);padding:10px 16px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.code-header span{font-family:'JetBrains Mono',monospace;font-size:11px;color:#a78bfa;font-weight:500}
+.code-header .tag{
+  font-size:10px;padding:2px 8px;border-radius:4px;
+  background:rgba(167,139,250,0.15);color:#c4b5fd;
+}
+.code-block pre{padding:16px 20px;overflow-x:auto}
+.code-block code{font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.7;color:#e0e0e0}
+
+/* Research Question */
+.rq-card{
+  background:linear-gradient(135deg,var(--coral-100) 0%,rgba(255,228,230,0.4) 100%);
+  border-left:4px solid var(--coral-400);border-radius:12px;
+  padding:20px 24px;margin:20px 0;box-shadow:var(--shadow-sm);
+}
+.rq-card .rq-tag{
+  display:inline-block;font-size:10px;font-weight:700;letter-spacing:1px;
+  color:var(--coral-500);background:rgba(244,63,94,0.1);padding:3px 10px;border-radius:6px;
+  margin-bottom:10px;
+}
+.rq-card h4{font-size:15px;color:var(--ink);margin-bottom:8px}
+.rq-card p{font-size:13px;color:var(--ink-soft);margin:0}
+
+/* Table */
+.result-table{
+  width:100%;border-collapse:collapse;margin:20px 0;font-size:13px;
+  border-radius:12px;overflow:hidden;box-shadow:var(--shadow-sm);
+}
+.result-table th{
+  background:var(--lav-100);color:var(--lav-700);font-weight:600;
+  padding:10px 12px;text-align:left;font-size:12px;
+}
+.result-table td{padding:8px 12px;border-bottom:1px solid rgba(192,132,252,0.08);color:var(--ink-soft)}
+.result-table tr:hover{background:var(--lav-50)}
+.result-table .highlight{background:var(--mint-100);font-weight:600;color:var(--ink)}
+
+/* Compare Card */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
+.compare-card{border-radius:12px;padding:20px;box-shadow:var(--shadow-sm)}
+.compare-card.bad{background:linear-gradient(135deg,var(--coral-100),rgba(255,228,230,0.3))}
+.compare-card.good{background:linear-gradient(135deg,var(--mint-100),rgba(209,250,229,0.3))}
+.compare-card h4{font-size:14px;margin-bottom:10px}
+.compare-card p{font-size:13px;margin:0}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+
+/* SVG container */
+.svg-wrap{margin:24px 0;text-align:center}
+.svg-wrap svg{max-width:100%;height:auto}
+.svg-caption{font-size:11px;color:var(--ink-muted);margin-top:8px}
+
+/* Footer */
+.footer{
+  text-align:center;padding:40px 24px;
+  background:linear-gradient(135deg,var(--lav-50),var(--warm-100));
+  border-top:1px solid rgba(192,132,252,0.1);
+}
+.footer p{font-size:12px;color:var(--ink-muted);margin-bottom:6px}
+
+/* Section divider */
+.divider{text-align:center;margin:40px 0;color:var(--lav-300);font-size:20px;letter-spacing:8px}
+
+/* Stats grid */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:24px 0}
+.stat-card{
+  background:var(--paper);border-radius:12px;padding:20px;text-align:center;
+  box-shadow:var(--shadow-sm);border:1px solid rgba(192,132,252,0.1);
+}
+.stat-card .stat-val{
+  font-family:'Noto Serif SC',serif;font-size:28px;font-weight:900;
+  background:linear-gradient(135deg,var(--lav-600),var(--coral-500));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.stat-card .stat-label{font-size:11px;color:var(--ink-muted);margin-top:4px}
+@media(max-width:640px){.stats-grid{grid-template-columns:1fr}}
+
+/* Warning box */
+.warn-box{
+  background:linear-gradient(135deg,var(--warm-100),rgba(254,243,199,0.4));
+  border-left:4px solid var(--warm-400);border-radius:12px;
+  padding:16px 20px;margin:20px 0;
+}
+.warn-box p{font-size:13px;color:var(--ink-soft);margin:0}
+
+/* Pipeline step */
+.pipeline{display:flex;flex-direction:column;gap:12px;margin:24px 0}
+.pipe-step{
+  display:flex;align-items:flex-start;gap:16px;
+  background:var(--paper);border-radius:12px;padding:16px 20px;
+  box-shadow:var(--shadow-sm);border:1px solid rgba(192,132,252,0.08);
+}
+.pipe-step .pipe-icon{
+  flex-shrink:0;width:36px;height:36px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;font-size:18px;
+}
+.pipe-step .pipe-body h4{font-size:14px;color:var(--ink);margin-bottom:4px}
+.pipe-step .pipe-body p{font-size:13px;color:var(--ink-soft);margin:0}
+.pipe-step .pipe-icon.purple{background:var(--lav-100);color:var(--lav-600)}
+.pipe-step .pipe-icon.green{background:var(--mint-100);color:var(--mint-500)}
+.pipe-step .pipe-icon.orange{background:var(--warm-100);color:var(--warm-500)}
+.pipe-step .pipe-icon.red{background:var(--coral-100);color:var(--coral-500)}
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="nav">
+<div class="nav-inner">
+<a href="#hero" class="nav-brand">Ultra Flash</a>
+<div class="nav-links"><a href="../index.html">« 合辑</a>
+<a href="#ch1">分辨率困境</a>
+<a href="#ch2">SR训练范式</a>
+<a href="#ch3">因果上采样器</a>
+<a href="#ch4">级联优化</a>
+<a href="#ch5">实验结果</a>
+<a href="#ch6">代码实现</a>
+<a href="#ch7">科研问题</a>
+</div>
+</div>
+</nav>
+
+<!-- Hero -->
+<section class="hero" id="hero">
+<div class="hero-wrap">
+<div class="hero-badge">arXiv 2606.09150 &middot; JD Explore Academy &middot; 2026</div>
+<h1>Ultra Flash</h1>
+<p class="hero-sub">将实时流式视频生成扩展到高分辨率</p>
+<p class="hero-tagline">Architecture-Preserving SR &times; Causal Latent Upsampler &times; Cascaded Streaming Optimization</p>
+<div class="hero-art">
+<img src="assets/cover.webp" alt="Ultra Flash Cover" class="hero-img">
+<p class="hero-caption">水彩写意：从480P的低分辨率溪流汇聚为1K/2K的高分辨率瀑布，闪电般的速度串联级联超分的每一个环节</p>
+</div>
+</div>
+<div class="scroll-ind">SCROLL TO READ</div>
+</div>
+</section>
+
+<div class="content">
+
+<!-- ==================== CH1: 分辨率困境 ==================== -->
+<div class="chapter" id="ch1">
+<div class="chapter-num">CHAPTER 01</div>
+<h2>分辨率困境：实时视频生成的最后一公里</h2>
+
+<p>视频扩散模型在过去两年取得了令人瞩目的进展——从 Stable Video Diffusion 到 Wan2.1，模型能够从文本提示生成逼真的视频。然而，<strong>一个核心矛盾始终悬而未决</strong>：最强大的视频生成模型只能在低分辨率（480P）下实现实时流式输出，而实际应用（游戏资产生成、实时预览、直播内容创作）需要的是<strong>高分辨率 + 低延迟</strong>。</p>
+
+<p>现有的自回归流式方法（CausVid、Self Forcing、Causal Forcing）通过非对称蒸馏将双向 DiT 转换为因果逐块生成器，在单 GPU 上实现了 480P 实时。但将这些方法直接扩展到 1K 或 2K 分辨率面临根本性挑战：</p>
+
+<div class="compare-grid">
+<div class="compare-card bad">
+<h4>直接生成高分辨率</h4>
+<p>计算成本随分辨率二次增长，480P 到 1K 意味着约 4x 的像素量，注意力复杂度从 $O(n^2)$ 进一步膨胀，在单 GPU 上完全不可行</p>
+</div>
+<div class="compare-card bad">
+<h4>现有级联方案的缺陷</h4>
+<p>像素空间 SR 方法（如 FlashVSR）需要修改架构，丧失预训练 T2V 模型的生成先验；潜在空间插值引入频域混叠，迫使 SR 阶段注入大量噪声</p>
+</div>
+</div>
+
+<div class="stats-grid">
+<div class="stat-card">
+<div class="stat-val">~30 FPS</div>
+<div class="stat-label">1K (960x1664) 单 GPU</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">~18 FPS</div>
+<div class="stat-label">2K (1440x2496) 单 GPU</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">84.17</div>
+<div class="stat-label">VBench Total Quality</div>
+</div>
+</div>
+
+<div class="fig">
+<img src="assets/figure_1_p3.webp" alt="Figure 1: Ultra Flash framework overview">
+<div class="fig-caption">Figure 1: Ultra Flash 框架概览。(a) 级联流式架构：从低分辨率生成器出发，经因果潜在上采样器、SR 模型到高分辨率解码器。(b) 质量-速度对比：Ultra Flash 在 1K/2K 分辨率下同时实现更高质量和实时吞吐量，人类偏好评测胜率达 70.89%</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：分辨率-速度的 Pareto 前沿</div>
+<p>论文的核心突破在于<strong>同时推高了分辨率和速度的 Pareto 前沿</strong>。现有方法面临一个看似不可调和的权衡：提高分辨率必然增加计算量，压缩计算量必然牺牲质量。Ultra Flash 通过三个正交的设计贡献（架构保持的 SR 训练、因果潜在上采样器、级联流式优化）打破了这一权衡，使得高分辨率实时生成成为可能。</p>
+</div>
+
+<h3>为什么是级联而不是直接生成？</h3>
+
+<p>直接生成高分辨率视频的核心瓶颈在于 <strong>DiT 的注意力复杂度</strong>。对于 960x1664 分辨率的视频，潜在空间的 token 数量远超 480P，导致单帧注意力计算量增长数倍。即使使用稀疏注意力，单步推理的延迟也难以控制在实时范围内。</p>
+
+<p>级联范式的思路是：<strong>先生成语义正确的低分辨率视频，再通过超分辨率补充高频细节</strong>。这将问题分解为两个子问题——语义生成（由轻量级 LR 生成器负责）和细节恢复（由 SR 模型负责）。关键在于如何让两个阶段无缝协作，不引入质量退化。</p>
+
+<!-- SVG 1: Cascaded Pipeline Overview -->
+<div class="svg-wrap">
+<svg viewBox="0 0 780 220" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="pipe-grad1" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#c084fc" stop-opacity="0.2"/>
+<stop offset="100%" stop-color="#c084fc" stop-opacity="0.05"/>
+</linearGradient>
+<linearGradient id="pipe-grad2" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#34d399" stop-opacity="0.2"/>
+<stop offset="100%" stop-color="#34d399" stop-opacity="0.05"/>
+</linearGradient>
+<linearGradient id="pipe-grad3" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#fbbf24" stop-opacity="0.2"/>
+<stop offset="100%" stop-color="#fbbf24" stop-opacity="0.05"/>
+</linearGradient>
+<marker id="arrow-purple" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+<path d="M0,0 L8,3 L0,6" fill="#a855f7"/>
+</marker>
+</defs>
+
+<!-- Step 1: LR Generator -->
+<rect x="20" y="40" width="160" height="100" rx="12" fill="url(#pipe-grad1)" stroke="#c084fc" stroke-width="1.5"/>
+<text x="100" y="70" text-anchor="middle" font-family="Noto Serif SC" font-size="12" font-weight="700" fill="#9333ea">LR 生成器</text>
+<text x="100" y="90" text-anchor="middle" font-family="Noto Sans SC" font-size="10" fill="#7e22ce">Self Forcing</text>
+<text x="100" y="106" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#7e22ce">480P @ 32 FPS</text>
+<text x="100" y="160" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#787887">480x832</text>
+
+<!-- Arrow 1 -->
+<line x1="185" y1="90" x2="225" y2="90" stroke="#a855f7" stroke-width="2" marker-end="url(#arrow-purple)"/>
+
+<!-- Step 2: Latent Upsampler -->
+<rect x="230" y="40" width="160" height="100" rx="12" fill="url(#pipe-grad2)" stroke="#34d399" stroke-width="1.5"/>
+<text x="310" y="70" text-anchor="middle" font-family="Noto Serif SC" font-size="12" font-weight="700" fill="#10b981">因果上采样器</text>
+<text x="310" y="90" text-anchor="middle" font-family="Noto Sans SC" font-size="10" fill="#047857">Causal Memory Net</text>
+<text x="310" y="106" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#047857">2.1M params</text>
+<text x="310" y="160" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#787887">HR Latent</text>
+
+<!-- Arrow 2 -->
+<line x1="395" y1="90" x2="435" y2="90" stroke="#a855f7" stroke-width="2" marker-end="url(#arrow-purple)"/>
+
+<!-- Step 3: SR Model -->
+<rect x="440" y="40" width="160" height="100" rx="12" fill="url(#pipe-grad3)" stroke="#fbbf24" stroke-width="1.5"/>
+<text x="520" y="70" text-anchor="middle" font-family="Noto Serif SC" font-size="12" font-weight="700" fill="#f59e0b">SR DiT</text>
+<text x="520" y="90" text-anchor="middle" font-family="Noto Sans SC" font-size="10" fill="#b45309">Sparse Causal</text>
+<text x="520" y="106" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#b45309">1.3B one-step</text>
+<text x="520" y="160" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#787887">SR Latent</text>
+
+<!-- Arrow 3 -->
+<line x1="605" y1="90" x2="645" y2="90" stroke="#a855f7" stroke-width="2" marker-end="url(#arrow-purple)"/>
+
+<!-- Step 4: HR Decoder -->
+<rect x="650" y="40" width="110" height="100" rx="12" fill="url(#pipe-grad1)" stroke="#c084fc" stroke-width="1.5"/>
+<text x="705" y="70" text-anchor="middle" font-family="Noto Serif SC" font-size="12" font-weight="700" fill="#9333ea">HR 解码器</text>
+<text x="705" y="90" text-anchor="middle" font-family="Noto Sans SC" font-size="10" fill="#7e22ce">Causal Memory</text>
+<text x="705" y="106" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#7e22ce">8x decode</text>
+<text x="705" y="160" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#787887">960x1664</text>
+
+<!-- Bottom label -->
+<text x="390" y="195" text-anchor="middle" font-family="Noto Serif SC" font-size="12" fill="#4c4b5e">Ultra Flash 级联流式推理管线：四个模块串行协作，总延迟 ~33ms/帧</text>
+<text x="390" y="212" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#787887">Single GPU &middot; H200/B200 &middot; BF16 Precision</text>
+</svg>
+<p class="svg-caption">SVG 可视化：Ultra Flash 的四级级联流式管线架构，从480P低分辨率到1K/2K高分辨率</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH2: SR Training Paradigm ==================== -->
+<div class="chapter" id="ch2">
+<div class="chapter-num">CHAPTER 02</div>
+<h2>架构保持的 T2V-to-TV2V SR 训练范式</h2>
+
+<p>Ultra Flash 的第一个核心贡献是：<strong>在不修改预训练 T2V 模型架构的前提下，将其转换为 TV2V（Text+Video-to-Video）超分辨率模型</strong>。这看似简单的设计选择背后有深刻的工程洞察。</p>
+
+<h3>现有像素空间 SR 方法的根本缺陷</h3>
+
+<p>FlashVSR 等像素空间 SR 方法需要对预训练模型进行<strong>根本性架构修改</strong>——添加 LQ 投影层、修改注意力模式等。这些修改有两个致命后果：(1) 丧失预训练 T2V 模型的生成先验，使得训练困难；(2) 在像素空间操作引入额外的编解码开销。</p>
+
+<h3>条件机制：零初始化通道扩展</h3>
+
+<p>Ultra Flash 的方案极为优雅：将上采样后的低分辨率潜在 $z_{HR}$ 与噪声潜在 $\epsilon$ 在通道维度拼接，得到 $2c$ 通道输入。DiT 的输入投影层从 $c$ 扩展到 $2c$ 通道，<strong>新增权重以零初始化</strong>，使得训练从原始 T2V 检查点开始。</p>
+
+<div class="math-block">
+<div class="math-label">Conditioning Mechanism — 通道拼接</div>
+$$\text{input} = [z_{HR} \;;\; \epsilon] \in \mathbb{R}^{t \times 2h \times 2w \times 2c}$$
+$$\text{proj}_{\text{new}} = \text{proj}_{\text{old}} \oplus \mathbf{0}_{c \to 2c}$$
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：零初始化的数学直觉</div>
+<p>零初始化保证了训练开始时 SR 模型的行为与原始 T2V 模型完全一致——拼接的 LR 条件通道贡献为零。随着训练推进，模型逐渐学会利用 LR 条件。这是一种<strong>渐进式条件注入</strong>，避免了突然改变模型行为导致的训练不稳定。类比 LoRA 中零初始化的低秩适配器，这里的零初始化起到了类似的保护作用。</p>
+</div>
+
+<h3>条件增强：噪声注入与 Dropout</h3>
+
+<p>为了进一步增强鲁棒性和保持生成能力，训练时应用两种条件增强策略：</p>
+
+<div class="pipeline">
+<div class="pipe-step">
+<div class="pipe-icon purple">N</div>
+<div class="pipe-body">
+<h4>条件噪声注入 (Condition Noise Injection)</h4>
+<p>在拼接前向 LR 条件潜在添加高斯噪声 $\sigma_{cond} \in [0.4, 0.6]$，防止模型过度依赖 LR 条件，鼓励利用学到的生成先验补充缺失细节</p>
+</div>
+</div>
+<div class="pipe-step">
+<div class="pipe-icon green">D</div>
+<div class="pipe-body">
+<h4>条件 Dropout (Condition Dropout)</h4>
+<p>以概率 $p_{drop}=0.4$ 将 LR 条件完全置零，迫使模型执行纯 T2V 生成。确保 SR 模型保持无条件生成能力，改善 CFG 有效性并防止模式坍塌</p>
+</div>
+</div>
+</div>
+
+<h3>AIGC 导向的退化管线</h3>
+
+<p>标准的退化模型（如 Real-ESRGAN）针对自然视频设计，<strong>不适合 AI 生成内容</strong>。AIGC 视频有其独特的伪影模式——时间闪烁、不自然的运动抖动、滚动快门摆动、扩散特有的色彩偏移。Ultra Flash 设计了一个两阶段混合退化管线：</p>
+
+<!-- SVG 2: Degradation Pipeline -->
+<div class="svg-wrap">
+<svg viewBox="0 0 780 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="stage1-bg" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#f3e8ff" stop-opacity="0.6"/>
+<stop offset="100%" stop-color="#faf5ff" stop-opacity="0.2"/>
+</linearGradient>
+<linearGradient id="stage2-bg" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#fef3c7" stop-opacity="0.6"/>
+<stop offset="100%" stop-color="#fffbeb" stop-opacity="0.2"/>
+</linearGradient>
+</defs>
+
+<!-- Stage 1 -->
+<rect x="20" y="20" width="360" height="240" rx="12" fill="url(#stage1-bg)" stroke="#c084fc" stroke-width="1" stroke-dasharray="6,3"/>
+<text x="200" y="48" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#9333ea">Stage 1: AIGC 合成退化</text>
+
+<!-- 5 operations -->
+<rect x="40" y="65" width="140" height="38" rx="8" fill="#e9d5ff" stroke="#c084fc" stroke-width="1"/>
+<text x="110" y="89" text-anchor="middle" font-size="10" fill="#7e22ce">时间形态混合</text>
+<rect x="200" y="65" width="140" height="38" rx="8" fill="#e9d5ff" stroke="#c084fc" stroke-width="1"/>
+<text x="270" y="89" text-anchor="middle" font-size="10" fill="#7e22ce">随机帧丢弃+插值</text>
+
+<rect x="40" y="115" width="140" height="38" rx="8" fill="#e9d5ff" stroke="#c084fc" stroke-width="1"/>
+<text x="110" y="139" text-anchor="middle" font-size="10" fill="#7e22ce">方向运动模糊</text>
+<rect x="200" y="115" width="140" height="38" rx="8" fill="#e9d5ff" stroke="#c084fc" stroke-width="1"/>
+<text x="270" y="139" text-anchor="middle" font-size="10" fill="#7e22ce">ROI 网格变形</text>
+
+<rect x="100" y="165" width="180" height="38" rx="8" fill="#e9d5ff" stroke="#c084fc" stroke-width="1"/>
+<text x="190" y="189" text-anchor="middle" font-size="10" fill="#7e22ce">H.264 编解码压缩</text>
+
+<text x="200" y="230" text-anchor="middle" font-size="10" fill="#9333ea" font-style="italic">低频正弦轨迹参数演化，避免帧间闪烁</text>
+
+<!-- Arrow -->
+<text x="405" y="145" text-anchor="middle" font-family="Noto Serif SC" font-size="20" fill="#a855f7">&rarr;</text>
+
+<!-- Stage 2 -->
+<rect x="420" y="20" width="340" height="240" rx="12" fill="url(#stage2-bg)" stroke="#fbbf24" stroke-width="1" stroke-dasharray="6,3"/>
+<text x="590" y="48" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#f59e0b">Stage 2: 级联空间退化</text>
+
+<!-- Real-ESRGAN style -->
+<rect x="440" y="70" width="300" height="35" rx="6" fill="#fef3c7" stroke="#fbbf24" stroke-width="1"/>
+<text x="590" y="93" text-anchor="middle" font-size="10" fill="#b45309">USM 锐化 &rarr; 高斯模糊 &rarr; 随机缩放</text>
+
+<rect x="440" y="115" width="300" height="35" rx="6" fill="#fef3c7" stroke="#fbbf24" stroke-width="1"/>
+<text x="590" y="138" text-anchor="middle" font-size="10" fill="#b45309">加性噪声 &rarr; JPEG 压缩 (q: 70-95)</text>
+
+<rect x="440" y="165" width="300" height="35" rx="6" fill="#fef3c7" stroke="#fbbf24" stroke-width="1"/>
+<text x="590" y="188" text-anchor="middle" font-size="10" fill="#b45309">2x-4x 双三次下采样 + 上采样回原分辨率</text>
+
+<text x="590" y="228" text-anchor="middle" font-size="10" fill="#f59e0b" font-style="italic">两轮退化（2-pass），随机 CutMix 混合</text>
+
+<!-- HR/LR pair -->
+<text x="390" y="275" text-anchor="middle" font-family="Noto Serif SC" font-size="11" fill="#4c4b5e">退化管线生成真实 LR-HR 训练对，模拟 AIGC 视频特有的退化特征</text>
+</svg>
+<p class="svg-caption">SVG 可视化：Ultra Flash 的两阶段 AIGC 导向退化管线，专为 AI 生成视频的特征伪影设计</p>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：AIGC 退化管线的设计哲学</div>
+<p>传统 SR 退化管线假设输入是自然图像/视频，退化模型是相机噪声 + 压缩。但 AI 生成的视频有完全不同的退化模式：<strong>时间维度的不一致</strong>（闪烁、抖动）比空间维度的退化更为关键。Stage 1 专门模拟这些时间退化，而 Stage 2 处理传统的空间退化。两阶段级联通过 CutMix 随机混合，产生多样化的训练样本。</p>
+</div>
+
+<!-- Code block 1 -->
+<div class="code-block">
+<div class="code-header">
+<span>AIGC Degradation Pipeline (Core Logic)</span>
+<span class="tag">可信度: 高</span>
+</div>
+<pre><code>class AIGCDegradationPipeline:
+    """AIGC-specific temporal + spatial degradation."""
+    
+    def __call__(self, hr_video: Tensor) -> Tensor:
+        # Stage 1: AIGC synthetic temporal degradation
+        x = self.temporal_morphing(hr_video, alpha_range=(0.2, 0.9))
+        x = self.stochastic_frame_drop(x, p_drop=0.15, max_consecutive=2)
+        x = self.directional_motion_blur(x)    # smooth angle/length trajectories
+        x = self.roi_grid_warp(x, max_disp=14) # rolling-shutter wobble
+        x = self.h264_compress(x, crf_range=(25, 30))
+        
+        # Stage 2: Real-ESRGAN-style spatial degradation (2-pass)
+        for _ in range(2):
+            x = self.usm_sharpen(x)
+            x = self.gaussian_blur(x, kernel=(15, 37), sigma=(0.2, 3.0))
+            x = self.random_rescale(x, factor=(0.15, 1.5))
+            x = self.add_noise(x)
+            x = self.jpeg_compress(x, quality=(70, 95))
+        
+        # Simulate spatial resolution gap
+        x = self.bicubic_down_up(x, scale_range=(2, 4))
+        
+        # Stochastic CutMix between branches
+        if random.random() < self.p_mix:
+            x = self.cutmix(aigc_degraded, spatial_degraded)
+        return x</code></pre>
+</div>
+
+<div class="math-block">
+<div class="math-label">Equation 1 — SR 训练目标 (Flow Matching)</div>
+$$\mathcal{L}_{FM} = \mathbb{E}_{t, \epsilon} \left[ \| f_\theta(z_t, t, c_{text}, z_{HR}) - (\epsilon - z_0) \|_2^2 \right]$$
+$$z_t = (1 - \sigma_t) z_0 + \sigma_t \epsilon, \quad \sigma_t \sim \text{LogNormal}(\text{shift}=s)$$
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH3: Causal Upsampler ==================== -->
+<div class="chapter" id="ch3">
+<div class="chapter-num">CHAPTER 03</div>
+<h2>因果流式潜在上采样器与高分辨率解码器</h2>
+
+<p>在级联高分辨率生成中，上采样阶段是连接 LR 潜在和 SR 模型的桥梁。现有方案要么使用朴素插值（引入频域混叠，迫使 SR 注入大量噪声），要么依赖大型上采样模型（排除流式推理）。Ultra Flash 提出了一种<strong>统一的因果记忆网络架构</strong>，同时作为流式潜在上采样器和高分辨率解码器。</p>
+
+<h3>核心构建块：CausalMemBlock</h3>
+
+<p>因果记忆网络的核心是 CausalMemBlock，它将当前帧的特征与前一帧的记忆融合：</p>
+
+<div class="math-block">
+<div class="math-label">Equation 2 — CausalMemBlock</div>
+$$h_t^{(\ell)} = \sigma\left(\text{Conv}_{3\times3}^{(3)}\left(\text{Conv}_{3\times3}^{(2)}\left(\sigma\left(\text{Conv}_{3\times3}^{(1)}\left([h_t^{(\ell-1)}; m_{t-1}^{(\ell)}]\right)\right)\right)\right)\right) + W_{skip} h_t^{(\ell-1)}$$
+</div>
+
+<p>其中 $[\cdot;\cdot]$ 表示通道拼接，$m_{t-1}^{(\ell)}$ 是前一帧的特征作为时间记忆，$\sigma$ 是 ReLU 激活，$W_{skip}$ 是 $1\times1$ 残差投影。因果结构确保每帧仅依赖于过去的上下文，实现逐帧流式推理。</p>
+
+<!-- SVG 3: Causal Memory Block -->
+<div class="svg-wrap">
+<svg viewBox="0 0 780 250" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="cmem-grad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d1fae5" stop-opacity="0.5"/>
+<stop offset="100%" stop-color="#ecfdf5" stop-opacity="0.2"/>
+</linearGradient>
+</defs>
+
+<!-- Frame t-1 -->
+<rect x="30" y="30" width="180" height="80" rx="10" fill="#f3e8ff" stroke="#c084fc" stroke-width="1.5"/>
+<text x="120" y="60" text-anchor="middle" font-family="Noto Serif SC" font-size="12" font-weight="700" fill="#9333ea">Frame t-1</text>
+<text x="120" y="80" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#7e22ce">h_{t-1}^{(l-1)}</text>
+<text x="120" y="96" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#7e22ce">m_{t-1}^{(l)}</text>
+
+<!-- Arrow from t-1 to t -->
+<line x1="215" y1="70" x2="275" y2="70" stroke="#a855f7" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<text x="245" y="60" text-anchor="middle" font-size="9" fill="#9333ea">memory</text>
+
+<!-- CausalMemBlock -->
+<rect x="280" y="20" width="240" height="210" rx="12" fill="url(#cmem-grad)" stroke="#34d399" stroke-width="1.5"/>
+<text x="400" y="48" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#10b981">CausalMemBlock</text>
+
+<!-- Internal flow -->
+<rect x="300" y="65" width="80" height="28" rx="6" fill="#d1fae5" stroke="#34d399" stroke-width="1"/>
+<text x="340" y="84" text-anchor="middle" font-size="9" fill="#047857">Concat</text>
+
+<line x1="340" y1="97" x2="340" y2="115" stroke="#34d399" stroke-width="1" marker-end="url(#arrow-causal)"/>
+
+<rect x="300" y="118" width="80" height="28" rx="6" fill="#d1fae5" stroke="#34d399" stroke-width="1"/>
+<text x="340" y="137" text-anchor="middle" font-size="9" fill="#047857">Conv3x3 #1</text>
+
+<line x1="340" y1="150" x2="340" y2="168" stroke="#34d399" stroke-width="1"/>
+
+<rect x="300" y="171" width="80" height="28" rx="6" fill="#d1fae5" stroke="#34d399" stroke-width="1"/>
+<text x="340" y="190" text-anchor="middle" font-size="9" fill="#047857">Conv3x3 #2,3</text>
+
+<!-- Skip connection -->
+<rect x="410" y="95" width="90" height="28" rx="6" fill="#fef3c7" stroke="#fbbf24" stroke-width="1"/>
+<text x="455" y="114" text-anchor="middle" font-size="9" fill="#b45309">W_skip 1x1</text>
+
+<!-- Plus -->
+<text x="400" y="220" text-anchor="middle" font-size="16" fill="#10b981">+</text>
+
+<!-- Frame t -->
+<rect x="560" y="30" width="180" height="80" rx="10" fill="#f3e8ff" stroke="#c084fc" stroke-width="1.5"/>
+<text x="650" y="60" text-anchor="middle" font-family="Noto Serif SC" font-size="12" font-weight="700" fill="#9333ea">Frame t</text>
+<text x="650" y="80" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#7e22ce">h_t^{(l)}</text>
+<text x="650" y="96" text-anchor="middle" font-size="10" fill="#7e22ce">output</text>
+
+<line x1="525" y1="120" x2="555" y2="70" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrow-causal)"/>
+
+<!-- Bottom label -->
+<text x="400" y="245" text-anchor="middle" font-size="10" fill="#787887">逐帧因果推理：当前帧 t 仅依赖帧 t-1 的记忆，实现流式生成</text>
+</svg>
+<p class="svg-caption">SVG 可视化：CausalMemBlock 的内部结构，通过因果记忆实现逐帧流式推理</p>
+</div>
+
+<h3>空间上采样：PixelShuffle</h3>
+
+<p>每个阶段内的空间上采样通过 PixelShuffle 实现：$3\times3$ 卷积将通道维度扩展 $r^2$ 倍，然后通过子像素重排将通道转换为空间分辨率（每阶段因子为 1x 或 2x 或 3x）。时间上采样通过 $1\times1$ 卷积和通道到时间的 reshape 实现。</p>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：潜空间上采样 vs 像素空间上采样</div>
+<p>关键设计选择是在<strong>潜空间而非像素空间</strong>进行上采样。这有两个重大优势：(1) 潜空间分辨率远低于像素空间（通常 8x 下采样），计算量极小；(2) 避免了像素空间编解码的额外开销。但挑战在于潜在空间对时空一致性敏感——朴素插值会引入频率混叠。因果记忆网络通过学习时空一致性上采样解决了这个问题，仅增加 \lt 5% 的管线成本。</p>
+</div>
+
+<h3>训练目标</h3>
+
+<div class="math-block">
+<div class="math-label">Equation 3 — Causal Memory Network 训练损失</div>
+$$\mathcal{L}_{cmn} = \|\hat{x} - x_{gt}\|_2^2 + \lambda_{warp} \cdot \mathcal{L}_{eWarp}$$
+$$\mathcal{L}_{eWarp} = \sum_t \|\hat{x}_t - \text{Warp}(\hat{x}_{t-1}, F_{t \to t-1})\|$$
+</div>
+
+<p>其中光流 warp 损失鼓励时空平滑输出，直接降低下游 SR 模型所需的噪声水平。这一步看似简单，却是整个管线的关键——<strong>如果上采样器输出不一致，SR 模型就需要更强的去噪能力来补偿，导致训练和蒸馏更加困难</strong>。</p>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH4: Cascaded Optimization ==================== -->
+<div class="chapter" id="ch4">
+<div class="chapter-num">CHAPTER 04</div>
+<h2>级联高分辨率流式生成优化</h2>
+
+<p>Multi-step SR 模型虽然质量高，但依赖密集双向注意力和迭代去噪，离实时相距甚远。Ultra Flash 设计了一个两阶段优化方案，逐步将其转换为实时流式模型。</p>
+
+<h3>Phase I: 混合奖励增强的稀疏因果化与单步蒸馏</h3>
+
+<p>这一阶段同时解决两个正交的瓶颈：<strong>密集双向注意力排除流式推理</strong>，<strong>多步去噪主导延迟</strong>。</p>
+
+<!-- SVG 4: Dynamic Block-Sparse Attention -->
+<div class="svg-wrap">
+<svg viewBox="0 0 780 240" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="sparse-bg" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#ffe4e6" stop-opacity="0.4"/>
+<stop offset="100%" stop-color="#fff1f2" stop-opacity="0.1"/>
+</linearGradient>
+</defs>
+
+<!-- Dense attention matrix -->
+<text x="140" y="20" text-anchor="middle" font-family="Noto Serif SC" font-size="12" font-weight="700" fill="#f43f5e">密集注意力 (不可行)</text>
+<rect x="40" y="30" width="200" height="180" rx="8" fill="url(#sparse-bg)" stroke="#fda4af" stroke-width="1"/>
+
+<!-- Dense matrix - full grid -->
+<g fill="#fda4af" opacity="0.3">
+<rect x="50" y="40" width="24" height="24" rx="2"/><rect x="78" y="40" width="24" height="24" rx="2"/><rect x="106" y="40" width="24" height="24" rx="2"/><rect x="134" y="40" width="24" height="24" rx="2"/><rect x="162" y="40" width="24" height="24" rx="2"/><rect x="190" y="40" width="24" height="24" rx="2"/><rect x="218" y="40" width="24" height="24" rx="2"/>
+<rect x="50" y="68" width="24" height="24" rx="2"/><rect x="78" y="68" width="24" height="24" rx="2"/><rect x="106" y="68" width="24" height="24" rx="2"/><rect x="134" y="68" width="24" height="24" rx="2"/><rect x="162" y="68" width="24" height="24" rx="2"/><rect x="190" y="68" width="24" height="24" rx="2"/><rect x="218" y="68" width="24" height="24" rx="2"/>
+<rect x="50" y="96" width="24" height="24" rx="2"/><rect x="78" y="96" width="24" height="24" rx="2"/><rect x="106" y="96" width="24" height="24" rx="2"/><rect x="134" y="96" width="24" height="24" rx="2"/><rect x="162" y="96" width="24" height="24" rx="2"/><rect x="190" y="96" width="24" height="24" rx="2"/><rect x="218" y="96" width="24" height="24" rx="2"/>
+<rect x="50" y="124" width="24" height="24" rx="2"/><rect x="78" y="124" width="24" height="24" rx="2"/><rect x="106" y="124" width="24" height="24" rx="2"/><rect x="134" y="124" width="24" height="24" rx="2"/><rect x="162" y="124" width="24" height="24" rx="2"/><rect x="190" y="124" width="24" height="24" rx="2"/><rect x="218" y="124" width="24" height="24" rx="2"/>
+<rect x="50" y="152" width="24" height="24" rx="2"/><rect x="78" y="152" width="24" height="24" rx="2"/><rect x="106" y="152" width="24" height="24" rx="2"/><rect x="134" y="152" width="24" height="24" rx="2"/><rect x="162" y="152" width="24" height="24" rx="2"/><rect x="190" y="152" width="24" height="24" rx="2"/><rect x="218" y="152" width="24" height="24" rx="2"/>
+<rect x="50" y="180" width="24" height="24" rx="2"/><rect x="78" y="180" width="24" height="24" rx="2"/><rect x="106" y="180" width="24" height="24" rx="2"/><rect x="134" y="180" width="24" height="24" rx="2"/><rect x="162" y="180" width="24" height="24" rx="2"/><rect x="190" y="180" width="24" height="24" rx="2"/><rect x="218" y="180" width="24" height="24" rx="2"/>
+</g>
+<text x="140" y="230" text-anchor="middle" font-size="10" fill="#f43f5e">O(n^2) &rarr; OOM @ 1K</text>
+
+<!-- Arrow -->
+<text x="330" y="120" text-anchor="middle" font-family="Noto Serif SC" font-size="24" fill="#a855f7">&rarr;</text>
+<text x="330" y="145" text-anchor="middle" font-size="10" fill="#9333ea">top-k + causal</text>
+
+<!-- Sparse attention matrix -->
+<text x="560" y="20" text-anchor="middle" font-family="Noto Serif SC" font-size="12" font-weight="700" fill="#10b981">稀疏因果注意力 (Ours)</text>
+<rect x="420" y="30" width="280" height="180" rx="8" fill="url(#cmem-grad)" stroke="#34d399" stroke-width="1"/>
+
+<!-- Labels -->
+<text x="445" y="48" font-size="8" fill="#047857">B0</text>
+<text x="473" y="48" font-size="8" fill="#047857">B1</text>
+<text x="501" y="48" font-size="8" fill="#047857">B2</text>
+<text x="529" y="48" font-size="8" fill="#047857">B3</text>
+<text x="557" y="48" font-size="8" fill="#047857">B4</text>
+<text x="585" y="48" font-size="8" fill="#047857">B5</text>
+<text x="613" y="48" font-size="8" fill="#047857">B6</text>
+<text x="641" y="48" font-size="8" fill="#047857">B7</text>
+<text x="669" y="48" font-size="8" fill="#047857">B8</text>
+
+<!-- Sparse pattern: causal + local + top-k -->
+<!-- Row 0: only self -->
+<g fill="#34d399" opacity="0.6">
+<rect x="435" y="56" width="24" height="24" rx="2"/>
+</g>
+<!-- Row 1: self + prev -->
+<g fill="#34d399" opacity="0.6">
+<rect x="435" y="84" width="24" height="24" rx="2"/><rect x="463" y="84" width="24" height="24" rx="2"/>
+</g>
+<!-- Row 2: local window + some top-k -->
+<g fill="#34d399" opacity="0.6">
+<rect x="435" y="112" width="24" height="24" rx="2"/><rect x="463" y="112" width="24" height="24" rx="2"/><rect x="491" y="112" width="24" height="24" rx="2"/>
+</g>
+<!-- Row 3: more -->
+<g fill="#34d399" opacity="0.6">
+<rect x="435" y="140" width="24" height="24" rx="2"/><rect x="463" y="140" width="24" height="24" rx="2"/><rect x="491" y="140" width="24" height="24" rx="2"/><rect x="519" y="140" width="24" height="24" rx="2"/>
+<rect x="613" y="140" width="24" height="24" rx="2"/>
+</g>
+<!-- Row 4 -->
+<g fill="#34d399" opacity="0.6">
+<rect x="463" y="168" width="24" height="24" rx="2"/><rect x="491" y="168" width="24" height="24" rx="2"/><rect x="519" y="168" width="24" height="24" rx="2"/><rect x="547" y="168" width="24" height="24" rx="2"/>
+</g>
+<!-- Row 5 -->
+<g fill="#34d399" opacity="0.6">
+<rect x="491" y="196" width="24" height="24" rx="2"/><rect x="519" y="196" width="24" height="24" rx="2"/><rect x="547" y="196" width="24" height="24" rx="2"/><rect x="575" y="196" width="24" height="24" rx="2"/>
+</g>
+
+<!-- Legend -->
+<rect x="420" y="222" width="10" height="10" rx="2" fill="#34d399" opacity="0.6"/>
+<text x="435" y="231" font-size="9" fill="#047857">因果 + 局部窗口 + 内容自适应 top-k</text>
+<text x="560" y="231" font-size="9" fill="#787887">r=9x9 window, top-k adaptive</text>
+</svg>
+<p class="svg-caption">SVG 可视化：从密集注意力到动态块稀疏因果注意力的转换，使 1K 分辨率流式推理成为可能</p>
+</div>
+
+<h4>动态块稀疏因果注意力</h4>
+
+<p>3D token 网格 $(t, h, w)$ 被划分为不重叠的块 $(b_t, b_h, b_w)$。对每个注意力层，计算两级掩码：(1) 结构掩码——空间局部性掩码 $M_{local}$ 限定感受野为 $r \times r$ 滑动窗口，时间因果掩码 $M_{causal}$ 确保仅关注当前和先前的 chunk；(2) 内容自适应 top-k 选择——对 Q 和 K 进行块级池化，保留每个头最相关的 top-k 块。</p>
+
+<div class="math-block">
+<div class="math-label">Equation 4 — 块级注意力分数与稀疏掩码</div>
+$$s_{ij}^h = \frac{\bar{q}_i^{h\top} \bar{k}_j^h}{\sqrt{d_h}}, \quad M_{sparse}^h[i,j] = \mathbb{1}\left[\text{softmax}(s_{i,:}^h)_j \geq \tau_k\right] \cap M_{local} \cap M_{causal}$$
+</div>
+
+<h4>解耦 DMD 单步蒸馏</h4>
+
+<p>采用 Decoupled DMD 将多步去噪压缩为单次前向传播。蒸馏涉及三个模型：</p>
+
+<div class="pipeline">
+<div class="pipe-step">
+<div class="pipe-icon purple">T</div>
+<div class="pipe-body">
+<h4>Real Score Model (Teacher)</h4>
+<p>多步双向 SR 模型 + CFG，冻结参数。提供真实的去噪信号</p>
+</div>
+</div>
+<div class="pipe-step">
+<div class="pipe-icon orange">F</div>
+<div class="pipe-body">
+<h4>Fake Score Model</h4>
+<p>从教师权重初始化，在学生生成的样本上训练，追踪演化中的生成器分布。更新频率为生成器的 5 倍</p>
+</div>
+</div>
+<div class="pipe-step">
+<div class="pipe-icon green">S</div>
+<div class="pipe-body">
+<h4>Generator (Student)</h4>
+<p>转换为因果稀疏注意力，是主要的可训练组件。接收 CA（CFG增强）和 DM（分布匹配）两个梯度信号</p>
+</div>
+</div>
+</div>
+
+<div class="math-block">
+<div class="math-label">Equation 5 — 解耦 DMD 梯度</div>
+$$\nabla_\theta \mathcal{L}_{d-DMD} = \mathbb{E}\left[-\left(s_{cond}^{real}(x_\tau^{DM}) - s_{cond}^{fake}(x_\tau^{DM}) + (\alpha-1)(s_{cond}^{real}(x_\tau^{CA}) - s_{uncond}^{real}(x_\tau^{CA}))\right)\frac{\partial G_\theta}{\partial \theta}\right]$$
+</div>
+
+<h4>混合奖励集成</h4>
+
+<p>在蒸馏过程中融入感知和美学奖励信号，直接优化视觉质量：</p>
+
+<div class="math-block">
+<div class="math-label">Equation 7 — 混合奖励损失</div>
+$$\mathcal{L}_{reward} = -\lambda_{clip} \cdot \text{CLIP-IQA+}(D_{HR}(\hat{z}_0)) - \lambda_{musiq} \cdot \text{MUSIQ}(D_{HR}(\hat{z}_0)) - \lambda_{aes} \cdot \text{LAION-Aes}(D_{HR}(\hat{z}_0))$$
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：混合奖励的互补性设计</div>
+<p>三个奖励指标从不同维度约束生成质量：CLIP-IQA+ 捕获感知质量（语义正确性），MUSIQ 评估多尺度图像质量（局部细节+全局协调），LAION-Aesthetic 评估美学吸引力（构图、色彩和谐）。它们的梯度通过 HR 解码器 $D_{HR}$ 反向传播到学生模型，提供了分布匹配（Decoupled DMD）和像素重建（小波 L1 + LPIPS）无法覆盖的互补信号。</p>
+</div>
+
+<h3>Phase II: 级联流式自强迫偏好优化</h3>
+
+<p>Phase I 产生单步因果 SR 模型，但仍基于 GT 低分辨率上下文训练。推理时必须处理不完美的上游输出——这是级联设定特有的<strong>复合暴露偏差</strong>。</p>
+
+<h4>高分辨率自强迫 Rollout</h4>
+
+<p>训练时模拟实际推理分布：LR 流式生成器自回归产生上下文 chunk，经潜在上采样器后输入 SR 模型。SR 输出反过来作为后续 chunk 的上下文，使模型同时暴露于自身不完美和上游错误。</p>
+
+<h4>偏好优化 (DPO)</h4>
+
+<div class="math-block">
+<div class="math-label">Equation 9 — DPO 偏好损失</div>
+$$\mathcal{L}_{Phase II} = \mathcal{L}_{pref} = -\log \sigma\left(\beta \left(\log \frac{\pi_\theta(z^+|c)}{\pi_{ref}(z^+|c)} - \log \frac{\pi_\theta(z^-|c)}{\pi_{ref}(z^-|c)}\right)\right)$$
+</div>
+
+<p>其中负样本 $z^-$ 来自当前级联管线的流式推理，正样本 $z^+$ 来自更强的 Wan2.2-5B SR 模型的多步像素空间超分，作为 oracle 参考。</p>
+
+<h4>动态缓存管理</h4>
+
+<div class="pipeline">
+<div class="pipe-step">
+<div class="pipe-icon purple">1</div>
+<div class="pipe-body">
+<h4>LR 去噪步数缩减</h4>
+<p>首个 chunk 使用完整 4 步，后续 chunk 减少为 3 步。下游 SR 补偿细节，节省每个 chunk 一次前向传播</p>
+</div>
+</div>
+<div class="pipe-step">
+<div class="pipe-icon green">2</div>
+<div class="pipe-body">
+<h4>自适应缓存刷新</h4>
+<p>使用轻量 IQA 指标评估前一 chunk：若分数超阈值则直接复用 KV 缓存，消除额外前向传播</p>
+</div>
+</div>
+<div class="pipe-step">
+<div class="pipe-icon orange">3</div>
+<div class="pipe-body">
+<h4>SR 缓存长度自适应</h4>
+<p>单步 SR 对强条件信号使得质量对 KV 缓存长度不敏感，动态选择紧凑缓存窗口</p>
+</div>
+</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：级联 DPO 为何选择更强的教师</div>
+<p>Phase II 的 DPO 使用 Wan2.2-5B（5B 参数，多步像素空间 SR）作为正样本的 oracle。这与 Phase I 的 Decoupled DMD 形成了<strong>层级化的知识蒸馏</strong>：Phase I 从多步教师压缩到单步，Phase II 用更强的模型引导偏好方向。这种设计巧妙地将分辨率提升引入的质量退化通过偏好学习来补偿，而非依赖更强的模型本身。</p>
+</div>
+
+<!-- Code block 2 -->
+<div class="code-block">
+<div class="code-header">
+<span>Cascaded Streaming Inference (Core Loop)</span>
+<span class="tag">可信度: 高</span>
+</div>
+<pre><code>def cascaded_streaming_inference(lr_generator, upsampler, sr_model, hr_decoder, text_embed):
+    """Real-time cascaded streaming inference."""
+    kv_cache_lr, kv_cache_sr = None, None
+    
+    for chunk_idx, lr_chunk in enumerate(lr_generator.stream()):
+        # Step 1: LR generation with adaptive step count
+        n_steps = 4 if chunk_idx == 0 else 3  # step reduction for subsequent chunks
+        lr_latent = lr_generator.denoise(lr_chunk, steps=n_steps, kv_cache=kv_cache_lr)
+        
+        # Step 2: Adaptive cache refresh
+        if chunk_idx > 0 and iqa_score(prev_decoded) > IQA_THRESHOLD:
+            kv_cache_lr = reuse_last_kv_cache()  # skip x0 forward pass
+        else:
+            kv_cache_lr = update_kv_cache(lr_latent)
+        
+        # Step 3: Causal latent upsampling (< 5% overhead)
+        hr_latent = upsampler.upsample(lr_latent)  # 2x spatial in latent space
+        
+        # Step 4: Single-step SR with sparse causal attention
+        sr_latent = sr_model.one_step_denoise(hr_latent, text_embed, kv_cache=kv_cache_sr)
+        kv_cache_sr = sr_model.update_cache(sr_latent, window_size=adaptive_window())
+        
+        # Step 5: Causal HR decode (8x8x4 spatiotemporal)
+        hr_pixels = hr_decoder.decode(sr_latent)
+        yield hr_pixels</code></pre>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH5: Experimental Results ==================== -->
+<div class="chapter" id="ch5">
+<div class="chapter-num">CHAPTER 05</div>
+<h2>实验结果：全面超越的实时高分辨率生成</h2>
+
+<p>Ultra Flash 基于 Wan2.1-T2V-1.3B 构建，在单 H200/B200 GPU 上进行了全面评估。</p>
+
+<h3>质量对比：VBench 全面领先</h3>
+
+<div class="fig">
+<img src="assets/table_1_p7.webp" alt="Table 1: VBench comparison">
+<div class="fig-caption">Table 1: VBench 对比。Ultra Flash 在所有维度上取得最优或竞争性分数，总分 84.17 超越所有基线。SC: 主体一致性; BC: 背景一致性; MS: 运动平滑度; IQ: 图像质量; AQ: 美学质量</div>
+</div>
+
+<table class="result-table">
+<tr><th>Method</th><th>Steps</th><th>SC</th><th>BC</th><th>MS</th><th>IQ</th><th>AQ</th><th>Total</th></tr>
+<tr><td>Wan2.1 (teacher)</td><td>50</td><td>96.87</td><td>97.35</td><td>98.31</td><td>65.02</td><td>62.79</td><td>83.37</td></tr>
+<tr><td>CausVid</td><td>4</td><td>96.58</td><td>96.74</td><td>97.82</td><td>67.45</td><td>63.87</td><td>81.33</td></tr>
+<tr><td>Self Forcing</td><td>4</td><td>97.12</td><td>97.08</td><td>97.63</td><td>67.92</td><td>63.50</td><td>83.74</td></tr>
+<tr><td>Causal Forcing</td><td>4</td><td>97.53</td><td>97.19</td><td>98.05</td><td>68.88</td><td>64.15</td><td>84.04</td></tr>
+<tr><td>DummyForcing</td><td>4</td><td>96.45</td><td>96.81</td><td>98.14</td><td>67.28</td><td>63.62</td><td>83.48</td></tr>
+<tr class="highlight"><td>Ultra Flash (Ours)</td><td>4</td><td>97.68</td><td>97.42</td><td>98.13</td><td>68.90</td><td>64.21</td><td>84.17</td></tr>
+</table>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：单步生成器超越多步教师</div>
+<p>Ultra Flash 的总分（84.17）超越了 50 步的 Wan2.1 教师（83.37）。这证明了混合奖励集成（CLIP-IQA+、MUSIQ、LAION-Aesthetic）和偏好优化的有效性——它们不仅弥补了多步到单步的质量损失，还通过直接优化感知指标实现了对教师的超越。这种"学生超越教师"的现象在蒸馏文献中相对罕见。</p>
+</div>
+
+<h3>效率对比：单 GPU 实现实时</h3>
+
+<!-- SVG 5: Resolution-Throughput Pareto Frontier -->
+<div class="svg-wrap">
+<svg viewBox="0 0 700 320" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="pareto-bg" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#faf5ff" stop-opacity="0.5"/>
+<stop offset="100%" stop-color="#fdfbf7" stop-opacity="0.1"/>
+</linearGradient>
+</defs>
+
+<!-- Background -->
+<rect x="60" y="20" width="600" height="250" rx="8" fill="url(#pareto-bg)" stroke="#e9d5ff" stroke-width="1"/>
+
+<!-- Axes -->
+<line x1="60" y1="270" x2="660" y2="270" stroke="#787887" stroke-width="1.5"/>
+<line x1="60" y1="270" x2="60" y2="20" stroke="#787887" stroke-width="1.5"/>
+
+<!-- Axis labels -->
+<text x="360" y="305" text-anchor="middle" font-family="Noto Sans SC" font-size="12" fill="#4c4b5e">分辨率 (像素高度)</text>
+<text x="20" y="145" text-anchor="middle" font-family="Noto Sans SC" font-size="12" fill="#4c4b5e" transform="rotate(-90,20,145)">FPS (帧/秒)</text>
+
+<!-- Grid lines -->
+<line x1="60" y1="220" x2="660" y2="220" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4,4"/>
+<line x1="60" y1="170" x2="660" y2="170" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4,4"/>
+<line x1="60" y1="120" x2="660" y2="120" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4,4"/>
+<line x1="60" y1="70" x2="660" y2="70" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4,4"/>
+
+<!-- X axis ticks: 480, 720, 1080, 1440, 2160 -->
+<text x="100" y="288" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#787887">480P</text>
+<text x="220" y="288" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#787887">720P</text>
+<text x="340" y="288" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#787887">1K</text>
+<text x="460" y="288" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#787887">1.5K</text>
+<text x="580" y="288" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#787887">2K</text>
+
+<!-- Y axis ticks: 0, 10, 20, 30, 40 -->
+<text x="52" y="274" text-anchor="end" font-family="JetBrains Mono" font-size="10" fill="#787887">0</text>
+<text x="52" y="224" text-anchor="end" font-family="JetBrains Mono" font-size="10" fill="#787887">10</text>
+<text x="52" y="174" text-anchor="end" font-family="JetBrains Mono" font-size="10" fill="#787887">20</text>
+<text x="52" y="124" text-anchor="end" font-family="JetBrains Mono" font-size="10" fill="#787887">30</text>
+<text x="52" y="74" text-anchor="end" font-family="JetBrains Mono" font-size="10" fill="#787887">40</text>
+
+<!-- Real-time threshold -->
+<line x1="60" y1="170" x2="660" y2="170" stroke="#34d399" stroke-width="1" stroke-dasharray="8,4" opacity="0.5"/>
+<text x="665" y="167" font-family="Noto Sans SC" font-size="9" fill="#10b981">实时线 20FPS</text>
+
+<!-- Baseline points -->
+<!-- Wan2.1: 480P, 0.78 FPS -->
+<circle cx="100" cy="268" r="8" fill="#fecdd3" stroke="#f43f5e" stroke-width="1.5"/>
+<text x="100" y="258" text-anchor="middle" font-size="8" fill="#f43f5e">0.78</text>
+<text x="100" y="295" text-anchor="middle" font-size="8" fill="#f43f5e">Wan2.1</text>
+
+<!-- CausVid: 480P, 29.4 FPS -->
+<circle cx="115" cy="123" r="7" fill="#e9d5ff" stroke="#a855f7" stroke-width="1.5"/>
+<text x="115" y="113" text-anchor="middle" font-size="8" fill="#a855f7">29.4</text>
+
+<!-- Self Forcing: 480P, 32 FPS -->
+<circle cx="130" cy="110" r="7" fill="#e9d5ff" stroke="#a855f7" stroke-width="1.5"/>
+<text x="130" y="100" text-anchor="middle" font-size="8" fill="#a855f7">32.0</text>
+
+<!-- FlashVSR: 768P, 15 FPS -->
+<circle cx="235" cy="195" r="7" fill="#fef3c7" stroke="#fbbf24" stroke-width="1.5"/>
+<text x="235" y="185" text-anchor="middle" font-size="8" fill="#b45309">15.0</text>
+<text x="235" y="215" text-anchor="middle" font-size="8" fill="#b45309">FlashVSR</text>
+
+<!-- Ultra Flash 1K: 960P, 30 FPS -->
+<circle cx="340" cy="120" r="10" fill="#d1fae5" stroke="#10b981" stroke-width="2.5"/>
+<text x="340" y="108" text-anchor="middle" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="#047857">30.0</text>
+
+<!-- Ultra Flash 2K: 1440P, 18 FPS -->
+<circle cx="460" cy="179" r="10" fill="#d1fae5" stroke="#10b981" stroke-width="2.5"/>
+<text x="460" y="167" text-anchor="middle" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="#047857">18.0</text>
+
+<!-- Ultra Flash labels -->
+<text x="340" y="140" text-anchor="middle" font-family="Noto Serif SC" font-size="11" font-weight="700" fill="#10b981">Ultra Flash (1K)</text>
+<text x="460" y="199" text-anchor="middle" font-family="Noto Serif SC" font-size="11" font-weight="700" fill="#10b981">Ultra Flash (2K)</text>
+
+<!-- Pareto frontier arrow -->
+<path d="M 100,268 Q 200,260 235,195" stroke="#fda4af" stroke-width="1.5" fill="none" stroke-dasharray="6,3"/>
+<path d="M 235,195 L 340,120" stroke="#34d399" stroke-width="2.5" fill="none"/>
+<path d="M 340,120 L 460,179" stroke="#34d399" stroke-width="2.5" fill="none"/>
+<text x="290" y="155" font-size="9" fill="#10b981" transform="rotate(-30,290,155)">Pareto frontier</text>
+
+<!-- Legend -->
+<rect x="80" y="30" width="120" height="50" rx="6" fill="white" stroke="#e9d5ff" stroke-width="1"/>
+<circle cx="95" cy="45" r="5" fill="#fecdd3" stroke="#f43f5e" stroke-width="1"/>
+<text x="105" y="49" font-size="9" fill="#787887">Non-streaming</text>
+<circle cx="95" cy="65" r="5" fill="#d1fae5" stroke="#10b981" stroke-width="1.5"/>
+<text x="105" y="69" font-size="9" fill="#787887">Ultra Flash</text>
+</svg>
+<p class="svg-caption">SVG 可视化：分辨率-吞吐量 Pareto 前沿。Ultra Flash 显著推高了高分辨率实时生成的 Pareto 边界</p>
+</div>
+
+<div class="fig">
+<img src="assets/table_2_p8.webp" alt="Table 2: Efficiency comparison">
+<div class="fig-caption">Table 2: 效率对比。Ultra Flash 在 1K 分辨率下实现 ~30 FPS，2K 下 ~18 FPS，显著优于所有现有方法。所有测量在单 GPU 上完成</div>
+</div>
+
+<table class="result-table">
+<tr><th>Method</th><th>Resolution</th><th>Steps</th><th>FPS</th><th>Latency (ms)</th><th>Streaming</th></tr>
+<tr><td>Wan2.1</td><td>480x832</td><td>50</td><td>0.78</td><td>103,000</td><td>--</td></tr>
+<tr><td>CausVid</td><td>480x832</td><td>4</td><td>29.4</td><td>34</td><td>Yes</td></tr>
+<tr><td>Self Forcing</td><td>480x832</td><td>4</td><td>32.0</td><td>31</td><td>Yes</td></tr>
+<tr><td>Self Forcing + FlashVSR</td><td>768x1408</td><td>5</td><td>15.0</td><td>67</td><td>Yes</td></tr>
+<tr class="highlight"><td>Ultra Flash (Ours)</td><td>960x1664 (1K)</td><td>4</td><td>30.0</td><td>40</td><td>Yes</td></tr>
+<tr class="highlight"><td>Ultra Flash (Ours)</td><td>1440x2496 (2K)</td><td>4</td><td>18.0</td><td>56</td><td>Yes</td></tr>
+</table>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：633 倍延迟降低的意义</div>
+<p>相比原生 Wan2.1 的 103 秒/帧延迟，Ultra Flash 仅需 ~33ms/帧（30 FPS），实现了 <strong>633 倍的加速</strong>。更重要的是，这个加速不是在 480P 基础上实现的，而是在更高的 1K 分辨率下。这意味着 Ultra Flash 不仅解决了实时性问题，还同时解决了分辨率问题——两个维度的同时突破是此前任何方法都未能实现的。</p>
+</div>
+
+<h3>定性比较：细节与一致性</h3>
+
+<div class="fig">
+<img src="assets/figure_3_p9.webp" alt="Figure 3: Qualitative comparison">
+<div class="fig-caption">Figure 3: 定性比较。Ultra Flash 在 1K 和 2K 分辨率下生成更清晰、时间更一致的帧，而先前方法受限于 480x832。放大查看细节差异</div>
+</div>
+
+<div class="fig">
+<img src="assets/figure_6_p19.webp" alt="Figure 6: Fine-grained texture">
+<div class="fig-caption">Figure 6: 细粒度纹理比较。Ultra Flash 在 1K/2K 下呈现清晰的头发丝、皮肤纹理和织物图案，而 480P 基线显著模糊或过度平滑</div>
+</div>
+
+<div class="fig">
+<img src="assets/figure_7_p19.webp" alt="Figure 7: Temporal consistency">
+<div class="fig-caption">Figure 7: 时间一致性和色彩稳定性。在具有复杂表面细节的场景中（如动物皮毛、植被），Ultra Flash 保持稳定的曝光、鲜艳一致的色彩和时间连贯的细节</div>
+</div>
+
+<h3>VBench 16 维度雷达图</h3>
+
+<div class="fig">
+<img src="assets/figure_10_p23.webp" alt="Figure 10: VBench radar chart">
+<div class="fig-caption">Figure 10: VBench 16 维度雷达图。Ultra Flash 在大多数维度上取得最优或接近最优的性能，同时保持实时吞吐量。特别在时间闪烁（97.85）和运动平滑度（98.37）上超越了 50 步教师</div>
+</div>
+
+<h3>消融研究</h3>
+
+<h4>SR 训练组件消融</h4>
+
+<div class="fig">
+<img src="assets/table_4_p9.webp" alt="Table 4: SR training ablation">
+<div class="fig-caption">Table 4: SR 训练组件消融。移除 AIGC 退化、零初始化、条件噪声注入和条件 dropout 中的任何一个都会降低质量</div>
+</div>
+
+<div class="warn-box">
+<p><strong>关键发现：</strong>移除零初始化条件（替换为随机初始化）对质量影响最大——CLIP-IQA+ 从 0.671 降至 0.621。这验证了零初始化在保持预训练生成先验方面的关键作用。移除 AIGC 退化管线同样造成显著质量下降（降至 0.638），证实了针对 AIGC 特征退化的定制化设计的必要性。</p>
+</div>
+
+<h4>上采样策略消融</h4>
+
+<div class="fig">
+<img src="assets/table_5_p9.webp" alt="Table 5: Upsampling ablation">
+<div class="fig-caption">Table 5: 上采样策略消融。朴素插值引入频率混叠降低 SR 质量，因果记忆网络产生时空一致的潜在表示，显著降低 SR 任务难度</div>
+</div>
+
+<h4>级联流式优化组件消融</h4>
+
+<div class="fig">
+<img src="assets/table_6_p10.webp" alt="Table 6: Cascaded optimization ablation">
+<div class="fig-caption">Table 6: 级联流式优化组件消融。每个组件（稀疏注意力、混合奖励、DPO 偏好优化、动态缓存管理）都对最终性能有独立贡献</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：DPO 对时间一致性的独特贡献</div>
+<p>消融数据显示，DPO 偏好优化对时间一致性（TC）的贡献最为突出——移除 DPO 后 TC 从 97.2 降至 95.6，下降 1.6 个百分点。这远大于对 CLIP-IQA+（0.019）和 MUSIQ（1.3）的影响。这表明 DPO 的主要作用不是提升单帧质量，而是<strong>纠正级联管线中逐帧累积的时间不一致</strong>——这正是其设计目标。</p>
+</div>
+
+<h3>训练成本</h3>
+
+<div class="fig">
+<img src="assets/table_7_p24.webp" alt="Table 7: Training cost">
+<div class="fig-caption">Table 7: 训练成本分解。四个阶段总 GPU 时为 2,176 小时（32x H200），约 2.5 天端到端</div>
+</div>
+
+<p>值得注意的是，CausVid 报告约 3,000 A100 GPU 小时用于 480P 蒸馏，Self Forcing 报告约 2,400 GPU 小时。Ultra Flash 的 2,176 GPU 小时实现了 <strong>4 倍分辨率提升</strong>（从 480P 到 1K/2K），训练成本反而更低。</p>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH6: Code Implementation ==================== -->
+<div class="chapter" id="ch6">
+<div class="chapter-num">CHAPTER 06</div>
+<h2>核心代码实现：可复现的关键模块</h2>
+
+<p>本章提供 Ultra Flash 核心模块的高保真参考实现，帮助研究者理解和复现关键设计。</p>
+
+<h3>CausalMemBlock 实现</h3>
+
+<!-- Code block 3 -->
+<div class="code-block">
+<div class="code-header">
+<span>CausalMemBlock — Core Building Block</span>
+<span class="tag">可信度: 高</span>
+</div>
+<pre><code>class CausalMemBlock(nn.Module):
+    """Causal memory block: fuses current frame with previous frame memory."""
+    
+    def __init__(self, channels: int):
+        super().__init__()
+        self.conv1 = nn.Conv2d(channels * 2, channels, 3, padding=1)  # concat input
+        self.conv2 = nn.Conv2d(channels, channels, 3, padding=1)
+        self.conv3 = nn.Conv2d(channels, channels, 3, padding=1)
+        self.skip_proj = nn.Conv2d(channels, channels, 1)  # residual 1x1
+        self.act = nn.ReLU(inplace=True)
+    
+    def forward(self, h_t: Tensor, m_prev: Tensor) -> Tensor:
+        """
+        Args:
+            h_t: current frame features [B, C, H, W]
+            m_prev: previous frame memory [B, C, H, W]
+        Returns:
+            h_out: updated features [B, C, H, W]
+        """
+        # Concatenate current + memory along channel dim
+        x = torch.cat([h_t, m_prev], dim=1)  # [B, 2C, H, W]
+        
+        # Three conv layers with activations
+        x = self.act(self.conv1(x))    # [B, C, H, W]
+        x = self.act(self.conv2(x))    # [B, C, H, W]
+        x = self.conv3(x)              # [B, C, H, W]
+        
+        # Skip connection from input
+        return x + self.skip_proj(h_t)</code></pre>
+</div>
+
+<h3>动态块稀疏注意力掩码</h3>
+
+<div class="code-block">
+<div class="code-header">
+<span>Dynamic Block-Sparse Causal Attention Mask</span>
+<span class="tag">可信度: 高</span>
+</div>
+<pre><code>def compute_sparse_mask(Q, K, block_size, local_window, topk_ratio, causal=True):
+    """
+    Compute content-adaptive block-sparse causal attention mask.
+    
+    Args:
+        Q, K: query/key tensors [B, H, N, D]
+        block_size: (bt, bh, bw) for 3D token grid
+        local_window: spatial locality window size r
+        topk_ratio: fraction of blocks to keep per head
+        causal: if True, apply temporal causal masking
+    """
+    B, H, N, D = Q.shape
+    
+    # Pool Q, K to block level
+    Q_blk = pool_to_blocks(Q, block_size)  # [B, H, Nb, D]
+    K_blk = pool_to_blocks(K, block_size)  # [B, H, Nb, D]
+    
+    # Block-level attention scores
+    scores = torch.matmul(Q_blk, K_blk.transpose(-1, -2)) / math.sqrt(D)
+    
+    # Structural masks
+    M_local = build_local_mask(N, block_size, local_window)   # spatial locality
+    M_causal = build_causal_mask(N, block_size) if causal else None
+    
+    # Content-adaptive top-k selection
+    k = max(1, int(N * topk_ratio))
+    topk_mask = scores >= scores.topk(k, dim=-1).values[..., -1:]
+    
+    # Combine masks
+    mask = topk_mask & M_local
+    if M_causal is not None:
+        mask = mask & M_causal
+    
+    return mask</code></pre>
+</div>
+
+<h3>级联推理管线</h3>
+
+<div class="code-block">
+<div class="code-header">
+<span>Full Cascaded Streaming Pipeline</span>
+<span class="tag">可信度: 高</span>
+</div>
+<pre><code>class UltraFlashPipeline:
+    """Complete cascaded streaming pipeline for HR video generation."""
+    
+    def __init__(self, config):
+        self.lr_generator = SelfForcing(config.lr_model)     # 480P streaming
+        self.upsampler = CausalLatentUpsampler(config)       # 2.1M params
+        self.sr_model = SparseCausalDiT(config.sr_model)     # 1.3B, one-step
+        self.hr_decoder = CausalHRDecoder(config)            # 8x decode
+        
+        # Dynamic cache management params
+        self.iqa_threshold = config.iqa_threshold
+        self.adaptive_window_fn = config.cache_window_fn
+    
+    @torch.no_grad()
+    def generate(self, prompt: str, n_chunks: int = 10):
+        text_embed = self.encode_text(prompt)
+        
+        for i in range(n_chunks):
+            # LR generation (4 steps first chunk, 3 steps after)
+            lr_latent = self.lr_generator(
+                text_embed, steps=4 if i == 0 else 3
+            )
+            
+            # IQA-adaptive cache refresh
+            if i > 0 and self._iqa_ok(prev_hr):
+                self.lr_generator.reuse_kv_cache()
+            
+            # Causal latent upsampling (2x spatial, ~5% overhead)
+            hr_latent = self.upsampler(lr_latent)
+            
+            # Single-step SR with sparse causal attention
+            sr_latent = self.sr_model.one_step(
+                hr_latent, text_embed,
+                cache_window=self.adaptive_window_fn(lr_latent)
+            )
+            
+            # Causal HR decode (8x8x4 spatiotemporal)
+            prev_hr = self.hr_decoder(sr_latent)
+            yield prev_hr  # [B, T, 3, H, W] at target resolution</code></pre>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：管线设计的工程权衡</div>
+<p>观察推理管线，几个设计选择值得注意：(1) <strong>LR 步数动态调整</strong>——首个 chunk 使用 4 步确保上下文质量，后续 chunk 减为 3 步因为 SR 会补偿细节；(2) <strong>缓存复用的条件判断</strong>——基于 IQA 分数而非固定的刷新间隔，使得在高质量内容段节省计算；(3) <strong>SR 的单步约束</strong>——这是整个管线实时性的关键，所有其他优化都围绕这个约束展开。</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH7: Research Questions ==================== -->
+<div class="chapter" id="ch7">
+<div class="chapter-num">CHAPTER 07</div>
+<h2>开放科研问题</h2>
+
+<p>基于对 Ultra Flash 的深入分析，以下五个问题值得进一步探索：</p>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 1</div>
+<h4>因果记忆网络的容量瓶颈在哪里？</h4>
+<p>当前上采样器仅 2.1M 参数（8 个 CausalMemBlock），在 2x 空间上采样时表现良好，但如果需要 4x 甚至 8x 上采样（例如从 240P 到 1K），当前架构是否仍有足够的表达能力？记忆网络的"记忆容量"——即能够保持时空一致性的最大上下文长度——是否有理论上的上界？这是否可以通过增加块深度来线性扩展？</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 2</div>
+<h4>AIGC 退化管线能否泛化到新的生成模型架构？</h4>
+<p>Ultra Flash 的退化管线是针对 Wan2.1 的特征伪影设计的。随着视频生成模型的架构快速演进（如从 DiT 到 MMDiT、从 flow matching 到 consistency models），新一代模型可能产生完全不同的伪影模式。能否设计一个<strong>自适应退化管线</strong>，通过从目标模型的输出中学习退化特征，自动调整退化参数？</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 3</div>
+<h4>DPO 偏好优化的正样本质量上限在哪里？</h4>
+<p>Phase II 使用 Wan2.2-5B 作为 oracle 生成正样本。但 DPO 的效果理论上受限于正样本质量——如果正样本本身就有缺陷，DPO 可能将生成器引导到次优方向。是否可以使用<strong>在线搜索</strong>（如 MCTS 或 best-of-N 采样）动态生成更高质量的正样本？或者使用多模型集成作为更强的 oracle？</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 4</div>
+<h4>稀疏注意力的自适应 top-k 选择能否学习？</h4>
+<p>当前的 top-k 选择基于块级注意力分数的静态阈值。能否训练一个<strong>轻量级路由器网络</strong>，根据输入内容动态预测每个头应该关注哪些块？这类似于 Mixture-of-Experts 中的门控机制，但应用于注意力掩码。是否能在不增加推理延迟的情况下实现更优的稀疏模式？</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 5</div>
+<h4>级联管线的误差累积如何量化和控制？</h4>
+<p>Ultra Flash 的四级级联管线中，每个阶段的误差都会传递到下游。论文通过 Phase II DPO 缓解了暴露偏差，但误差累积的<strong>定量分析</strong>仍然缺失。每个阶段对最终质量的贡献比例是多少？能否设计一个<strong>误差传播图</strong>来指导每个阶段的优化优先级？如果训练预算有限，应该优先优化哪个阶段？</p>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：Ultra Flash 的方法论启示</div>
+<p>Ultra Flash 的成功揭示了一个更广泛的方法论模式：<strong>面对单一模型无法解决的复杂问题（实时 + 高分辨率），级联管线是一种有效的系统化解决方案</strong>。但级联不是简单的串联——每个阶段的设计都必须考虑下游的需求。上采样器的时空一致性减少了 SR 的噪声需求，SR 的单步约束决定了蒸馏方案，偏好优化弥补了级联的暴露偏差。这种"全局思维、局部优化"的工程哲学值得其他级联系统借鉴。</p>
+</div>
+
+</div>
+
+</div>
+
+<!-- Footer -->
+<footer class="footer">
+<p>Ultra Flash: Scaling Real-Time Streaming Video Generation to High Resolutions</p>
+<p>arXiv: 2606.09150v2 [cs.CV] &middot; JD Explore Academy, USTC, PKU, THU, BUAA, FDU, HKUST, HKU, CUHK</p>
+<p style="margin-top:12px;font-size:11px;color:var(--ink-muted)">论文精读 &middot; 深度解析 &middot; 水彩写意风格</p>
+</footer>
+
+</body>
+</html>

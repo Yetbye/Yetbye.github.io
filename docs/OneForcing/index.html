@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>One-Forcing: 迈向稳定的单步自回归视频生成 | 论文精读</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- MathJax v5 Standard Config with Options Block and Retry Typeset -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true
+  },
+  options: {
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+  },
+  chtml: { scale: 1.05 },
+  startup: {
+    typeset: true,
+    pageReady: function() {
+      return MathJax.startup.defaultPageReady().then(function() {
+        if (MathJax.typesetPromise) {
+          return MathJax.typesetPromise();
+        }
+      });
+    }
+  }
+};
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"
+  onerror="document.getElementById('mathjax-fallback').src='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'">
+</script>
+<script id="mathjax-fallback"></script>
+<script>
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    if (!window.MathJax || !window.MathJax.startup || !window.MathJax.startup.promise) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+      document.head.appendChild(s);
+    } else {
+      if (window.MathJax.typesetPromise && window.MathJax.startup) {
+        MathJax.startup.promise.then(function() {
+          MathJax.typesetPromise().catch(function(){});
+        });
+      }
+    }
+  }, 5000);
+});
+</script>
+
+<style>
+:root {
+  --lav-50:#faf5ff;--lav-100:#f3e8ff;--lav-200:#e9d5ff;--lav-300:#d8b4fe;
+  --lav-400:#c084fc;--lav-500:#a855f7;--lav-600:#9333ea;--lav-700:#7e22ce;
+  --coral-100:#ffe4e6;--coral-200:#fecdd3;--coral-300:#fda4af;--coral-400:#fb7185;--coral-500:#f43f5e;
+  --mint-100:#d1fae5;--mint-200:#a7f3d0;--mint-300:#6ee7b7;--mint-400:#34d399;--mint-500:#10b981;
+  --warm-100:#fef3c7;--warm-200:#fde68a;--warm-300:#fcd34d;--warm-400:#fbbf24;--warm-500:#f59e0b;
+  --ink:#1e1b4b;--ink-soft:#4c4b5e;--ink-muted:#787887;
+  --paper:#ffffff;--paper-warm:#faf8f5;--paper-cream:#fdfbf7;
+  --shadow-sm:0 2px 8px rgba(30,27,75,0.06);
+  --shadow-md:0 8px 30px rgba(30,27,75,0.08);
+  --shadow-lg:0 20px 60px rgba(30,27,75,0.12);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;font-size:16px}
+body{
+  font-family:'Noto Sans SC',sans-serif;color:var(--ink);background:var(--paper-cream);
+  line-height:1.75;overflow-x:hidden;
+}
+h1,h2,h3,h4,h5,h6{font-family:'Noto Serif SC',serif;font-weight:700;letter-spacing:-0.02em}
+
+/* Navigation */
+.nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(253,251,247,0.82);backdrop-filter:blur(20px) saturate(1.5);
+  border-bottom:1px solid rgba(192,132,252,0.12);transition:all .3s ease;
+}
+.nav-inner{max-width:1200px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;justify-content:space-between}
+.nav-brand{font-family:'Noto Serif SC',serif;font-size:15px;font-weight:700;color:var(--lav-600);text-decoration:none}
+.nav-links{display:flex;gap:4px;flex-wrap:wrap}
+.nav-links a{
+  font-size:12px;color:var(--ink-soft);text-decoration:none;padding:6px 12px;border-radius:8px;
+  transition:all .2s;font-weight:500;
+}
+.nav-links a:hover{background:var(--lav-100);color:var(--lav-600)}
+
+/* Hero */
+.hero{
+  position:relative;min-height:auto;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;padding:120px 24px 80px;
+  background:linear-gradient(135deg,#faf5ff 0%,#f3e8ff 18%,#fdf4e3 50%,#fffbeb 100%);
+}
+.hero::before{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 520px 320px at 12% 22%,rgba(192,132,252,0.16),transparent 60%),
+    radial-gradient(ellipse 520px 320px at 88% 78%,rgba(251,191,36,0.13),transparent 60%);
+}
+.hero-wrap{position:relative;z-index:2;width:100%;max-width:780px;text-align:center}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,0.6);backdrop-filter:blur(12px) saturate(1.5);
+  border:1px solid rgba(192,132,252,0.3);color:var(--lav-600);
+  padding:7px 20px;border-radius:100px;
+  font-family:'Noto Sans SC',sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;
+  margin-bottom:20px;box-shadow:0 4px 20px rgba(192,132,252,0.12);
+}
+.hero h1{
+  font-size:clamp(2.4rem,7vw,4.2rem);font-weight:900;
+  letter-spacing:-0.03em;line-height:1.15;margin:12px 0 10px;
+  background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 38%,var(--coral-500) 62%,var(--warm-400) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero-sub{
+  font-size:clamp(1rem,2.5vw,1.3rem);color:var(--ink-soft);font-weight:400;
+  margin-bottom:8px;font-family:'Noto Sans SC',sans-serif;
+}
+.hero-tagline{
+  font-size:13px;color:var(--ink-muted);font-weight:500;letter-spacing:1px;
+  margin-bottom:24px;
+}
+.hero-art{margin:20px auto 8px;max-width:760px;width:100%}
+.hero-img{
+  width:100%;height:auto;border-radius:24px;
+  box-shadow:0 24px 70px -24px rgba(30,27,75,0.18);
+  border:1px solid rgba(192,132,252,0.12);
+}
+.hero-caption{font-size:11px;color:var(--ink-muted);margin-top:8px}
+.scroll-ind{
+  position:absolute;bottom:30px;left:50%;transform:translateX(-50%);
+  font-size:10px;letter-spacing:3px;color:var(--ink-muted);font-weight:600;
+  animation:bounce 2s infinite;
+}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+
+/* Content */
+.content{max-width:820px;margin:0 auto;padding:60px 24px}
+.chapter{margin-bottom:80px;scroll-margin-top:80px}
+.chapter-num{
+  display:inline-block;font-family:'JetBrains Mono',monospace;font-size:11px;
+  color:var(--lav-500);font-weight:600;letter-spacing:2px;margin-bottom:8px;
+}
+.chapter h2{
+  font-size:clamp(1.6rem,4vw,2.2rem);margin-bottom:24px;
+  background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.chapter h3{font-size:1.25rem;margin:28px 0 12px;color:var(--ink)}
+.chapter p{margin-bottom:16px;color:var(--ink-soft);font-size:15px;line-height:1.85}
+.chapter strong{color:var(--ink);font-weight:600}
+.chapter em{color:var(--lav-600);font-style:normal;font-weight:500}
+
+/* Figure */
+.fig{margin:28px 0;border-radius:16px;overflow:hidden;box-shadow:var(--shadow-md);background:var(--paper)}
+.fig img{width:100%;display:block}
+.fig-caption{padding:12px 16px;font-size:12px;color:var(--ink-muted);line-height:1.5;background:var(--paper-warm)}
+
+/* Insight Box */
+.insight-box{
+  background:linear-gradient(135deg,var(--mint-100) 0%,rgba(209,250,229,0.5) 100%);
+  border-left:4px solid var(--mint-400);border-radius:12px;
+  padding:20px 24px;margin:24px 0;box-shadow:var(--shadow-sm);
+}
+.insight-box .ib-title{
+  font-family:'Noto Serif SC',serif;font-weight:700;font-size:14px;
+  color:var(--mint-500);margin-bottom:8px;display:flex;align-items:center;gap:6px;
+}
+.insight-box .ib-title::before{content:'';width:8px;height:8px;background:var(--mint-400);border-radius:50%}
+.insight-box p{color:var(--ink-soft);font-size:14px;margin:0}
+
+/* Math Block */
+.math-block{
+  background:var(--paper);border:1px solid rgba(192,132,252,0.15);
+  border-radius:12px;padding:20px 24px;margin:20px 0;
+  box-shadow:var(--shadow-sm);overflow-x:auto;
+}
+.math-label{
+  font-size:11px;color:var(--lav-500);font-weight:600;
+  font-family:'JetBrains Mono',monospace;margin-bottom:8px;letter-spacing:1px;
+}
+
+/* Code Block */
+.code-block{
+  background:#1e1b2e;border-radius:12px;overflow:hidden;margin:24px 0;
+  box-shadow:var(--shadow-md);
+}
+.code-header{
+  background:rgba(255,255,255,0.05);padding:10px 16px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.code-header span{font-family:'JetBrains Mono',monospace;font-size:11px;color:#a78bfa;font-weight:500}
+.code-header .tag{
+  font-size:10px;padding:2px 8px;border-radius:4px;
+  background:rgba(167,139,250,0.15);color:#c4b5fd;
+}
+.code-block pre{
+  padding:16px 20px;overflow-x:auto;
+}
+.code-block code{
+  font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.7;color:#e0e0e0;
+}
+
+/* Research Question */
+.rq-card{
+  background:linear-gradient(135deg,var(--coral-100) 0%,rgba(255,228,230,0.4) 100%);
+  border-left:4px solid var(--coral-400);border-radius:12px;
+  padding:20px 24px;margin:20px 0;box-shadow:var(--shadow-sm);
+}
+.rq-card .rq-tag{
+  display:inline-block;font-size:10px;font-weight:700;letter-spacing:1px;
+  color:var(--coral-500);background:rgba(244,63,94,0.1);padding:3px 10px;border-radius:6px;
+  margin-bottom:10px;
+}
+.rq-card h4{font-size:15px;color:var(--ink);margin-bottom:8px}
+.rq-card p{font-size:13px;color:var(--ink-soft);margin:0}
+
+/* Table */
+.result-table{
+  width:100%;border-collapse:collapse;margin:20px 0;font-size:13px;
+  border-radius:12px;overflow:hidden;box-shadow:var(--shadow-sm);
+}
+.result-table th{
+  background:var(--lav-100);color:var(--lav-700);font-weight:600;
+  padding:10px 12px;text-align:left;font-size:12px;
+}
+.result-table td{padding:8px 12px;border-bottom:1px solid rgba(192,132,252,0.08);color:var(--ink-soft)}
+.result-table tr:hover{background:var(--lav-50)}
+.result-table .highlight{background:var(--mint-100);font-weight:600;color:var(--ink)}
+
+/* Compare Card */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
+.compare-card{
+  border-radius:12px;padding:20px;box-shadow:var(--shadow-sm);
+}
+.compare-card.bad{background:linear-gradient(135deg,var(--coral-100),rgba(255,228,230,0.3))}
+.compare-card.good{background:linear-gradient(135deg,var(--mint-100),rgba(209,250,229,0.3))}
+.compare-card.neutral{background:linear-gradient(135deg,var(--warm-100),rgba(254,243,199,0.3))}
+.compare-card h4{font-size:14px;margin-bottom:10px}
+.compare-card p{font-size:13px;margin:0}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+
+/* SVG container */
+.svg-wrap{margin:24px 0;text-align:center}
+.svg-wrap svg{max-width:100%;height:auto}
+.svg-caption{font-size:11px;color:var(--ink-muted);margin-top:8px}
+
+/* Footer */
+.footer{
+  text-align:center;padding:40px 24px;
+  background:linear-gradient(135deg,var(--lav-50),var(--warm-100));
+  border-top:1px solid rgba(192,132,252,0.1);
+}
+.footer p{font-size:12px;color:var(--ink-muted);margin-bottom:6px}
+
+/* Section divider */
+.divider{
+  text-align:center;margin:40px 0;color:var(--lav-300);
+  font-size:20px;letter-spacing:8px;
+}
+
+/* Stats grid */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:24px 0}
+.stat-card{
+  background:var(--paper);border-radius:12px;padding:20px;text-align:center;
+  box-shadow:var(--shadow-sm);border:1px solid rgba(192,132,252,0.1);
+}
+.stat-card .stat-val{
+  font-family:'Noto Serif SC',serif;font-size:28px;font-weight:900;
+  background:linear-gradient(135deg,var(--lav-600),var(--coral-500));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.stat-card .stat-label{font-size:11px;color:var(--ink-muted);margin-top:4px}
+@media(max-width:640px){.stats-grid{grid-template-columns:1fr}}
+
+/* Warning box */
+.warn-box{
+  background:linear-gradient(135deg,var(--warm-100),rgba(254,243,199,0.4));
+  border-left:4px solid var(--warm-400);border-radius:12px;
+  padding:16px 20px;margin:20px 0;
+}
+.warn-box p{font-size:13px;color:var(--ink-soft);margin:0}
+
+/* Three-column compare */
+.compare-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:24px 0}
+.compare-grid-3 .compare-card{padding:16px}
+.compare-grid-3 .compare-card h4{font-size:13px;margin-bottom:8px}
+.compare-grid-3 .compare-card p{font-size:12px}
+@media(max-width:640px){.compare-grid-3{grid-template-columns:1fr}}
+
+/* === FORMAT FIXES v1 === */
+/* Stats grid 必须并行4列 */
+.stats-grid,.stats-row,.hero-stats,.stat-grid{
+  display:grid !important;
+  grid-template-columns:repeat(4,1fr) !important;
+  gap:12px !important;
+  max-width:720px !important;
+  margin:24px auto !important;
+}
+.stat-card,.stat-item,.stat-box{
+  text-align:center !important;
+  padding:16px !important;
+}
+/* figure 居中对齐 */
+.figure,.fig,.img-wrap{margin:24px auto !important;text-align:center !important}
+.figure img,.fig img,.img-wrap img,.figure figure img{display:block;margin:0 auto !important;max-width:100% !important}
+/* SVG 居中 */
+.svg-wrap,.svg-container{text-align:center !important;margin:24px auto !important}
+.svg-wrap svg,.svg-container svg{display:block;margin:0 auto !important;max-width:100% !important}
+/* hero 不要太大 */
+.hero{min-height:auto !important;padding:100px 24px 60px !important}
+/* 减少过度效果 - 移除非必要动画 */
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+.scroll-indicator{animation:bounce 2s infinite}
+/* 确保关键交互保留hover效果 */
+a:hover,button:hover,input:focus{transition:all .2s !important}
+
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="nav">
+<div class="nav-inner">
+<a href="#hero" class="nav-brand">One-Forcing</a>
+<div class="nav-links"><a href="../index.html">« 合辑</a>
+<a href="#ch1">几何障碍</a>
+<a href="#ch2">DMD局限</a>
+<a href="#ch3">One-Forcing方法</a>
+<a href="#ch4">训练细节</a>
+<a href="#ch5">实验结果</a>
+<a href="#ch6">消融研究</a>
+<a href="#ch7">人类评估</a>
+<a href="#ch8">科研问题</a>
+</div>
+</div>
+</nav>
+
+<!-- Hero -->
+<section class="hero" id="hero">
+<div class="hero-wrap">
+<div class="hero-badge">arXiv 2026 &middot; Preprint &middot; Tsinghua &amp; UCLA</div>
+<h1>One-Forcing</h1>
+<p class="hero-sub">迈向稳定的单步自回归视频生成：DMD + GAN 的联合蒸馏范式</p>
+<p class="hero-tagline">单步因果生成 &times; 对抗分布匹配 &times; 共享假分数骨干 &times; VBench 83.76 SOTA</p>
+<div class="hero-art">
+<img src="assets/cover.webp" alt="One-Forcing Cover" class="hero-img">
+<p class="hero-caption">One-Forcing：将 DMD 分数匹配与对抗判别统一于同一假分数骨干网络，实现高质量单步自回归视频生成</p>
+</div>
+</div>
+<div class="scroll-ind">SCROLL TO READ</div>
+</section>
+
+<div class="content">
+
+<!-- ==================== CH1: 背景与动机 ==================== -->
+<div class="chapter" id="ch1">
+<div class="chapter-num">CHAPTER 01</div>
+<h2>背景与动机：实时视频生成的单步瓶颈</h2>
+
+<p>扩散式视频生成在过去两年取得了惊人的进展。Sora、Veo、Wan、HunyuanVideo、Seedance 等双向模型能够合成视觉保真度极高、时空动态复杂的视频。然而，这些模型需要对整个序列进行联合去噪，计算成本随视频长度呈超线性增长，<strong>完全无法满足实时交互部署需求</strong>。</p>
+
+<p>自回归视频生成器通过逐帧或逐短时块流式生成来解决这一限制，支持世界模拟和交互式游戏引擎等低延迟应用场景。但即使是当前最优秀的因果视频系统（如 Self Forcing、Causal Forcing），仍然需要每个块进行 4 步去噪。<strong>这个采样预算仍然是端到端延迟的主要瓶颈</strong>。核心问题是：当推向极致的单步设置时，因果视频生成器能否保持出色的视觉质量和运动动态？</p>
+
+<h3>现有方法在单步设置下的退化</h3>
+
+<p>论文首先系统地诊断了现有少步蒸馏方法在单步设置下的失败模式。轨迹式一致性蒸馏方法产生<strong>动态微弱</strong>的视频，而基于 DMD 的方法（如 Self Forcing）则倾向于产生<strong>模糊帧</strong>。这两种退化模式分别源于不同的根本原因。</p>
+
+<div class="compare-grid">
+<div class="compare-card bad">
+<h4>轨迹式一致性蒸馏</h4>
+<p><strong>症状：动态微弱</strong><br>单步采样必须用一次跳跃逼近整个高噪声到数据的轨迹。视频教师轨迹在高噪声端有尖锐弯曲，单步逼近能力不足导致运动信息丢失。</p>
+</div>
+<div class="compare-card bad">
+<h4>Vanilla DMD (Self Forcing)</h4>
+<p><strong>症状：帧模糊</strong><br>DMD 的分数差异信号仅局部于当前生成的潜在变量。在自回归展开中，模糊的早期帧递归注入未来条件，导致误差累积放大。</p>
+</div>
+</div>
+
+<div class="fig">
+<img src="assets/_precise_v2/fig1_video_comparison.webp" alt="Figure 1: 四种方法对比">
+<div class="fig-caption">Figure 1: 使用四种不同方法从两个提示生成的视频。Wan2.1 教师使用 50 步去噪，Causal Forcing、Self Forcing 和 One-Forcing 使用单步自回归采样。One-Forcing 展现出出色的动态性和视觉质量。</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：为什么从 4 步到 1 步是质变而非渐变</div>
+<p>从 4 步压缩到 2 步时，模型仍能在高噪声弯曲之后放置一个中间锚点来保持轨迹拟合质量。但 1 步设置要求单次前向传播<strong>完全跨越</strong>主导非线性区域。这不是"少一步"的问题，而是逼近范式的根本转变——从迭代修正到一次性映射。</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH2: 几何障碍 ==================== -->
+<div class="chapter" id="ch2">
+<div class="chapter-num">CHAPTER 02</div>
+<h2>几何障碍：视频教师轨迹的高噪声曲率集中</h2>
+
+<p>One-Forcing 的第一个核心贡献是揭示了单步视频蒸馏退化背后的<strong>几何本质</strong>。论文引入了一个定量指标来度量教师轨迹偏离直线（连接数据端和噪声端的弦）的程度。</p>
+
+<h3>轨迹曲率度量</h3>
+
+<p>对于相邻教师状态，定义逐坐标平方偏差：</p>
+
+<div class="math-block">
+<div class="math-label">EQUATION 2 &mdash; 轨迹曲率度量</div>
+$$C(t_i) = \frac{1}{d} \left\| \frac{x_{t_i} - x_{t_{i-1}}}{t_i - t_{i-1}} - (x_1 - x_0) \right\|^2_2$$
+<p style="font-size:13px;color:var(--ink-muted);margin-top:8px">其中 $t=0$ 和 $t=1$ 分别表示数据端和最高噪声端，$d$ 是潜在坐标数。$C(t_i)$ 度量局部教师速度与全局端点弦之间的偏离程度。</p>
+</div>
+
+<h3>视频 vs 图像教师的曲率对比</h3>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="video-fill" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#a855f7" stop-opacity="0.3"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0.05"/>
+</linearGradient>
+<linearGradient id="image-fill" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#34d399" stop-opacity="0.2"/><stop offset="100%" stop-color="#34d399" stop-opacity="0.05"/>
+</linearGradient>
+</defs>
+
+<!-- Background -->
+<rect x="0" y="0" width="720" height="340" fill="var(--paper)" rx="8"/>
+
+<!-- Axes -->
+<line x1="90" y1="280" x2="680" y2="280" stroke="#d8b4fe" stroke-width="1.5"/>
+<line x1="90" y1="280" x2="90" y2="35" stroke="#d8b4fe" stroke-width="1.5"/>
+<text x="385" y="320" text-anchor="middle" font-size="12" fill="#787887" font-family="Noto Sans SC">归一化时间步 t（右侧为高噪声）</text>
+<text x="28" y="160" text-anchor="middle" font-size="12" fill="#787887" font-family="Noto Sans SC" transform="rotate(-90,28,160)">相对曲率 C(t)</text>
+
+<!-- Grid lines -->
+<line x1="90" y1="230" x2="680" y2="230" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4"/>
+<line x1="90" y1="180" x2="680" y2="180" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4"/>
+<line x1="90" y1="130" x2="680" y2="130" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4"/>
+<line x1="90" y1="80" x2="680" y2="80" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="4"/>
+
+<!-- Y labels -->
+<text x="82" y="284" text-anchor="end" font-size="9" fill="#787887">0</text>
+<text x="82" y="234" text-anchor="end" font-size="9" fill="#787887">0.25</text>
+<text x="82" y="184" text-anchor="end" font-size="9" fill="#787887">0.50</text>
+<text x="82" y="134" text-anchor="end" font-size="9" fill="#787887">0.75</text>
+<text x="82" y="84" text-anchor="end" font-size="9" fill="#787887">1.00</text>
+<text x="82" y="55" text-anchor="end" font-size="9" fill="#787887">1.25</text>
+
+<!-- X labels -->
+<text x="148" y="298" text-anchor="middle" font-size="9" fill="#787887">0.0</text>
+<text x="264" y="298" text-anchor="middle" font-size="9" fill="#787887">0.2</text>
+<text x="380" y="298" text-anchor="middle" font-size="9" fill="#787887">0.4</text>
+<text x="496" y="298" text-anchor="middle" font-size="9" fill="#787887">0.6</text>
+<text x="612" y="298" text-anchor="middle" font-size="9" fill="#787887">0.8</text>
+<text x="668" y="298" text-anchor="middle" font-size="9" fill="#787887">1.0</text>
+
+<!-- High-noise zone highlight -->
+<rect x="595" y="35" width="85" height="245" fill="rgba(244,63,94,0.06)" rx="4"/>
+<text x="637" y="52" text-anchor="middle" font-size="10" fill="#f43f5e" font-weight="600" font-family="Noto Sans SC">92.5% 曲率</text>
+<text x="637" y="66" text-anchor="middle" font-size="10" fill="#f43f5e" font-weight="600" font-family="Noto Sans SC">集中在 t&gt;=0.9</text>
+
+<!-- Video curve (Wan2.1) -->
+<path d="M148,273 C206,271 264,268 322,263 C380,256 438,245 496,225 C536,210 566,185 595,140 C610,108 630,65 652,48 L668,42" fill="none" stroke="#a855f7" stroke-width="3"/>
+<path d="M148,273 C206,271 264,268 322,263 C380,256 438,245 496,225 C536,210 566,185 595,140 C610,108 630,65 652,48 L668,42 L668,280 L148,280 Z" fill="url(#video-fill)"/>
+
+<!-- Image curve (EDM2) -->
+<path d="M148,262 C206,255 264,245 322,232 C380,222 438,216 496,214 C536,213 566,216 595,221 C610,224 630,231 652,241 L668,246" fill="none" stroke="#34d399" stroke-width="3"/>
+<path d="M148,262 C206,255 264,245 322,232 C380,222 438,216 496,214 C536,213 566,216 595,221 C610,224 630,231 652,241 L668,246 L668,280 L148,280 Z" fill="url(#image-fill)"/>
+
+<!-- Legend -->
+<rect x="110" y="55" width="18" height="3" fill="#a855f7" rx="1"/>
+<text x="134" y="59" font-size="11" fill="#4c4b5e" font-family="Noto Sans SC">Wan2.1-T2V-1.3B 视频教师</text>
+<rect x="110" y="78" width="18" height="3" fill="#34d399" rx="1"/>
+<text x="134" y="82" font-size="11" fill="#4c4b5e" font-family="Noto Sans SC">EDM2 ImageNet-512 图像教师</text>
+
+<!-- Annotation: t=0.9 line -->
+<line x1="595" y1="140" x2="595" y2="280" stroke="#f43f5e" stroke-width="1.5" stroke-dasharray="4"/>
+<text x="590" y="215" text-anchor="end" font-size="10" fill="#f43f5e" font-family="JetBrains Mono" font-weight="600">t=0.9</text>
+
+<!-- Spike annotation -->
+<line x1="668" y1="42" x2="680" y2="42" stroke="#a855f7" stroke-width="1"/>
+<text x="685" y="46" font-size="9" fill="#a855f7" font-weight="600">1.25</text>
+</svg>
+<p class="svg-caption">SVG 1: 视频与图像教师轨迹的相对曲率分布对比。Wan2.1 视频轨迹在高噪声端（t&gt;=0.9）呈现尖锐的曲率集中（峰值 1.25），而 EDM2 图像教师的曲率分布相对平坦。</p>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：高噪声曲率集中的几何含义</div>
+<p>曲率集中意味着轨迹在高噪声区域有剧烈的非线性弯曲。两步采样器可以在弯曲之后放置一个中间锚点来捕捉这种非线性，但单步采样器必须用一次线性跳跃来逼近整个主导非线性区域。<strong>这不是近似精度的问题，而是几何不可能性</strong>——就像用一条直线逼近一个急弯。</p>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：为什么图像生成不受此影响</div>
+<p>EDM2 图像教师的曲率分布没有可比的高噪声尖峰，因此图像一致性蒸馏可以轻松压缩到单步。这一对比揭示了<strong>视频生成独有的几何困难</strong>：时空建模的复杂性使得去噪轨迹在高噪声端产生剧烈弯曲，而图像生成的轨迹则相对平滑。</p>
+</div>
+
+<h3>曲率分析代码实现</h3>
+
+<div class="code-block">
+<div class="code-header">
+<span>曲率分布分析：验证视频教师的高噪声端曲率集中</span>
+<span class="tag">可运行实现 &middot; Python</span>
+</div>
+<pre><code><span class="kw">import</span> torch
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+<span class="kw">def</span> <span class="fn">compute_trajectory_curvature</span>(x0, x1, teacher, n_steps=<span class="num">48</span>):
+    <span class="str">"""计算PF-ODE轨迹的逐点曲率分布。
+    
+    核心思想：度量局部教师速度与全局端点弦之间的偏差。
+    偏差越大，说明轨迹越弯曲，单步逼近越困难。
+    
+    Args:
+        x0: 干净数据 [B, C, T, H, W]
+        x1: 高斯噪声 [B, C, T, H, W]
+        teacher: 教师扩散模型 v_theta
+        n_steps: ODE求解步数（论文用48步）
+    Returns:
+        curvatures: 每个时间步的曲率值 [n_steps-1]
+        timesteps: 对应的归一化时间步
+    """</span>
+    ts = torch.linspace(<span class="num">1</span>, <span class="num">0</span>, n_steps + <span class="num">1</span>)
+    <span class="com"># 沿PF-ODE轨迹采样中间状态</span>
+    trajectory = []
+    <span class="kw">for</span> t <span class="kw">in</span> ts:
+        xt = (<span class="num">1</span> - t) * x0 + t * x1  <span class="com"># 线性插值</span>
+        trajectory.append(xt)
+    
+    <span class="com"># 全局弦速度: x1 -> x0 方向</span>
+    chord_velocity = trajectory[-<span class="num">1</span>] - trajectory[<span class="num">0</span>]
+    
+    curvatures = []
+    <span class="kw">for</span> i <span class="kw">in</span> range(<span class="num">1</span>, len(trajectory)):
+        dt = ts[i] - ts[i-<span class="num">1</span>]
+        local_vel = (trajectory[i] - trajectory[i-<span class="num">1</span>]) / dt
+        <span class="com"># 逐坐标平方偏差（归一化）</span>
+        curvature = torch.mean((local_vel - chord_velocity)**<span class="num">2</span>)
+        curvatures.append(curvature.item())
+    
+    <span class="com"># 归一化到峰值</span>
+    curvatures = np.array(curvatures)
+    curvatures_norm = curvatures / curvatures.max()
+    
+    <span class="com"># 验证：Wan2.1视频教师92.5%曲率集中在t>=0.9</span>
+    high_noise_mask = ts[<span class="num">1</span>:].numpy() >= <span class="num">0.9</span>
+    ratio = curvatures_norm[high_noise_mask].sum() / curvatures_norm.sum()
+    print(f<span class="str">"高噪声端(t>=0.9)曲率占比: {ratio*100:.1f}%"</span>)
+    
+    <span class="kw">return</span> curvatures_norm, ts[<span class="num">1</span>:].numpy()</code></pre>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH3: DMD 局限性 ==================== -->
+<div class="chapter" id="ch3">
+<div class="chapter-num">CHAPTER 03</div>
+<h2>Vanilla DMD 的局限性：局部信号的递归放大</h2>
+
+<p>虽然 DMD 绕过了轨迹曲率问题（因为它不依赖特定的教师路径），但它引入了一个在自回归视频中尤为致命的新问题：<strong>局部性</strong>。在单步图像生成中，局部性问题并不严重，因为模型只产生一个终态样本。但在自回归视频中，每个预测的潜在块都会被反馈到因果 KV 缓存中，成为所有后续块的条件上下文。</p>
+
+<h3>DMD 的反向 KL 梯度估计</h3>
+
+<div class="math-block">
+<div class="math-label">EQUATION 3 &mdash; DMD 的反向 KL 梯度</div>
+$$\nabla_\theta \text{KL}(p_\theta \| p_{\text{data}}) = \mathbb{E}_{x_\theta} \left[ J_\theta(z,c)^\top \left( \nabla_x \log p_\theta(x_\theta|c) - \nabla_x \log p_{\text{data}}(x_\theta|c) \right) \right]$$
+<p style="font-size:13px;color:var(--ink-muted);margin-top:8px">DMD 用 $s_\phi - s_{\text{real}}$ 在加噪样本上实现此梯度。关键困难在于：此信号<strong>仅局部于当前生成的潜在变量</strong>。</p>
+</div>
+
+<h3>误差的递归放大机制</h3>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 720 310" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#a855f7"/>
+</marker>
+<marker id="arr-red" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#f43f5e"/>
+</marker>
+</defs>
+
+<!-- Background -->
+<rect x="0" y="0" width="720" height="310" fill="var(--paper)" rx="8"/>
+
+<!-- Title -->
+<text x="360" y="30" text-anchor="middle" font-size="14" fill="var(--ink)" font-weight="700" font-family="Noto Sans SC">Vanilla DMD 的局部性问题：自回归展开中的误差传播</text>
+
+<!-- Frame sequence -->
+<g transform="translate(55,70)">
+<!-- Frame 1 -->
+<rect x="0" y="0" width="110" height="75" rx="10" fill="var(--mint-100)" stroke="#34d399" stroke-width="2.5"/>
+<text x="55" y="28" text-anchor="middle" font-size="12" fill="#10b981" font-weight="700" font-family="JetBrains Mono">Frame 1</text>
+<text x="55" y="48" text-anchor="middle" font-size="10" fill="#787887">清晰预测</text>
+<text x="55" y="63" text-anchor="middle" font-size="9" fill="#34d399">e=0.02</text>
+
+<line x1="115" y1="37" x2="155" y2="37" stroke="#a855f7" stroke-width="2" marker-end="url(#arr)"/>
+
+<!-- Frame 2 -->
+<rect x="160" y="0" width="110" height="75" rx="10" fill="var(--warm-100)" stroke="#fbbf24" stroke-width="2.5"/>
+<text x="215" y="28" text-anchor="middle" font-size="12" fill="#f59e0b" font-weight="700" font-family="JetBrains Mono">Frame 2</text>
+<text x="215" y="48" text-anchor="middle" font-size="10" fill="#787887">轻微模糊</text>
+<text x="215" y="63" text-anchor="middle" font-size="9" fill="#f59e0b">e=0.15</text>
+
+<line x1="275" y1="37" x2="315" y2="37" stroke="#a855f7" stroke-width="2" marker-end="url(#arr)"/>
+
+<!-- Frame 3 -->
+<rect x="320" y="0" width="110" height="75" rx="10" fill="var(--coral-100)" stroke="#fb7185" stroke-width="2.5"/>
+<text x="375" y="28" text-anchor="middle" font-size="12" fill="#f43f5e" font-weight="700" font-family="JetBrains Mono">Frame 3</text>
+<text x="375" y="48" text-anchor="middle" font-size="10" fill="#787887">明显退化</text>
+<text x="375" y="63" text-anchor="middle" font-size="9" fill="#f43f5e">e=0.41</text>
+
+<!-- Dots -->
+<text x="430" y="40" text-anchor="middle" font-size="18" fill="#a855f7">...</text>
+
+<!-- Frame K -->
+<rect x="450" y="0" width="110" height="75" rx="10" fill="var(--coral-100)" stroke="#f43f5e" stroke-width="2.5"/>
+<text x="505" y="28" text-anchor="middle" font-size="12" fill="#f43f5e" font-weight="700" font-family="JetBrains Mono">Frame K</text>
+<text x="505" y="48" text-anchor="middle" font-size="10" fill="#787887">严重漂移</text>
+<text x="505" y="63" text-anchor="middle" font-size="9" fill="#f43f5e">e=0.87</text>
+</g>
+
+<!-- KV cache feedback loop -->
+<path d="M110,150 C110,200 505,200 505,150" fill="none" stroke="#f43f5e" stroke-width="2" stroke-dasharray="6" marker-end="url(#arr-red)"/>
+<text x="307" y="215" text-anchor="middle" font-size="11" fill="#f43f5e" font-weight="600" font-family="Noto Sans SC">KV 缓存递归注入：误差逐帧累积放大</text>
+
+<!-- DMD local signal annotation -->
+<rect x="55" y="240" width="200" height="50" rx="8" fill="rgba(168,85,247,0.08)" stroke="#a855f7" stroke-width="1"/>
+<text x="155" y="260" text-anchor="middle" font-size="10" fill="#9333ea" font-weight="600" font-family="Noto Sans SC">DMD 分数信号：仅关注当前样本</text>
+<text x="155" y="278" text-anchor="middle" font-size="9" fill="#787887">无全局拒绝机制</text>
+
+<!-- Solution hint -->
+<rect x="440" y="240" width="200" height="50" rx="8" fill="rgba(16,185,129,0.08)" stroke="#34d399" stroke-width="1"/>
+<text x="540" y="260" text-anchor="middle" font-size="10" fill="#10b981" font-weight="600" font-family="Noto Sans SC">需要：基于真实数据的全局判别</text>
+<text x="540" y="278" text-anchor="middle" font-size="9" fill="#787887">One-Forcing 的核心解决方案</text>
+</svg>
+<p class="svg-caption">SVG 2: Vanilla DMD 的局部性在自回归视频中的递归放大效应。每个模糊帧通过 KV 缓存成为后续帧的条件，误差指数级累积。</p>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：为什么 DMD 可以绕过曲率但无法解决局部性</div>
+<p>DMD 通过跳过复杂的中间 ODE 路径来绕过曲率问题，直接匹配生成分布。但这种"绕过"恰恰导致了局部性——因为不经过轨迹的中间状态，DMD 的梯度信号只在当前生成样本的邻域内有效。<strong>在单步图像生成中这不是问题（只有一个终态），但在 AR 视频中每个样本都是后续样本的条件</strong>。</p>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：分布级真实性为何如此重要</div>
+<p>AR 视频生成对分布级真实性的要求远高于图像 DMD 或图像对抗蒸馏。我们需要的不仅仅是"在学生展开分布周围拟合假分数"的局部校正，而是一个能够<strong>明确拒绝全局可区分样本</strong>的判别器。这就是 One-Forcing 引入对抗分支的根本动机。</p>
+</div>
+
+<h3>DMD 局部性分析代码</h3>
+
+<div class="code-block">
+<div class="code-header">
+<span>DMD 局部信号在自回归展开中的递归放大机制</span>
+<span class="tag">示意性实现 &middot; Python</span>
+</div>
+<pre><code><span class="kw">def</span> <span class="fn">dmd_locality_analysis</span>(generator, real_score, fake_score, prompt, n_frames=<span class="num">21</span>):
+    <span class="str">"""分析DMD局部信号在帧级自回归展开中的递归放大。
+    
+    核心问题：DMD的分数差异信号仅局部于当前生成的潜在变量，
+    但在AR展开中，每个预测的潜在帧都会被反馈到KV缓存中，
+    成为后续所有帧的条件上下文。误差逐帧累积放大。
+    
+    Returns:
+        errors: 每帧的局部DMD误差
+        accumulated: 累积误差（考虑KV缓存传播）
+    """</span>
+    kv_cache = <span class="kw">None</span>
+    errors = []
+    accumulated = <span class="num">0</span>
+    
+    <span class="kw">for</span> frame_idx <span class="kw">in</span> range(n_frames):
+        <span class="com"># 单步生成当前帧（framewise设置）</span>
+        x_gen, kv_cache = generator.generate_frame(
+            prompt, kv_cache=kv_cache, n_steps=<span class="num">1</span>
+        )
+        
+        <span class="com"># DMD分数差异（局部信号）</span>
+        t = torch.rand(<span class="num">1</span>)
+        x_noisy = add_noise(x_gen, t)
+        score_diff = fake_score(x_noisy, t) - real_score(x_noisy, t)
+        
+        <span class="com"># 局部误差度量</span>
+        local_error = torch.norm(score_diff).item()
+        errors.append(local_error)
+        
+        <span class="com"># 关键：误差通过KV缓存递归传播</span>
+        <span class="com"># 当前帧的误差影响所有后续帧</span>
+        remaining = n_frames - frame_idx
+        accumulated += local_error * remaining
+        
+    print(f<span class="str">"总累积误差: {accumulated:.4f}"</span>)
+    print(f<span class="str">"误差增长率: {errors[-1]/errors[0]:.2f}x"</span>)
+    
+    <span class="kw">return</span> errors, accumulated
+
+<span class="com"># 预期：误差随帧数递增，展示递归放大效应</span>
+<span class="com"># 这正是One-Forcing引入对抗判别器的根本原因</span></code></pre>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH4: One-Forcing 方法 ==================== -->
+<div class="chapter" id="ch4">
+<div class="chapter-num">CHAPTER 04</div>
+<h2>One-Forcing：联合分数匹配与对抗判别</h2>
+
+<p>基于上述两大发现，One-Forcing 提出了一个简洁而有效的解决方案：将可训练的假分数网络转变为<strong>联合扩散判别器和加噪潜在判别器</strong>。核心创新在于复用假分数骨干网络作为判别器，无需额外网络开销。</p>
+
+<h3>整体训练框架</h3>
+
+<div class="fig">
+<img src="assets/_precise_v2/fig2_framework.webp" alt="Figure 2: One-Forcing 训练框架">
+<div class="fig-caption">Figure 2: One-Forcing 训练框架。从单步因果展开开始，One-Forcing 用两个耦合信号优化生成潜在分布：来自可训练假分数与冻结真分数之间差异的 DMD 梯度，以及来自加噪潜在判别器的对抗梯度。两个信号共享假分数骨干，因此判别器在与去噪相同的潜在特征空间中学习真假判别。</div>
+</div>
+
+<h3>联合分数与对抗判别器</h3>
+
+<p>One-Forcing 保持两个分数网络。真分数 $s_{\text{real}}$ 是冻结的双向教师模型（Wan2.1-T2V-14B）。假分数 $s_\phi$ 是可训练的单步自回归模型（Wan2.1-T2V-1.3B）。</p>
+
+<div class="math-block">
+<div class="math-label">EQUATION 4 &mdash; 假分数去噪目标</div>
+$$\mathcal{L}_{\text{fake}}(\phi) = \mathbb{E}_{x_\theta, t, \epsilon} \left[ \ell_{\text{denoise}}(s_\phi(x_t, t, c), x_\theta, \epsilon, t) \right]$$
+<p style="font-size:13px;color:var(--ink-muted);margin-top:8px">其中 $\ell_{\text{denoise}}$ 是流匹配目标，训练 $s_\phi$ 从加噪样本 $x_t$ 预测速度目标 $\epsilon - x_\theta$。</p>
+</div>
+
+<div class="math-block">
+<div class="math-label">EQUATION 5 &mdash; DMD 生成器更新（stop-gradient 形式）</div>
+$$\mathcal{L}_{\text{DMD}}(\theta) = \frac{1}{2} \mathbb{E}_{x_\theta, t, \epsilon} \left[ \| x_\theta - \text{sg}(x_\theta - [s_\phi(x_{\theta,t}, t, c) - s_{\text{real}}(x_{\theta,t}, t, c)]) \|^2_2 \right]$$
+<p style="font-size:13px;color:var(--ink-muted);margin-top:8px">将假分数与真分数的差异通过 stop-gradient 传递给生成器，实现分布匹配。</p>
+</div>
+
+<h3>对抗分支设计</h3>
+
+<p>对抗分支在假分数 Transformer 上添加少量<strong>可学习的寄存器 token</strong>。对于每个选定的 Transformer 层，一个寄存器 token 作为轻量注意力块的查询，对该层的潜在 token 进行交叉注意力，产生紧凑的逐层判别特征。所有选定层的特征拼接后通过 MLP 头产生标量真假 logit。</p>
+
+<div class="math-block">
+<div class="math-label">EQUATION 5-6 &mdash; 对抗损失（非饱和 GAN 框架）</div>
+$$\mathcal{L}_{\text{adv}}^G(\theta) = \mathbb{E}_{x_\theta, t} \left[ \text{softplus}(-D_\phi(x_{\theta,t}, t, c)) \right]$$
+$$\mathcal{L}_{\text{adv}}^D(\phi) = \mathbb{E}_{x_{\text{real}}, x_\theta, t} \left[ \text{softplus}(-D_\phi(x_{\text{real},t}, t, c)) + \text{softplus}(D_\phi(x_{\theta,t}, t, c)) \right]$$
+<p style="font-size:13px;color:var(--ink-muted);margin-top:8px">真实样本 $x_{\text{real}}$ 来自数据集，假样本 $x_\theta$ 来自当前单步因果生成器，两者都在判别器时间步 $t$ 处加噪。</p>
+</div>
+
+<div class="math-block">
+<div class="math-label">EQUATION 7-8 &mdash; 总训练目标</div>
+$$\mathcal{L}_G = \mathcal{L}_{\text{DMD}} + \lambda_G \mathcal{L}_{\text{adv}}^G$$
+$$\mathcal{L}_\phi = \mathcal{L}_{\text{fake}} + \lambda_D \mathcal{L}_{\text{adv}}^D$$
+<p style="font-size:13px;color:var(--ink-muted);margin-top:8px">交替更新：每 K=5 步更新一次生成器，每步都更新判别器。$\lambda_G = \lambda_D = 0.03$。</p>
+</div>
+
+<h3>共享架构可视化</h3>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="gen-grad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#a855f7" stop-opacity="0.15"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0.05"/>
+</linearGradient>
+<linearGradient id="crit-grad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#34d399" stop-opacity="0.15"/><stop offset="100%" stop-color="#34d399" stop-opacity="0.05"/>
+</linearGradient>
+<marker id="arr2" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#a855f7"/>
+</marker>
+<marker id="arr3" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#10b981"/>
+</marker>
+<marker id="arr-gold" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#f59e0b"/>
+</marker>
+</defs>
+
+<!-- Background -->
+<rect x="0" y="0" width="720" height="380" fill="var(--paper)" rx="8"/>
+
+<!-- Title -->
+<text x="360" y="30" text-anchor="middle" font-size="14" fill="var(--ink)" font-weight="700" font-family="Noto Sans SC">One-Forcing：共享假分数骨干的双头架构</text>
+<text x="360" y="48" text-anchor="middle" font-size="11" fill="#787887">去噪头和对抗头在相同潜在特征空间中协同工作，零额外参数开销</text>
+
+<!-- Generator -->
+<rect x="25" y="130" width="170" height="110" rx="14" fill="url(#gen-grad)" stroke="#a855f7" stroke-width="2.5"/>
+<text x="110" y="160" text-anchor="middle" font-size="13" fill="#7e22ce" font-weight="700" font-family="Noto Sans SC">因果生成器</text>
+<text x="110" y="180" text-anchor="middle" font-size="11" fill="#787887" font-family="JetBrains Mono">G_theta (1.3B)</text>
+<text x="110" y="198" text-anchor="middle" font-size="10" fill="#787887">单步 framewise 展开</text>
+<text x="110" y="215" text-anchor="middle" font-size="9" fill="#a855f7">1 latent frame / block</text>
+
+<!-- Arrow to critic -->
+<line x1="200" y1="185" x2="280" y2="185" stroke="#a855f7" stroke-width="2.5" marker-end="url(#arr2)"/>
+<text x="240" y="175" text-anchor="middle" font-size="9" fill="#a855f7" font-weight="600">x_theta</text>
+
+<!-- Shared Fake-Score Critic -->
+<rect x="285" y="80" width="210" height="200" rx="14" fill="url(#crit-grad)" stroke="#10b981" stroke-width="2.5"/>
+<text x="390" y="108" text-anchor="middle" font-size="13" fill="#10b981" font-weight="700" font-family="Noto Sans SC">共享假分数判别器</text>
+<text x="390" y="128" text-anchor="middle" font-size="11" fill="#787887" font-family="JetBrains Mono">s_phi + D_phi (1.3B)</text>
+
+<!-- Two heads inside critic -->
+<rect x="300" y="145" width="80" height="45" rx="8" fill="rgba(168,85,247,0.15)" stroke="#a855f7" stroke-width="1.5"/>
+<text x="340" y="165" text-anchor="middle" font-size="10" fill="#9333ea" font-weight="600">去噪头</text>
+<text x="340" y="180" text-anchor="middle" font-size="8" fill="#787887">L_fake</text>
+
+<rect x="395" y="145" width="80" height="45" rx="8" fill="rgba(244,63,94,0.15)" stroke="#f43f5e" stroke-width="1.5"/>
+<text x="435" y="165" text-anchor="middle" font-size="10" fill="#f43f5e" font-weight="600">对抗头</text>
+<text x="435" y="180" text-anchor="middle" font-size="8" fill="#787887">L_adv_D</text>
+
+<!-- Register tokens -->
+<rect x="315" y="205" width="150" height="35" rx="8" fill="rgba(251,191,36,0.15)" stroke="#fbbf24" stroke-width="1.5"/>
+<text x="390" y="225" text-anchor="middle" font-size="9" fill="#f59e0b" font-weight="600">可学习寄存器 Token (2x)</text>
+<text x="390" y="236" text-anchor="middle" font-size="8" fill="#787887">Layer {21, 29}</text>
+
+<!-- Shared backbone label -->
+<rect x="300" y="248" width="160" height="24" rx="6" fill="rgba(16,185,129,0.15)"/>
+<text x="380" y="264" text-anchor="middle" font-size="9" fill="#10b981" font-weight="600">共享 DiT Backbone</text>
+
+<!-- Real data -->
+<rect x="555" y="90" width="140" height="65" rx="10" fill="rgba(251,191,36,0.1)" stroke="#fbbf24" stroke-width="2"/>
+<text x="625" y="115" text-anchor="middle" font-size="12" fill="#f59e0b" font-weight="700" font-family="Noto Sans SC">真实数据</text>
+<text x="625" y="135" text-anchor="middle" font-size="9" fill="#787887">冻结 s_real (14B)</text>
+
+<line x1="555" y1="125" x2="500" y2="175" stroke="#fbbf24" stroke-width="2" stroke-dasharray="5" marker-end="url(#arr-gold)"/>
+<text x="535" y="142" font-size="9" fill="#f59e0b">加噪</text>
+
+<!-- Teacher model -->
+<rect x="555" y="200" width="140" height="65" rx="10" fill="rgba(168,85,247,0.1)" stroke="#a855f7" stroke-width="2"/>
+<text x="625" y="225" text-anchor="middle" font-size="12" fill="#9333ea" font-weight="700" font-family="Noto Sans SC">冻结教师</text>
+<text x="625" y="245" text-anchor="middle" font-size="9" fill="#787887">Wan2.1-14B</text>
+
+<line x1="555" y1="230" x2="500" y2="205" stroke="#a855f7" stroke-width="2" stroke-dasharray="5"/>
+<text x="535" y="210" font-size="9" fill="#a855f7">s_real</text>
+
+<!-- DMD loss arrow -->
+<path d="M625,155 L625,180 L500,180" fill="none" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="3"/>
+<text x="570" y="175" font-size="8" fill="#f59e0b">DMD信号</text>
+
+<!-- Loss labels at bottom -->
+<rect x="25" y="280" width="250" height="40" rx="8" fill="rgba(168,85,247,0.08)"/>
+<text x="150" y="300" text-anchor="middle" font-size="10" fill="#9333ea" font-weight="600">L_G = L_DMD + lambda_G * L_adv_G</text>
+<text x="150" y="314" text-anchor="middle" font-size="8" fill="#787887">每 K=5 步更新一次生成器</text>
+
+<rect x="300" y="280" width="210" height="40" rx="8" fill="rgba(16,185,129,0.08)"/>
+<text x="405" y="300" text-anchor="middle" font-size="10" fill="#10b981" font-weight="600">L_phi = L_fake + lambda_D * L_adv_D</text>
+<text x="405" y="314" text-anchor="middle" font-size="8" fill="#787887">每步更新判别器</text>
+
+<!-- Key insight -->
+<rect x="530" y="280" width="170" height="55" rx="8" fill="rgba(244,63,94,0.06)" stroke="#f43f5e" stroke-width="1"/>
+<text x="615" y="298" text-anchor="middle" font-size="9" fill="#f43f5e" font-weight="600">关键：判别器锚定在</text>
+<text x="615" y="312" text-anchor="middle" font-size="9" fill="#f43f5e" font-weight="600">真实数据而非自蒸馏</text>
+<text x="615" y="328" text-anchor="middle" font-size="8" fill="#787887">防止 ASD 式判别器坍塌</text>
+</svg>
+<p class="svg-caption">SVG 3: One-Forcing 的共享架构设计。假分数网络同时作为去噪器和判别器，对抗信号基于真实数据而非自蒸馏输出。</p>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：共享骨干的"复用即正则化"效应</div>
+<p>假分数网络同时扮演去噪器（通过流匹配损失）和判别器（通过对抗分支）两个角色。这种设计不仅是参数效率的考量，更是一种隐式正则化：<strong>判别器在与生成器相同的潜在特征空间中学习</strong>，避免了独立判别器可能引入的分布偏移。两个目标可以协同进化，去噪能力帮助判别器理解"好的生成"是什么样的。</p>
+</div>
+
+<h3>One-Forcing 训练算法</h3>
+
+<div class="code-block">
+<div class="code-header">
+<span>Algorithm 1: One-Forcing Training (完整实现)</span>
+<span class="tag">论文算法 &middot; 可信度: 高</span>
+</div>
+<pre><code><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn.functional <span class="kw">as</span> F
+
+<span class="kw">class</span> <span class="fn">OneForcingTrainer</span>:
+    <span class="str">"""One-Forcing: 联合DMD + 对抗训练的单步AR视频蒸馏。
+    
+    核心设计：
+    1. 生成器 G_theta: 单步因果展开，1 latent frame/block
+    2. 假分数 s_phi: 可训练，同时作为去噪器和判别器骨干
+    3. 真分数 s_real: 冻结的双向教师 (Wan2.1-14B)
+    4. 对抗头 D_phi: 基于寄存器token的加噪潜在判别器
+    """</span>
+    
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, generator, fake_score, real_score, 
+                 lambda_g=<span class="num">0.03</span>, lambda_d=<span class="num">0.03</span>, K=<span class="num">5</span>):
+        self.G = generator        <span class="com"># Wan2.1-1.3B causal</span>
+        self.s_phi = fake_score   <span class="com"># Wan2.1-1.3B trainable</span>
+        self.s_real = real_score  <span class="com"># Wan2.1-14B frozen</span>
+        self.lambda_g = lambda_g
+        self.lambda_d = lambda_d
+        self.K = K  <span class="com"># 生成器更新间隔</span>
+    
+    <span class="kw">def</span> <span class="fn">train_step</span>(self, i, batch):
+        <span class="com"># === 判别器更新（每步） ===</span>
+        prompt, x_real = batch
+        <span class="com"># 无生成器梯度的假样本</span>
+        x_fake = self.G(prompt, n_steps=<span class="num">1</span>).detach()
+        
+        <span class="com"># 假分数去噪损失</span>
+        t = torch.rand(<span class="num">1</span>) * <span class="num">1000</span>
+        sigma_t = <span class="num">5</span> * (t/<span class="num">1000</span>) / (<span class="num">1</span> + <span class="num">4</span> * t/<span class="num">1000</span>)
+        x_fake_noisy = (<span class="num">1</span> - sigma_t) * x_fake + sigma_t * torch.randn_like(x_fake)
+        L_fake = flow_denoise_loss(self.s_phi, x_fake_noisy, x_fake, t)
+        
+        <span class="com"># 对抗判别损失（基于真实数据）</span>
+        x_real_noisy = (<span class="num">1</span> - sigma_t) * x_real + sigma_t * torch.randn_like(x_real)
+        L_adv_D = (F.softplus(-self.s_phi.discriminate(x_real_noisy, t)) + 
+                   F.softplus(self.s_phi.discriminate(x_fake_noisy, t)))
+        
+        loss_phi = L_fake + self.lambda_d * L_adv_D
+        loss_phi.backward()
+        
+        <span class="com"># === 生成器更新（每K步） ===</span>
+        <span class="kw">if</span> i % self.K == <span class="num">0</span>:
+            x_fake = self.G(prompt, n_steps=<span class="num">1</span>)
+            x_fake_noisy = (<span class="num">1</span> - sigma_t) * x_fake + sigma_t * torch.randn_like(x_fake)
+            
+            <span class="com"># DMD损失（stop-gradient形式）</span>
+            score_diff = self.s_phi(x_fake_noisy, t) - self.s_real(x_fake_noisy, t)
+            L_DMD = <span class="num">0.5</span> * ((x_fake - (x_fake - score_diff).detach())**<span class="num">2</span>).mean()
+            
+            <span class="com"># 对抗生成损失</span>
+            L_adv_G = F.softplus(-self.s_phi.discriminate(x_fake_noisy, t))
+            
+            loss_G = L_DMD + self.lambda_g * L_adv_G
+            loss_G.backward()</code></pre>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH5: 训练细节 ==================== -->
+<div class="chapter" id="ch5">
+<div class="chapter-num">CHAPTER 05</div>
+<h2>训练细节与实现配置</h2>
+
+<p>One-Forcing 的实现基于 Causal Forcing 代码库和 Wan2.1 模型家族。本章详细解读关键的训练超参数和实现选择。</p>
+
+<h3>模型配置</h3>
+
+<table class="result-table">
+<thead>
+<tr><th>配置项</th><th>值</th><th>说明</th></tr>
+</thead>
+<tbody>
+<tr><td>生成器初始化</td><td>ODE-trained Causal model</td><td>从 Causal Forcing 的因果 ODE 初始化检查点出发</td></tr>
+<tr><td>生成器 / 真分数 / 假分数</td><td>1.3B / 14B / 1.3B</td><td>真分数冻结为双向14B教师</td></tr>
+<tr><td>训练帧数</td><td>21 latent frames</td><td>16 x 60 x 104 per frame</td></tr>
+<tr><td>每块帧数</td><td>1 (framewise) / 3 (chunkwise)</td><td>framewise 提供 3x 判别器反馈</td></tr>
+<tr><td>CFG 引导尺度</td><td>5.0 (生成器+真分数) / 0.0 (假分数)</td><td>假分数不使用 CFG</td></tr>
+<tr><td>噪声调度</td><td>shift factor 5.0</td><td>1000 训练时间步</td></tr>
+<tr><td>更新调度</td><td>K=5</td><td>每5次判别器更新对应1次生成器更新</td></tr>
+<tr><td>优化器</td><td>AdamW</td><td>beta1=0, beta2=0.999, wd=0.01</td></tr>
+<tr><td>学习率</td><td>1.0e-5</td><td>生成器和假分数共享</td></tr>
+<tr><td>GAN 分支</td><td>Layer {21, 29}</td><td>2 registers, 1536 dim, 2048 FFN, 12 heads</td></tr>
+<tr><td>GAN 损失权重</td><td>lambda_G = lambda_D = 0.03</td><td>非饱和 logistic 损失</td></tr>
+<tr><td>EMA</td><td>decay 0.99</td><td>从第50步开始</td></tr>
+<tr><td>硬件</td><td>8 x H100</td><td>FSDP + gradient checkpointing</td></tr>
+</tbody>
+</table>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：K=5 的两时间尺度设计</div>
+<p>生成器每 5 步更新一次的设计遵循了 DMD2 的两时间尺度直觉。判别器需要比生成器更频繁地更新，以保持对生成器变化的追踪能力。如果两者同步更新，判别器可能无法及时适应生成器的快速变化，导致训练不稳定。</p>
+</div>
+
+<h3>推理配置</h3>
+
+<div class="math-block">
+<div class="math-label">推理流程</div>
+<p style="font-size:14px;color:var(--ink-soft)">第一个自回归块使用 <strong>4 步</strong>预热调度初始化 KV 缓存（遵循 ASD 的 FFE 策略），后续块使用 <strong>1 步</strong>去噪。视频在 <strong>832 x 480</strong> 分辨率和 <strong>16 FPS</strong> 下解码。推理仅需单张 H100。</p>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：首帧4步预热的必要性</div>
+<p>首个 AR 块使用 4 步而非 1 步，是因为 KV 缓存的初始化质量决定了整个视频的基调。后续帧有条件可循（KV 缓存已建立），因此 1 步即可。这种<strong>非对称推理策略</strong>以极小的额外成本（仅首帧 4 步）换取了显著的质量提升。</p>
+</div>
+
+<h3>噪声调度实现</h3>
+
+<div class="code-block">
+<div class="code-header">
+<span>One-Forcing 噪声调度与前向加噪过程</span>
+<span class="tag">论文附录 &middot; 可信度: 高</span>
+</div>
+<pre><code><span class="kw">import</span> torch
+
+<span class="kw">def</span> <span class="fn">one_forcing_noise_schedule</span>(t, k=<span class="num">5.0</span>):
+    <span class="str">"""One-Forcing 的 shifted 噪声调度。
+    
+    遵循 Wan2.1 的 flow-matching 调度器。
+    shift factor k=5 将更多权重分配给高噪声区域，
+    与视频轨迹的高噪声曲率集中特性匹配。
+    """</span>
+    t_normalized = t / <span class="num">1000</span>  <span class="com"># t in [0, 1000]</span>
+    sigma_t = k * t_normalized / (<span class="num">1</span> + (k - <span class="num">1</span>) * t_normalized)
+    <span class="kw">return</span> sigma_t
+
+<span class="kw">def</span> <span class="fn">forward_corruption</span>(x0, sigma_t, epsilon):
+    <span class="str">"""前向加噪过程：x_t = (1-sigma_t)*x0 + sigma_t*epsilon"""</span>
+    <span class="kw">return</span> (<span class="num">1</span> - sigma_t) * x0 + sigma_t * epsilon
+
+<span class="kw">def</span> <span class="fn">velocity_to_clean</span>(xt, sigma_t, v_theta):
+    <span class="str">"""从速度预测转换为干净潜在估计：x_hat = x_t - sigma_t * v_theta"""</span>
+    <span class="kw">return</span> xt - sigma_t * v_theta
+
+<span class="com"># 使用示例</span>
+t = torch.randint(<span class="num">0</span>, <span class="num">1000</span>, (<span class="num">1</span>,))
+sigma_t = one_forcing_noise_schedule(t)
+xt = forward_corruption(x0, sigma_t, epsilon)
+v_pred = model(xt, t, prompt)  <span class="com"># flow-prediction target: epsilon - x0</span>
+x0_hat = velocity_to_clean(xt, sigma_t, v_pred)</code></pre>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH6: 实验结果 ==================== -->
+<div class="chapter" id="ch6">
+<div class="chapter-num">CHAPTER 06</div>
+<h2>实验结果：单步 SOTA 与多步方法竞争</h2>
+
+<h3>关键指标一览</h3>
+
+<div class="stats-grid">
+<div class="stat-card">
+<div class="stat-val">83.76</div>
+<div class="stat-label">VBench 总分 (framewise 1-step SOTA)</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">85.22</div>
+<div class="stat-label">质量分数 (接近教师 85.30)</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">200</div>
+<div class="stat-label">收敛步数 (chunkwise 的 1/3)</div>
+</div>
+</div>
+
+<h3>VBench 主要结果</h3>
+
+<div class="fig">
+<img src="assets/_precise_v2/table1_vbench.webp" alt="Table 1: VBench 结果">
+<div class="fig-caption">Table 1: VBench 单步和多步视频生成结果。One-Forcing (framewise) 在单步设置下取得 83.76 总分，超越所有现有单步因果方法 4-7 分，且仅用 1 个 NFE 就超越了大多数使用 4-25 步的多步基线。</div>
+</div>
+
+<table class="result-table">
+<thead>
+<tr><th>模型</th><th>参数量</th><th>NFE</th><th>总分</th><th>质量</th><th>语义</th></tr>
+</thead>
+<tbody>
+<tr><td colspan="6" style="background:var(--lav-50);font-weight:600;color:var(--lav-700)">多步方法</td></tr>
+<tr><td>Wan2.1 (教师)</td><td>1.3B</td><td>50</td><td>84.26</td><td>85.30</td><td>80.09</td></tr>
+<tr><td>Self Forcing 4-step</td><td>1.3B</td><td>4</td><td>83.46</td><td>84.77</td><td>78.24</td></tr>
+<tr><td>CausVid</td><td>1.3B</td><td>4</td><td>81.18</td><td>84.41</td><td>68.30</td></tr>
+<tr><td colspan="6" style="background:var(--lav-50);font-weight:600;color:var(--lav-700)">单步方法</td></tr>
+<tr><td>Self Forcing 1-step</td><td>1.3B</td><td>1</td><td>77.18</td><td>79.40</td><td>68.34</td></tr>
+<tr><td>Causal-Forcing</td><td>1.3B</td><td>1</td><td>78.39</td><td>80.67</td><td>69.25</td></tr>
+<tr><td>ASD</td><td>1.3B</td><td>1*</td><td>79.12</td><td>81.35</td><td>70.19</td></tr>
+<tr class="highlight"><td><strong>One-Forcing (chunkwise)</strong></td><td>1.3B</td><td>1*</td><td>81.60</td><td>83.65</td><td>73.41</td></tr>
+<tr class="highlight"><td><strong>One-Forcing (framewise)</strong></td><td>1.3B</td><td><strong>1*</strong></td><td><strong>83.76</strong></td><td><strong>85.22</strong></td><td><strong>77.91</strong></td></tr>
+</tbody>
+</table>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：framewise 为何优于 chunkwise</div>
+<p>Framewise 模型（1帧/块，200 步训练）不仅在总分上超越 chunkwise（3帧/块，750 步），而且训练效率更高。原因在于：framewise 生成每视频产生 21 个自回归块（vs. chunkwise 的 7 个），每个样本提供 <strong>3 倍更多的判别器反馈</strong>，使生成器能在更细的时间粒度上纠正错误，在不到 1/3 的训练步数内收敛。</p>
+</div>
+
+<h3>与教师模型的差距分析</h3>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 720 260" xmlns="http://www.w3.org/2000/svg">
+<rect x="0" y="0" width="720" height="260" fill="var(--paper)" rx="8"/>
+
+<!-- Bars -->
+<g transform="translate(50,30)">
+<!-- Wan2.1 teacher -->
+<rect x="0" y="0" width="90" height="190" rx="6" fill="var(--lav-100)" stroke="var(--lav-300)" stroke-width="1"/>
+<rect x="0" y="16" width="90" height="174" rx="6" fill="var(--lav-200)"/>
+<text x="45" y="178" text-anchor="middle" font-size="10" fill="#787887">Wan2.1</text>
+<text x="45" y="-8" text-anchor="middle" font-size="13" fill="var(--lav-700)" font-weight="700">84.26</text>
+<text x="45" y="200" text-anchor="middle" font-size="9" fill="#787887">50步教师</text>
+
+<!-- One-Forcing framewise -->
+<rect x="110" y="0" width="90" height="190" rx="6" fill="var(--mint-100)" stroke="var(--mint-300)" stroke-width="1"/>
+<rect x="110" y="14" width="90" height="176" rx="6" fill="var(--mint-200)"/>
+<text x="155" y="178" text-anchor="middle" font-size="10" fill="#787887">One-Forcing</text>
+<text x="155" y="-8" text-anchor="middle" font-size="13" fill="var(--mint-500)" font-weight="700">83.76</text>
+<text x="155" y="200" text-anchor="middle" font-size="9" fill="#787887">1步 framewise</text>
+
+<!-- Self Forcing 4-step -->
+<rect x="220" y="0" width="90" height="190" rx="6" fill="var(--warm-100)" stroke="var(--warm-300)" stroke-width="1"/>
+<rect x="220" y="18" width="90" height="172" rx="6" fill="var(--warm-200)"/>
+<text x="265" y="178" text-anchor="middle" font-size="10" fill="#787887">Self Forcing</text>
+<text x="265" y="-8" text-anchor="middle" font-size="13" fill="var(--warm-500)" font-weight="700">83.46</text>
+<text x="265" y="200" text-anchor="middle" font-size="9" fill="#787887">4步</text>
+
+<!-- Causal-Forcing -->
+<rect x="330" y="0" width="90" height="190" rx="6" fill="var(--warm-100)" stroke="var(--warm-300)" stroke-width="1"/>
+<rect x="330" y="45" width="90" height="145" rx="6" fill="var(--warm-200)"/>
+<text x="375" y="178" text-anchor="middle" font-size="10" fill="#787887">Causal-F</text>
+<text x="375" y="-8" text-anchor="middle" font-size="13" fill="var(--warm-500)" font-weight="700">78.39</text>
+<text x="375" y="200" text-anchor="middle" font-size="9" fill="#787887">1步</text>
+
+<!-- ASD -->
+<rect x="440" y="0" width="90" height="190" rx="6" fill="var(--coral-100)" stroke="var(--coral-300)" stroke-width="1"/>
+<rect x="440" y="52" width="90" height="138" rx="6" fill="var(--coral-200)"/>
+<text x="485" y="178" text-anchor="middle" font-size="10" fill="#787887">ASD</text>
+<text x="485" y="-8" text-anchor="middle" font-size="13" fill="var(--coral-500)" font-weight="700">79.12</text>
+<text x="485" y="200" text-anchor="middle" font-size="9" fill="#787887">1步*</text>
+
+<!-- Self Forcing 1-step -->
+<rect x="550" y="0" width="90" height="190" rx="6" fill="var(--coral-100)" stroke="var(--coral-300)" stroke-width="1"/>
+<rect x="550" y="74" width="90" height="116" rx="6" fill="var(--coral-200)"/>
+<text x="595" y="178" text-anchor="middle" font-size="10" fill="#787887">Self Forcing</text>
+<text x="595" y="-8" text-anchor="middle" font-size="13" fill="var(--coral-500)" font-weight="700">77.18</text>
+<text x="595" y="200" text-anchor="middle" font-size="9" fill="#787887">1步</text>
+</g>
+
+<!-- Gap annotation -->
+<line x1="155" y1="22" x2="90" y2="22" stroke="var(--lav-500)" stroke-width="1.5"/>
+<text x="122" y="17" text-anchor="middle" font-size="10" fill="var(--lav-600)" font-weight="700">仅差 0.50</text>
+
+<!-- Ours label -->
+<rect x="100" y="230" width="70" height="18" rx="4" fill="var(--mint-400)"/>
+<text x="135" y="243" text-anchor="middle" font-size="9" fill="white" font-weight="700">SOTA</text>
+</svg>
+<p class="svg-caption">SVG 4: One-Forcing (framewise, 1步) 与 50 步教师模型仅差 0.5 分，同时超越所有 4 步方法。</p>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：单步首次超越多步的范式意义</div>
+<p>从 Self Forcing 4 步（83.46）到 One-Forcing 1 步（83.76），单步方法首次在 VBench 上超越多步方法。这不是渐进式改进，而是<strong>范式转换</strong>：通过正确的分布匹配目标，单步生成不再是对多步的妥协，而是一种独立的、可竞争的生成范式。核心在于 0.5 分的教师差距意味着分布匹配已经非常充分。</p>
+</div>
+
+<h3>VBench 全维度分析</h3>
+
+<div class="fig">
+<img src="assets/_precise_v2/fig6_vbench_scores.webp" alt="Figure 6: VBench 全维度分析">
+<div class="fig-caption">Figure 6: VBench 16 维度完整分析。One-Forcing 在物体、空间关系、场景和动态度上显著优于 ASD、Causal-Forcing 和单步 Self Forcing，同时保持高时间平滑度。</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：One-Forcing 的维度优势分布</div>
+<p>One-Forcing 的优势主要体现在<strong>动态度</strong>（52.76 vs ASD 的较低值）和<strong>物体/场景维度</strong>上。这与对抗信号的设计直接相关：基于真实数据的判别器能更好地捕捉全局视频质量，而不仅仅是局部分数匹配。在颜色、成像质量等维度上，4 步 Self Forcing 仍有微弱优势，说明多步采样在精细视觉属性上仍有价值。</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH7: 消融研究 ==================== -->
+<div class="chapter" id="ch7">
+<div class="chapter-num">CHAPTER 07</div>
+<h2>消融研究：设计选择的深入分析</h2>
+
+<h3>初始化策略对比</h3>
+
+<div class="compare-grid">
+<div class="compare-card good">
+<h4>ODE 初始化 (Framewise)</h4>
+<p><strong>总分: 83.76</strong> | 动态度: 52.76%<br>训练数据包含更丰富的运动信息（多步 ODE 轨迹），为生成器提供更强的运动先验。语义对齐 77.91。</p>
+</div>
+<div class="compare-card neutral">
+<h4>CD 初始化 (Framewise)</h4>
+<p><strong>总分: 82.36</strong> | 动态度: 23.61%<br>从已训练的一致性模型出发，有利于语义对齐（80.50）但倾向于抑制大运动。</p>
+</div>
+</div>
+
+<div class="fig">
+<img src="assets/_precise_v2/table3_ablation.webp" alt="Table 3: 消融研究">
+<div class="fig-caption">Table 3: VBench 16 维度消融研究。比较 ODE 初始化 vs CD 初始化、Forward KL 正则化的影响。</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：ODE vs CD 初始化的根本权衡</div>
+<p>ODE 初始化在动态度上大幅领先（52.76 vs 23.61），因为 ODE 轨迹包含多步去噪过程中的丰富运动信息。CD 初始化虽然动态度较低，但在语义对齐上更优（80.50 vs 77.91）。这揭示了一个根本性权衡：<strong>运动丰富性与语义精确性之间的张力</strong>。ODE 初始化的多步轨迹提供了更强的运动先验，但 CD 初始化的端点回归更利于语义保真。</p>
+</div>
+
+<h3>Forward KL 正则化的灾难性影响</h3>
+
+<div class="warn-box">
+<p><strong>警告：Forward KL 正则化与 One-Forcing 目标严重冲突</strong><br>添加 $\lambda_{\text{fkl}}=1$ 的 forward KL 正则化导致质量暴跌至 75.03（-10.19），总分降至 74.83（-8.93），动态度几乎消失（1.30 vs 52.76）。确定性平方误差代理与分布目标严重不兼容。</p>
+</div>
+
+<div class="math-block">
+<div class="math-label">EQUATION 9-10 &mdash; Forward KL 正则化（失败尝试）</div>
+$$\hat{\mathcal{L}}_{\text{fkl}} = \mathbb{E}_{x_{t_0}^{\text{ode}}, x_{t_{\text{ar}}}^{\text{ode}}} \left[ \| G_\theta(x_{t_0}^{\text{ode}}, t_0, c) - x_{t_{\text{ar}}}^{\text{ode}} \|^2_2 \right]$$
+<p style="font-size:13px;color:var(--ink-muted);margin-top:8px">此代理将生成器预测回归到存储的清洁端点。但确定性回归与 DMD 的分布匹配目标和对抗训练目标产生严重冲突，抑制了运动多样性。</p>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：为什么 Forward KL 会杀死运动</div>
+<p>Forward KL 正则化本质上是让生成器回归到教师 ODE 的确定性端点——这相当于<strong>模式寻求的反面</strong>。DMD 和 GAN 鼓励生成器探索数据分布的多样性，而 Forward KL 则将其锚定在单一点上。两者的梯度方向互相矛盾，导致运动多样性被压制。这说明在单步蒸馏中，<strong>分布目标和确定性目标不能简单混合</strong>。</p>
+</div>
+
+<h3>判别器有效性分析</h3>
+
+<div class="fig">
+<img src="assets/_precise_v2/table3_ablation.webp" alt="Figure 4: 判别器 logit 差距">
+<div class="fig-caption">Figure 4: 训练过程中的判别器 logit 差距 |r_l - f_l|。One-Forcing（蓝色）保持大幅变化的差距，而 ASD（红色）始终接近零，确认判别器坍塌。</div>
+</div>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 720 240" xmlns="http://www.w3.org/2000/svg">
+<rect x="0" y="0" width="720" height="240" fill="var(--paper)" rx="8"/>
+
+<g transform="translate(20,20)">
+<!-- One-Forcing -->
+<rect x="0" y="0" width="330" height="190" rx="14" fill="var(--mint-100)" stroke="var(--mint-300)" stroke-width="1.5"/>
+<text x="165" y="30" text-anchor="middle" font-size="14" fill="var(--mint-500)" font-weight="700" font-family="Noto Sans SC">One-Forcing 判别器</text>
+<text x="165" y="60" text-anchor="middle" font-size="32" fill="var(--mint-500)" font-weight="900" font-family="JetBrains Mono">mu=1.53</text>
+<text x="165" y="85" text-anchor="middle" font-size="16" fill="#787887" font-family="JetBrains Mono">sigma=1.20</text>
+<text x="165" y="115" text-anchor="middle" font-size="11" fill="#4c4b5e" font-family="Noto Sans SC">大幅变化的差距 = 健康对抗动态</text>
+<rect x="30" y="130" width="270" height="44" rx="8" fill="rgba(16,185,129,0.15)"/>
+<text x="165" y="150" text-anchor="middle" font-size="10" fill="var(--mint-500)" font-weight="600">判别器基于真实数据</text>
+<text x="165" y="166" text-anchor="middle" font-size="9" fill="#787887">提供稳定、有意义的学习信号</text>
+</g>
+
+<!-- ASD -->
+<rect x="370" y="20" width="330" height="190" rx="14" fill="var(--coral-100)" stroke="var(--coral-300)" stroke-width="1.5"/>
+<text x="535" y="50" text-anchor="middle" font-size="14" fill="var(--coral-500)" font-weight="700" font-family="Noto Sans SC">ASD 判别器</text>
+<text x="535" y="80" text-anchor="middle" font-size="32" fill="var(--coral-500)" font-weight="900" font-family="JetBrains Mono">mu=0.001</text>
+<text x="535" y="105" text-anchor="middle" font-size="16" fill="#787887" font-family="JetBrains Mono">max \lt 0.006</text>
+<text x="535" y="135" text-anchor="middle" font-size="11" fill="#4c4b5e" font-family="Noto Sans SC">接近零的差距 = 判别器坍塌</text>
+<rect x="400" y="150" width="270" height="44" rx="8" fill="rgba(244,63,94,0.15)"/>
+<text x="535" y="170" text-anchor="middle" font-size="10" fill="var(--coral-500)" font-weight="600">自蒸馏目标无法提供有意义信号</text>
+<text x="535" y="186" text-anchor="middle" font-size="9" fill="#787887">两个不完美模型输出的分布差异极小</text>
+</svg>
+<p class="svg-caption">SVG 5: One-Forcing vs ASD 的判别器动态对比。基于真实数据的判别是有效对抗蒸馏的关键前提。</p>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：ASD 判别器坍塌的结构性原因</div>
+<p>ASD 使用 $(n+1)$ 步模型的输出作为 $n$ 步学生的"真实"目标。判别器必须区分两个不完美模型的输出，而不是区分生成和真实数据。由于两边都是模型生成的潜在变量，<strong>分布差异极小</strong>（logit 差距 max \lt 0.006），判别器从未获得有意义的学习信号，从第一步起就坍塌了。这不是实现细节问题，而是结构性缺陷。</p>
+</div>
+
+<h3>判别器动态监控代码</h3>
+
+<div class="code-block">
+<div class="code-header">
+<span>判别器 logit 差距监控：验证对抗训练健康度</span>
+<span class="tag">诊断工具 &middot; Python</span>
+</div>
+<pre><code><span class="kw">import</span> torch
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+<span class="kw">def</span> <span class="fn">monitor_discriminator_health</span>(discriminator, real_loader, generator, 
+                                   n_samples=<span class="num">100</span>):
+    <span class="str">"""监控判别器 logit 差距以诊断对抗训练健康度。
+    
+    One-Forcing: mu=1.53, sigma=1.20 (健康)
+    ASD: mu=0.001, max<0.006 (坍塌)
+    
+    判别器坍塌的诊断标准：
+    - logit差距持续接近零 → 判别器无法区分真假
+    - 无变化趋势 → 对抗动态停滞
+    """</span>
+    logit_gaps = []
+    
+    <span class="kw">for</span> i, (prompt, x_real) <span class="kw">in</span> enumerate(real_loader):
+        <span class="kw">if</span> i >= n_samples: <span class="kw">break</span>
+        
+        <span class="com"># 生成假样本（无梯度）</span>
+        x_fake = generator(prompt, n_steps=<span class="num">1</span>).detach()
+        
+        <span class="com"># 在随机时间步加噪</span>
+        t = torch.rand(<span class="num">1</span>) * <span class="num">1000</span>
+        sigma = <span class="num">5</span> * (t/<span class="num">1000</span>) / (<span class="num">1</span> + <span class="num">4</span> * t/<span class="num">1000</span>)
+        
+        x_real_noisy = (<span class="num">1</span>-sigma)*x_real + sigma*torch.randn_like(x_real)
+        x_fake_noisy = (<span class="num">1</span>-sigma)*x_fake + sigma*torch.randn_like(x_fake)
+        
+        <span class="com"># 计算logit</span>
+        l_real = discriminator(x_real_noisy, t, prompt).mean()
+        l_fake = discriminator(x_fake_noisy, t, prompt).mean()
+        
+        logit_gaps.append(abs(l_real - l_fake).item())
+    
+    gaps = np.array(logit_gaps)
+    print(f<span class="str">"Logit gap: mu={gaps.mean():.3f}, sigma={gaps.std():.3f}"</span>)
+    print(f<span class="str">"Range: [{gaps.min():.4f}, {gaps.max():.4f}]"</span>)
+    
+    <span class="com"># 健康诊断</span>
+    <span class="kw">if</span> gaps.mean() < <span class="num">0.01</span>:
+        print(<span class="str">"WARNING: 判别器可能已坍塌！"</span>)
+        print(<span class="str">"建议：确保判别器基于真实数据而非自蒸馏"</span>)
+    
+    <span class="kw">return</span> gaps</code></pre>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH8: 人类评估 ==================== -->
+<div class="chapter" id="ch8">
+<div class="chapter-num">CHAPTER 08</div>
+<h2>人类评估与训练动态</h2>
+
+<h3>成对人类偏好研究</h3>
+
+<p>论文进行了严格的成对人类偏好研究，比较 One-Forcing (framewise, 1步) 与三个因果基线。从 VBench 提示集中分层采样 50 个提示，每个提示产生一个 A/B 对，每个对由三位标注者独立评分，总计最多 450 票。</p>
+
+<div class="fig">
+<img src="assets/_precise_v2/table2_human_pref.webp" alt="Table 2: 人类偏好结果">
+<div class="fig-caption">Table 2: One-Forcing (framewise, 1步) 与各基线的成对人类偏好。来自三位标注者的投票统计。</div>
+</div>
+
+<table class="result-table">
+<thead>
+<tr><th>基线</th><th>NFE</th><th>One-Forcing 胜</th><th>基线胜</th><th>胜率</th></tr>
+</thead>
+<tbody>
+<tr><td>Self Forcing 1-step</td><td>1</td><td>130</td><td>17</td><td><strong>88.4%</strong></td></tr>
+<tr><td>ASD</td><td>1</td><td>139</td><td>11</td><td><strong>92.7%</strong></td></tr>
+<tr><td>Self Forcing 4-step</td><td>4</td><td>32</td><td>118</td><td>21.3%</td></tr>
+</tbody>
+</table>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：人类评估与 VBench 的高度一致性</div>
+<p>One-Forcing 在单步设置下对 Self Forcing 1-step 和 ASD 的人类偏好胜率（88.4% 和 92.7%）与 VBench 分数差距（6.58 和 4.64 分）高度一致。这表明 <strong>VBench 在单步视频生成评估中是人类偏好的可靠代理</strong>。值得注意的是，One-Forcing 1步对 Self Forcing 4步的胜率仅为 21.3%，说明多步采样在整体质量上仍有优势，但差距已大幅缩小。</p>
+</div>
+
+<h3>训练损失曲线分析</h3>
+
+<div class="fig">
+<img src="assets/_precise_v2/fig5_training_loss.webp" alt="Figure 5: 训练损失曲线">
+<div class="fig-caption">Figure 5: One-Forcing（蓝色）和 ASD（红色）在前 100 步的训练损失曲线。(a) DMD 损失。(b) 生成器 GAN 损失。(c) 判别器损失（滚动平均）。(d) 判别器损失。</div>
+</div>
+
+<div class="compare-grid">
+<div class="compare-card good">
+<h4>One-Forcing 训练动态</h4>
+<p>DMD 损失稳定在较低水平。GAN 损失活跃变化，判别器提供有意义梯度。判别器损失随训练下降，证明学习到了区分真假的能力。</p>
+</div>
+<div class="compare-card bad">
+<h4>ASD 训练动态</h4>
+<p>GAN 损失从第一步起就平坦在 ln2*0.01 约 0.0069。判别器损失恒定不变。确认判别器信号从训练开始就已坍塌。</p>
+</div>
+</div>
+
+<h3>方法论定位图</h3>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg">
+<rect x="0" y="0" width="720" height="320" fill="var(--paper)" rx="8"/>
+
+<!-- Axes -->
+<line x1="90" y1="260" x2="680" y2="260" stroke="#d8b4fe" stroke-width="1.5"/>
+<line x1="90" y1="260" x2="90" y2="45" stroke="#d8b4fe" stroke-width="1.5"/>
+<text x="385" y="300" text-anchor="middle" font-size="12" fill="#787887" font-family="Noto Sans SC">采样效率（NFE 越少越好 &rarr;）</text>
+<text x="28" y="155" text-anchor="middle" font-size="12" fill="#787887" font-family="Noto Sans SC" transform="rotate(-90,28,155)">视频质量 (VBench)</text>
+
+<!-- Grid -->
+<line x1="90" y1="200" x2="680" y2="200" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="3"/>
+<line x1="90" y1="140" x2="680" y2="140" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="3"/>
+<line x1="90" y1="80" x2="680" y2="80" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="3"/>
+
+<!-- Methods -->
+<!-- Wan2.1 teacher -->
+<circle cx="130" cy="68" r="28" fill="var(--lav-200)" stroke="var(--lav-500)" stroke-width="2.5"/>
+<text x="130" y="65" text-anchor="middle" font-size="10" fill="var(--lav-700)" font-weight="700">Wan2.1</text>
+<text x="130" y="78" text-anchor="middle" font-size="8" fill="var(--lav-700)">50步教师</text>
+
+<!-- Self Forcing 4-step -->
+<circle cx="240" cy="78" r="22" fill="var(--warm-100)" stroke="var(--warm-400)" stroke-width="2"/>
+<text x="240" y="75" text-anchor="middle" font-size="9" fill="var(--warm-500)" font-weight="600">Self Forcing</text>
+<text x="240" y="88" text-anchor="middle" font-size="8" fill="var(--warm-500)">4步</text>
+
+<!-- Causal Forcing -->
+<circle cx="400" cy="175" r="18" fill="var(--warm-100)" stroke="var(--warm-400)" stroke-width="1.5"/>
+<text x="400" y="172" text-anchor="middle" font-size="8" fill="var(--warm-500)" font-weight="600">Causal</text>
+<text x="400" y="184" text-anchor="middle" font-size="7" fill="var(--warm-500)">Forcing</text>
+
+<!-- ASD -->
+<circle cx="430" cy="160" r="18" fill="var(--coral-100)" stroke="var(--coral-400)" stroke-width="1.5"/>
+<text x="430" y="163" text-anchor="middle" font-size="9" fill="var(--coral-500)" font-weight="600">ASD</text>
+
+<!-- Self Forcing 1-step -->
+<circle cx="480" cy="195" r="18" fill="var(--coral-100)" stroke="var(--coral-300)" stroke-width="1.5"/>
+<text x="480" y="192" text-anchor="middle" font-size="8" fill="var(--coral-500)" font-weight="600">Self Forcing</text>
+<text x="480" y="204" text-anchor="middle" font-size="7" fill="var(--coral-500)">1步</text>
+
+<!-- One-Forcing (star) -->
+<polygon points="600,60 606,78 625,78 610,90 616,108 600,96 584,108 590,90 575,78 594,78" fill="var(--mint-400)" stroke="var(--mint-500)" stroke-width="1.5"/>
+<text x="600" y="48" text-anchor="middle" font-size="12" fill="var(--mint-500)" font-weight="700">One-Forcing</text>
+<text x="600" y="125" text-anchor="middle" font-size="9" fill="#787887">1步 SOTA</text>
+
+<!-- Improvement arrow -->
+<path d="M440,155 C500,120 540,95 580,78" fill="none" stroke="var(--mint-400)" stroke-width="2" stroke-dasharray="5"/>
+<text x="520" y="118" font-size="10" fill="var(--mint-500)" font-weight="600">质量飞跃</text>
+
+<!-- NFE labels -->
+<text x="130" y="280" text-anchor="middle" font-size="9" fill="#787887">NFE=50</text>
+<text x="240" y="280" text-anchor="middle" font-size="9" fill="#787887">NFE=4</text>
+<text x="440" y="280" text-anchor="middle" font-size="9" fill="#787887">NFE=1</text>
+<text x="600" y="280" text-anchor="middle" font-size="9" fill="#787887">NFE=1</text>
+</svg>
+<p class="svg-caption">SVG 6: 方法论定位图。One-Forcing 在单步效率下达到了接近 50 步教师的质量，实现了质量-效率的帕累托前沿突破。</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH9: 科研问题 ==================== -->
+<div class="chapter" id="ch9">
+<div class="chapter-num">CHAPTER 09</div>
+<h2>开放科研问题与未来方向</h2>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 1</div>
+<h4>能否将曲率分析推广到自适应步长调度？</h4>
+<p>论文发现 92.5% 的曲率集中在高噪声端。是否可以利用此几何信息设计<strong>自适应步长调度</strong>：在高曲率区域分配更多去噪步数（如 2-4 步），在平滑区域使用单步？这可能在质量-效率之间取得更好的帕累托前沿。理论分析方向：曲率阈值与步数分配的最优映射关系是什么？是否可以训练一个轻量路由器来预测每个区域的最优步数？</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 2</div>
+<h4>共享判别器骨干是否限制了判别器容量？</h4>
+<p>One-Forcing 复用假分数骨干作为判别器，避免了额外参数。但这种设计是否限制了判别器的表达能力？<strong>独立的加噪潜在判别器</strong>（如更大的 Transformer 或专门的判别架构）能否带来进一步提升？调查方向：(1) 增加寄存器 token 数量和层数的边际收益；(2) 独立判别器 vs 共享判别器在不同生成质量阶段的有效性差异；(3) 参数开销与性能增益的定量权衡曲线。</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 3</div>
+<h4>对抗信号能否替代 DMD 中的真分数网络？</h4>
+<p>One-Forcing 同时使用 DMD 分数差异和对抗信号。在极限情况下，<strong>纯对抗训练</strong>（移除真分数网络）能否达到类似效果？这可以进一步简化训练流程并减少内存占用（释放 14B 教师的显存）。理论问题：对抗信号是否已经隐式包含了分布匹配信息？DMD 和 GAN 梯度的互补性有多大？消融实验建议：逐步降低 lambda_G 观察质量变化曲线。</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 4</div>
+<h4>如何将 One-Forcing 扩展到更长视频和更高分辨率？</h4>
+<p>论文在 21 帧、832x480 设置下验证了方法。扩展到分钟级长视频和 1080p 分辨率时，<strong>判别器的记忆效率</strong>和<strong>自回归误差累积</strong>会如何变化？调查方向：(1) 分层判别策略——局部帧级判别器 + 全局视频级判别器的组合；(2) 滑动窗口判别器以控制显存开销；(3) 与高效注意力机制（如 Ring Attention）的结合；(4) 更大骨干（14B）对一步质量的提升幅度。</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 5</div>
+<h4>Register Token 的最优设计空间是什么？</h4>
+<p>论文使用 2 个寄存器 token 和 2 个选定层（{21, 29}）。寄存器 token 的<strong>最优数量</strong>、<strong>放置层的选择策略</strong>、以及<strong>注意力机制的类型</strong>（交叉注意力 vs 自注意力 vs 线性注意力）如何影响判别器的有效性？理论分析：寄存器 token 本质上是对 Transformer 中间特征的低秩投影，其最优秩与生成器能力的关系值得探索。实验建议：在 {8, 16, 24, 32} 层的子集上进行系统搜索。</p>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：真实数据锚定作为通用设计原则</div>
+<p>One-Forcing 最深刻的贡献可能不是具体的技术方案，而是揭示了一个通用的设计原则：<strong>对抗蒸馏中的判别器必须锚定在真实数据上</strong>。这一原则不仅适用于视频生成，也可能对图像蒸馏（如 SDXL 蒸馏）、文本生成（如 LLM 对齐）等领域的对抗训练设计有指导意义。自蒸馏判别器的坍塌是一种结构性缺陷，而非实现细节问题。</p>
+</div>
+
+<h3>One-Forcing 的方法论启示</h3>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+<rect x="0" y="0" width="720" height="280" fill="var(--paper)" rx="8"/>
+
+<!-- Title -->
+<text x="360" y="28" text-anchor="middle" font-size="14" fill="var(--ink)" font-weight="700" font-family="Noto Sans SC">One-Forcing 的三大方法论启示</text>
+
+<!-- Three pillars -->
+<g transform="translate(30,50)">
+<!-- Pillar 1 -->
+<rect x="0" y="0" width="200" height="200" rx="14" fill="var(--lav-50)" stroke="var(--lav-300)" stroke-width="1.5"/>
+<circle cx="100" y="40" cy="40" r="22" fill="var(--lav-200)"/>
+<text x="100" y="45" text-anchor="middle" font-size="16" fill="var(--lav-700)" font-weight="900">1</text>
+<text x="100" y="80" text-anchor="middle" font-size="12" fill="var(--lav-700)" font-weight="700" font-family="Noto Sans SC">几何洞察</text>
+<text x="100" y="105" text-anchor="middle" font-size="10" fill="#4c4b5e" font-family="Noto Sans SC">视频轨迹曲率</text>
+<text x="100" y="125" text-anchor="middle" font-size="10" fill="#4c4b5e" font-family="Noto Sans SC">集中在高噪声端</text>
+<rect x="15" y="145" width="170" height="40" rx="6" fill="rgba(168,85,247,0.08)"/>
+<text x="100" y="165" text-anchor="middle" font-size="9" fill="var(--lav-600)" font-weight="600">放弃轨迹目标</text>
+<text x="100" y="178" text-anchor="middle" font-size="9" fill="#787887">转向分布匹配</text>
+</g>
+
+<!-- Pillar 2 -->
+<rect x="250" y="50" width="200" height="200" rx="14" fill="var(--mint-100)" stroke="var(--mint-300)" stroke-width="1.5"/>
+<circle cx="350" cy="90" r="22" fill="var(--mint-200)"/>
+<text x="350" y="95" text-anchor="middle" font-size="16" fill="var(--mint-700)" font-weight="900">2</text>
+<text x="350" y="130" text-anchor="middle" font-size="12" fill="var(--mint-700)" font-weight="700" font-family="Noto Sans SC">数据锚定</text>
+<text x="350" y="155" text-anchor="middle" font-size="10" fill="#4c4b5e" font-family="Noto Sans SC">判别器基于真实</text>
+<text x="350" y="175" text-anchor="middle" font-size="10" fill="#4c4b5e" font-family="Noto Sans SC">数据而非自蒸馏</text>
+<rect x="265" y="195" width="170" height="40" rx="6" fill="rgba(16,185,129,0.08)"/>
+<text x="350" y="215" text-anchor="middle" font-size="9" fill="var(--mint-600)" font-weight="600">防止判别器坍塌</text>
+<text x="350" y="228" text-anchor="middle" font-size="9" fill="#787887">稳定对抗训练</text>
+</g>
+
+<!-- Pillar 3 -->
+<rect x="490" y="50" width="200" height="200" rx="14" fill="var(--warm-100)" stroke="var(--warm-300)" stroke-width="1.5"/>
+<circle cx="590" cy="90" r="22" fill="var(--warm-200)"/>
+<text x="590" y="95" text-anchor="middle" font-size="16" fill="var(--warm-600)" font-weight="900">3</text>
+<text x="590" y="130" text-anchor="middle" font-size="12" fill="var(--warm-600)" font-weight="700" font-family="Noto Sans SC">共享骨干</text>
+<text x="590" y="155" text-anchor="middle" font-size="10" fill="#4c4b5e" font-family="Noto Sans SC">去噪 + 判别</text>
+<text x="590" y="175" text-anchor="middle" font-size="10" fill="#4c4b5e" font-family="Noto Sans SC">在同一特征空间</text>
+<rect x="505" y="195" width="170" height="40" rx="6" fill="rgba(251,191,36,0.08)"/>
+<text x="590" y="215" text-anchor="middle" font-size="9" fill="var(--warm-600)" font-weight="600">零额外参数</text>
+<text x="590" y="228" text-anchor="middle" font-size="9" fill="#787887">复用即正则化</text>
+</g>
+</svg>
+<p class="svg-caption">SVG 7: One-Forcing 的三大方法论启示——几何洞察决定目标选择，数据锚定保证训练稳定，共享骨干实现高效复用。</p>
+</div>
+
+</div>
+
+<!-- ==================== 总结 ==================== -->
+<div class="chapter" id="conclusion">
+<div class="chapter-num">CONCLUSION</div>
+<h2>总结与启示</h2>
+
+<p>One-Forcing 通过将 DMD 分数匹配与对抗判别统一于同一假分数骨干网络，优雅地解决了单步自回归视频生成的两大障碍：视频轨迹的高噪声曲率集中和 DMD 的局部性递归放大问题。</p>
+
+<div class="compare-grid-3">
+<div class="compare-card good">
+<h4>核心创新</h4>
+<p>共享假分数骨干作为联合去噪器和判别器。基于真实数据的对抗信号提供全局拒绝机制。零额外参数开销。</p>
+</div>
+<div class="compare-card neutral">
+<h4>关键发现</h4>
+<p>视频轨迹 92.5% 曲率集中在高噪声端。自蒸馏判别器（ASD）必然坍塌。Forward KL 与分布目标冲突。</p>
+</div>
+<div class="compare-card good">
+<h4>实践成果</h4>
+<p>VBench 83.76（单步 SOTA）。200 步收敛（1/3 训练成本）。与 50 步教师仅差 0.5 分。</p>
+</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：数据驱动 vs 自蒸馏的根本分歧</div>
+<p>One-Forcing 最重要的贡献可能不是具体的技术方案，而是揭示了一个更深层的设计原则：<strong>对抗蒸馏中的判别器必须锚定在真实数据上</strong>。自蒸馏方法（如 ASD）的判别器坍塌不是实现细节问题，而是结构性缺陷。这一洞察对整个扩散蒸馏领域都有启发意义。</p>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：从 4 步到 1 步的范式转换</div>
+<p>从 Self Forcing 4 步（83.46）到 One-Forcing 1 步（83.76），单步方法首次在 VBench 上超越多步方法。这不是渐进式改进，而是<strong>范式转换</strong>：通过正确的分布匹配目标，单步生成不再是对多步的妥协，而是一种独立的、可竞争的生成范式。这一结果表明，采样步数与生成质量之间的传统线性关系可以被打破。</p>
+</div>
+
+<h3>未来方向</h3>
+
+<p>论文指出了几个有前景的未来方向：(1) 将 One-Forcing 扩展到更高分辨率和更长视频生成；(2) 结合高效注意力机制和更大骨干架构；(3) 探索自适应步长调度；(4) 扩展到动作条件视频生成以支持更快的交互式世界建模。</p>
+
+<div class="fig">
+<img src="assets/_precise_v2/fig3_curvature.webp" alt="Figure 3: 视频生成示例">
+<div class="fig-caption">One-Forcing 生成的视频示例。在仅 1 步去噪的设置下，实现了出色的视觉质量和运动动态。</div>
+</div>
+
+</div>
+
+</div>
+
+<!-- Footer -->
+<footer class="footer">
+<p>One-Forcing: Towards Stable One-Step Autoregressive Video Generation</p>
+<p>Jiaqi Feng, Justin Cui, Yuanhao Ban, Cho-Jui Hsieh &middot; Tsinghua University &amp; UCLA</p>
+<p>arXiv:2605.23458v1 [cs.CV] &middot; 22 May 2026</p>
+<p style="margin-top:12px;font-size:11px;color:var(--ink-muted)">本博客基于论文原文生成，仅供学术参考</p>
+</footer>
+
+</body>
+</html>

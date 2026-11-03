@@ -1,0 +1,510 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>花主自述 | Yetbye-除了死亡，每一天都是婚礼~</title><meta name="author" content="Yetbye"><meta name="copyright" content="Yetbye"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#0d0d0d"><meta property="og:type" content="website">
+<meta property="og:title" content="花主自述">
+<meta property="og:url" content="https://yetbye.top/about/index.html">
+<meta property="og:site_name" content="Yetbye-除了死亡，每一天都是婚礼~">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://yetbye.top/image/media/avatar.jpg">
+<meta property="article:author" content="Yetbye">
+<meta property="article:tag" content="Yetbye">
+<meta property="article:tag" content="AI">
+<meta property="article:tag" content="Tech">
+<meta property="article:tag" content="Coolboy">
+<meta property="article:tag" content="Enjoy">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://yetbye.top/image/media/avatar.jpg"><link rel="shortcut icon" href="/image/media/favion.ico"><link rel="canonical" href="https://yetbye.top/about/index.html"><link rel="preconnect" href="//cdnjs.cloudflare.com"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!true && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdnjs.cloudflare.com/ajax/libs/egjs-infinitegrid/4.12.0/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '花主自述',
+  isHighlightShrink: false,
+  isToc: false,
+  pageType: 'page'
+}</script><link rel="stylesheet" href="/css/waves.css"><link rel="stylesheet" href="/css/cursor.css"><link rel="stylesheet" href="/css/venus-post.css"><link rel="stylesheet" href="/css/footer_fish.css"><link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin><link rel="preconnect" href="https://fonts.googleapis.com" crossorigin><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/js-heo@1.0.11/mainColor/heoMainColor.css"><link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/js-heo@1.0.11/poem/poem.css"><meta name="generator" content="Hexo 7.3.0"></head><body><div id="web_bg" style="background-image: url(/image/media/banner1.jpg);"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/image/media/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">35</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">15</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-skull"></i><span> Home</span></a></div><div class="menus_item"><a class="site-page" href="/notes/"><i class="fa-fw fas fa-crown"></i><span> Note</span></a></div><div class="menus_item"><a class="site-page" href="/moments/"><i class="fa-fw fas fa-camera"></i><span> Moments</span></a></div><div class="menus_item"><a class="site-page" href="/map/"><i class="fa-fw fas fa-route"></i><span> 行迹</span></a></div><div class="menus_item"><a class="site-page" href="/music/"><i class="fa-fw fas fa-compact-disc"></i><span> 八音盒</span></a></div><div class="menus_item"><a class="site-page" href="/gallery/"><i class="fa-fw fas fa-images"></i><span> 调色盘</span></a></div><div class="menus_item"><a class="site-page" href="/shuoshuo/"><i class="fa-fw fas fa-sticky-note"></i><span> 小纸条</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于我</span></a></div></div></div></div><div class="page" id="body-wrap"><header class="not-home-page" id="page-header" style="background-image: url(/image/media/about.jpg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">Yetbye-除了死亡，每一天都是婚礼~</span></a></span><div id="menus"><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-skull"></i><span> Home</span></a></div><div class="menus_item"><a class="site-page" href="/notes/"><i class="fa-fw fas fa-crown"></i><span> Note</span></a></div><div class="menus_item"><a class="site-page" href="/moments/"><i class="fa-fw fas fa-camera"></i><span> Moments</span></a></div><div class="menus_item"><a class="site-page" href="/map/"><i class="fa-fw fas fa-route"></i><span> 行迹</span></a></div><div class="menus_item"><a class="site-page" href="/music/"><i class="fa-fw fas fa-compact-disc"></i><span> 八音盒</span></a></div><div class="menus_item"><a class="site-page" href="/gallery/"><i class="fa-fw fas fa-images"></i><span> 调色盘</span></a></div><div class="menus_item"><a class="site-page" href="/shuoshuo/"><i class="fa-fw fas fa-sticky-note"></i><span> 小纸条</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于我</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="page-site-info"><h1 id="site-title">花主自述</h1></div></header><main class="layout" id="content-inner"><div id="page"><div class="container" id="article-container"><!-- ============ 花主自述 · Venus 樱吹雪 ============ -->
+<div class="va-wrap">
+  <div class="va-container">
+    <div class="va-seigaiha" aria-hidden="true"></div>
+    <div class="va-corner va-corner-tl" aria-hidden="true"></div>
+    <div class="va-corner va-corner-tr" aria-hidden="true"></div>
+    <div class="va-corner va-corner-bl" aria-hidden="true"></div>
+    <div class="va-corner va-corner-br" aria-hidden="true"></div>
+
+    <!-- 双剑饰 -->
+    <svg class="va-sword va-sword-left" viewBox="0 0 60 240" aria-hidden="true">
+      <circle cx="30" cy="10" r="4" fill="none" stroke="#3D2914" stroke-width="1.4" stroke-opacity="0.7"/>
+      <circle cx="30" cy="10" r="1.6" fill="#A8443C" fill-opacity="0.7"/>
+      <line x1="30" y1="14" x2="30" y2="22" stroke="#3D2914" stroke-width="1.6" stroke-opacity="0.7"/>
+      <line x1="30" y1="22" x2="30" y2="190" stroke="#3D2914" stroke-width="2.4" stroke-opacity="0.8"/>
+      <line x1="30" y1="28" x2="30" y2="186" stroke="#5C3D4E" stroke-width="0.6" stroke-opacity="0.45"/>
+      <line x1="14" y1="190" x2="46" y2="190" stroke="#3D2914" stroke-width="2.2" stroke-opacity="0.75"/>
+      <circle cx="14" cy="190" r="2.4" fill="none" stroke="#3D2914" stroke-width="1.2" stroke-opacity="0.65"/>
+      <circle cx="46" cy="190" r="2.4" fill="none" stroke="#3D2914" stroke-width="1.2" stroke-opacity="0.65"/>
+      <line x1="30" y1="190" x2="30" y2="216" stroke="#3D2914" stroke-width="1.6" stroke-opacity="0.7"/>
+      <path d="M30,216 Q26,224 28,232 M30,216 Q34,224 32,232 M30,216 L30,236" stroke="#A8443C" stroke-width="1.4" fill="none" stroke-opacity="0.7"/>
+    </svg>
+    <svg class="va-sword va-sword-right" viewBox="0 0 60 240" aria-hidden="true">
+      <circle cx="30" cy="10" r="4" fill="none" stroke="#3D2914" stroke-width="1.4" stroke-opacity="0.7"/>
+      <circle cx="30" cy="10" r="1.6" fill="#A8443C" fill-opacity="0.7"/>
+      <line x1="30" y1="14" x2="30" y2="22" stroke="#3D2914" stroke-width="1.6" stroke-opacity="0.7"/>
+      <line x1="30" y1="22" x2="30" y2="190" stroke="#3D2914" stroke-width="2.4" stroke-opacity="0.8"/>
+      <line x1="30" y1="28" x2="30" y2="186" stroke="#5C3D4E" stroke-width="0.6" stroke-opacity="0.45"/>
+      <line x1="14" y1="190" x2="46" y2="190" stroke="#3D2914" stroke-width="2.2" stroke-opacity="0.75"/>
+      <circle cx="14" cy="190" r="2.4" fill="none" stroke="#3D2914" stroke-width="1.2" stroke-opacity="0.65"/>
+      <circle cx="46" cy="190" r="2.4" fill="none" stroke="#3D2914" stroke-width="1.2" stroke-opacity="0.65"/>
+      <line x1="30" y1="190" x2="30" y2="216" stroke="#3D2914" stroke-width="1.6" stroke-opacity="0.7"/>
+      <path d="M30,216 Q26,224 28,232 M30,216 Q34,224 32,232 M30,216 L30,236" stroke="#A8443C" stroke-width="1.4" fill="none" stroke-opacity="0.7"/>
+    </svg>
+
+    <div class="va-col">
+      <!-- Hero -->
+      <header class="va-hero">
+        <img class="va-avatar" src="/img/butterfly-icon.png" alt="Yetbye">
+        <h1 class="va-name">Yetbye</h1>
+        <p class="va-hand">除了死亡，每一天都是婚礼</p>
+        <p class="va-bio">
+          站主本人，目前是一名大一学生。兴趣广泛但都不精通，正在把「都懂一点」慢慢炼成「真懂一样」。<br>
+          这里存放我的笔记、随想、日常与审美——如果你也遇到了什么困难，想找人倾诉或聊天，随时可以联系我。
+        </p>
+      </header>
+
+      <!-- 座右铭 -->
+      <section class="va-quote-card">
+        <span class="va-quote-mark">「</span>
+        <p>尊重差异性，尊重个性化。<br>每一次思考，即是在重新定义「偏见」。</p>
+        <span class="va-quote-mark-end">」</span>
+      </section>
+
+      <!-- 更新日志 -->
+      <section class="va-section">
+        <div class="va-section-head">
+          <span class="va-eyebrow">CHANGELOG</span>
+          <h2>网站更新日志</h2>
+        </div>
+        <div class="va-timeline">
+          <div class="va-log">
+            <time>2025.06.09</time>
+            <ul>
+              <li>图片压缩的有点狠了</li>
+              <li>我的小纸条是被吃了吗</li>
+              <li>邮箱功能撤回了，以后拿网站注册一个再放上来吧</li>
+              <li>结束了</li>
+            </ul>
+          </div>
+          <div class="va-log">
+            <time>2025.06.08</time>
+            <ul>
+              <li>友链页面以后再弄吧，或许以后可以认识更多的朋友。</li>
+              <li>音乐界面暂时不想折腾了</li>
+              <li>打算有空改一下导航栏，加入搜索和开往</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- 友链（并入关于页） -->
+      <section class="va-section">
+        <div class="va-section-head">
+          <span class="va-eyebrow">FRIENDS</span>
+          <h2>友链</h2>
+        </div>
+        <div class="va-friends">
+          <div class="va-friend va-friend-open">
+            <b>这里留给你</b>
+            <p>想交换友链？在评论区或私信告诉我你的站名、链接和一句话简介 ✿</p>
+          </div>
+          <div class="va-friend va-friend-soon">
+            <b>待补充</b>
+            <p>认识更多的朋友之后，这里会热闹起来的。</p>
+          </div>
+        </div>
+      </section>
+
+      <div class="va-foot">
+        <span>✿</span>
+        <p>每一次相遇都是婚礼的请柬</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+/* ===== Venus 配方 D：樱吹雪 —— 自足不透明画布（明暗主题皆宜） ===== */
+/* 布局骨架契约 v1：外层满幅画布 > 1200 内容容器 > 860 窄阅读列 */
+.va-wrap {
+  --paper:#FFFBF8; --paper2:#FFF5F0; --line:#F0E0D8;
+  --ink:#3A2828; --ink2:#6A5050; --ink3:#A08888;
+  --plum:#8B4570; --sakura:#E86B8A; --gold:#D4A87A;
+  position:relative; min-height:100vh; padding:20px;
+  font-family:'Noto Sans SC',-apple-system,sans-serif; color:var(--ink); line-height:1.8;
+  background:
+    radial-gradient(700px 260px at 88% -30px, rgba(232,107,138,.07), transparent 60%),
+    linear-gradient(#FFFBF8, #FFF5F0);
+}
+/* 樱花纸纹理（BG-03 宣纸 + 散点） */
+.va-wrap::before {
+  content:''; position:absolute; inset:0; pointer-events:none; opacity:.5; z-index:0;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 .96 0 0 0 0 .93 0 0 0 0 .91 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+/* 内容容器（全站契约槽位：1200 居中卡纸，承载原画布的纸面质感与边框投影） */
+.va-container {
+  position:relative; z-index:1; max-width:1200px; margin:0 auto; padding:20px;
+  background:linear-gradient(#FFFBF8, #FFF5F0);
+  border:1px solid var(--line); border-radius:18px;
+  box-shadow:0 18px 50px rgba(0,0,0,.3);
+  overflow:hidden;
+}
+/* 窄阅读列（原 860px 内容列，居于宽容器之内居中） */
+.va-col { position:relative; z-index:1; max-width:860px; margin:0 auto; }
+
+.va-seigaiha {
+  position:absolute; inset:0; pointer-events:none; opacity:.045; z-index:0;
+  background-image:radial-gradient(circle at 50% 100%, transparent 18px, var(--plum) 19px, transparent 20px),
+                   radial-gradient(circle at 50% 100%, transparent 38px, var(--plum) 39px, transparent 40px);
+  background-size:40px 20px;
+}
+.va-corner { position:absolute; width:56px; height:56px; pointer-events:none; z-index:1; }
+.va-corner::before { content:''; position:absolute; inset:0; border:2px solid var(--plum); opacity:.32; }
+.va-corner::after  { content:''; position:absolute; inset:6px; border:1px solid var(--sakura); opacity:.42; }
+.va-corner-tl { top:8px; left:8px; } .va-corner-tl::before,.va-corner-tl::after { border-right:0; border-bottom:0; }
+.va-corner-tr { top:8px; right:8px; } .va-corner-tr::before,.va-corner-tr::after { border-left:0; border-bottom:0; }
+.va-corner-bl { bottom:8px; left:8px; } .va-corner-bl::before,.va-corner-bl::after { border-right:0; border-top:0; }
+.va-corner-br { bottom:8px; right:8px; } .va-corner-br::before,.va-corner-br::after { border-left:0; border-top:0; }
+.va-sword { position:absolute; top:34px; width:30px; height:120px; pointer-events:none; z-index:2; opacity:.9; }
+.va-sword-left  { left:5%; transform:rotate(-5deg); }
+.va-sword-right { right:5%; transform:rotate(5deg) scaleX(-1); }
+@media (max-width:780px){ .va-sword { display:none; } }
+
+/* Hero（水平居中） */
+.va-hero { position:relative; z-index:1; text-align:center; padding:2.8rem 1rem 2rem; }
+.va-avatar {
+  width:96px; height:96px; border-radius:50%; object-fit:cover;
+  border:3px solid #fff; box-shadow:0 6px 24px rgba(139,69,112,.25), 0 0 0 1px var(--line);
+}
+.va-name {
+  font-family:'Noto Serif SC',serif; font-weight:900; letter-spacing:.18em;
+  font-size:clamp(1.9rem,4vw,2.7rem); margin:1.1rem 0 .4rem;
+}
+.va-hand { font-family:'Ma Shan Zheng',cursive; font-size:1.35rem; color:var(--sakura); margin:0 0 1rem; }
+.va-bio { color:var(--ink2); font-size:.95rem; max-width:560px; margin:0 auto; }
+
+/* 座右铭卡（header 下间距 ≥28px；文案与装饰一字不改） */
+.va-quote-card {
+  position:relative; z-index:1; max-width:600px; margin:1.75rem auto 0;
+  background:linear-gradient(135deg,var(--paper2),#fff);
+  border:1px solid var(--line); border-radius:16px; padding:1.6rem 2.4rem;
+  text-align:center; box-shadow:0 4px 18px rgba(139,69,112,.08);
+}
+.va-quote-card p {
+  font-family:'Noto Serif SC',serif; font-size:1.06rem; line-height:2; margin:0; color:var(--plum);
+}
+.va-quote-mark, .va-quote-mark-end {
+  font-family:'Noto Serif SC',serif; font-size:1.6rem; color:var(--gold);
+  position:absolute; opacity:.85;
+}
+.va-quote-mark { left:.9rem; top:.55rem; }
+.va-quote-mark-end { right:.9rem; bottom:.45rem; }
+
+/* 分区（区块间节奏 24–32px） */
+.va-section { position:relative; z-index:1; margin-top:30px; }
+.va-section-head { text-align:center; margin-bottom:1.6rem; }
+.va-eyebrow {
+  font-family:'JetBrains Mono',monospace; font-size:.68rem; letter-spacing:.4em;
+  color:var(--sakura); display:inline-block; margin-bottom:.5rem;
+}
+.va-section-head h2 {
+  font-family:'Noto Serif SC',serif; font-size:1.45rem; letter-spacing:.12em; margin:0;
+}
+
+/* 日志时间线 */
+.va-timeline { position:relative; padding-left:26px; max-width:620px; margin:0 auto; }
+.va-timeline::before {
+  content:''; position:absolute; left:8px; top:8px; bottom:8px; width:2px;
+  background:linear-gradient(#FFB7C5, var(--line)); border-radius:2px;
+}
+.va-log {
+  position:relative; background:#fff; border:1px solid var(--line); border-radius:14px;
+  padding:1rem 1.3rem; margin-bottom:1.1rem; box-shadow:0 2px 10px rgba(139,69,112,.06);
+  transition:transform .3s cubic-bezier(.16,1,.3,1), box-shadow .3s;
+}
+.va-log:hover { transform:translateY(-3px); box-shadow:0 8px 22px rgba(139,69,112,.13); }
+.va-log::before {
+  content:'✿'; position:absolute; left:-26px; top:1.15rem; color:var(--sakura);
+  font-size:.85rem; background:var(--paper); line-height:1;
+}
+.va-log time {
+  font-family:'JetBrains Mono',monospace; font-size:.78rem; color:var(--ink3); letter-spacing:.08em;
+}
+.va-log ul { margin:.5rem 0 0; padding-left:1.1rem; color:var(--ink2); font-size:.92rem; }
+.va-log li { margin:.25rem 0; }
+
+/* 友链 */
+.va-friends { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:1.2rem; max-width:680px; margin:0 auto; }
+.va-friend {
+  background:#fff; border:1px solid var(--line); border-radius:16px; padding:1.4rem 1.5rem;
+  transition:transform .3s cubic-bezier(.16,1,.3,1), box-shadow .3s, border-color .3s;
+}
+.va-friend:hover { transform:translateY(-5px); box-shadow:0 10px 26px rgba(139,69,112,.14); }
+.va-friend b { font-family:'Noto Serif SC',serif; letter-spacing:.06em; }
+.va-friend p { margin:.5rem 0 0; font-size:.88rem; color:var(--ink2); }
+.va-friend-open { border-color:var(--sakura); border-style:dashed; }
+.va-friend-open b { color:var(--sakura); }
+.va-friend-soon b { color:var(--ink3); }
+
+.va-foot { position:relative; z-index:1; text-align:center; margin-top:30px; }
+.va-foot span { color:var(--sakura); font-size:1.1rem; }
+.va-foot p { font-family:'Ma Shan Zheng',cursive; font-size:1.05rem; color:var(--plum); margin:.3rem 0 0; }
+
+@media (max-width:900px){
+  .va-wrap{padding:12px;}
+  .va-container{padding:16px;}
+  .va-hero{padding:2.2rem .5rem 1.4rem;}
+  .va-friends{grid-template-columns:1fr;}
+}
+@media (max-width:640px){ .va-hero{padding:2rem .5rem 1.4rem;} .va-quote-card{padding:1.3rem 1.6rem;} }
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+</style>
+---
+</div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/image/media/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Yetbye</div><div class="author-info-description"></div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">35</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">15</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://www.zhihu.com/people/80-34-65-84-64"><i class="fab fa-zhihu"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/Yetbye" target="_blank" title="Github"><i class="fab fa-github"></i></a><a class="social-icon" href="https://www.zhihu.com/people/80-34-65-84-64" target="_blank" title="Zhihu"><i class="fab fa-zhihu"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">小站现在还有很多不足，如果数据没有加载出来，可以刷新试试~ Have a nice day!</div></div><div class="sticky_layout"><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/docs/CausalForcingPP/" title="Causal Forcing++: 可扩展少步自回归扩散蒸馏"><img src="/docs/CausalForcingPP/assets/_v_end.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Causal Forcing++: 可扩展少步自回归扩散蒸馏"/></a><div class="content"><a class="title" href="/docs/CausalForcingPP/" title="Causal Forcing++: 可扩展少步自回归扩散蒸馏">Causal Forcing++: 可扩展少步自回归扩散蒸馏</a><time datetime="2026-08-31T04:00:00.000Z" title="发表于 2026-08-31 12:00:00">2026-08-31</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/docs/AnnCA/" title="FAST-AR: ANN加速自回归视频扩散"><img src="/docs/AnnCA/assets/Figure_10__Ablations_p15.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="FAST-AR: ANN加速自回归视频扩散"/></a><div class="content"><a class="title" href="/docs/AnnCA/" title="FAST-AR: ANN加速自回归视频扩散">FAST-AR: ANN加速自回归视频扩散</a><time datetime="2026-08-31T04:00:00.000Z" title="发表于 2026-08-31 12:00:00">2026-08-31</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/docs/CausVid/" title="从双向扩散到快速自回归视频扩散模型 | CausVid 论文精读"><img src="/docs/CausVid/assets/fig1_latency.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="从双向扩散到快速自回归视频扩散模型 | CausVid 论文精读"/></a><div class="content"><a class="title" href="/docs/CausVid/" title="从双向扩散到快速自回归视频扩散模型 | CausVid 论文精读">从双向扩散到快速自回归视频扩散模型 | CausVid 论文精读</a><time datetime="2026-08-31T04:00:00.000Z" title="发表于 2026-08-31 12:00:00">2026-08-31</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/docs/ContextForcing/" title="Context Forcing: 一致性长上下文自回归视频生成"><img src="/docs/ContextForcing/assets/cover.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Context Forcing: 一致性长上下文自回归视频生成"/></a><div class="content"><a class="title" href="/docs/ContextForcing/" title="Context Forcing: 一致性长上下文自回归视频生成">Context Forcing: 一致性长上下文自回归视频生成</a><time datetime="2026-08-31T04:00:00.000Z" title="发表于 2026-08-31 12:00:00">2026-08-31</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/docs/CausalForcing/" title="Causal Forcing: 自回归扩散蒸馏的正确姿势"><img src="/docs/CausalForcing/assets/cover.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Causal Forcing: 自回归扩散蒸馏的正确姿势"/></a><div class="content"><a class="title" href="/docs/CausalForcing/" title="Causal Forcing: 自回归扩散蒸馏的正确姿势">Causal Forcing: 自回归扩散蒸馏的正确姿势</a><time datetime="2026-08-31T04:00:00.000Z" title="发表于 2026-08-31 12:00:00">2026-08-31</time></div></div></div></div><div class="card-widget card-categories"><div class="item-headline">
+            <i class="fas fa-folder-open"></i>
+            <span>分类</span>
+            
+          </div>
+          <ul class="card-category-list" id="aside-cat-list">
+            <li class="card-category-list-item "><a class="card-category-list-link" href="/categories/DL-cards/"><span class="card-category-list-name">DL-cards</span><span class="card-category-list-count">4</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/nlp/"><span class="card-category-list-name">nlp</span><span class="card-category-list-count">1</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/poetry/"><span class="card-category-list-name">poetry</span><span class="card-category-list-count">1</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/yolo-od/"><span class="card-category-list-name">yolo-od</span><span class="card-category-list-count">2</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/%E8%AE%BA%E6%96%87%E7%B2%BE%E8%AF%BB/"><span class="card-category-list-name">论文精读</span><span class="card-category-list-count">25</span></a></li>
+          </ul></div><div class="card-widget card-tags"><div class="item-headline"><i class="fas fa-tags"></i><span>标签</span></div><div class="card-tag-cloud"><a href="/tags/%E8%A7%86%E9%A2%91%E7%94%9F%E6%88%90/" style="font-size: 1.5em; color: #99a9bf">视频生成</a> <a href="/tags/NeurIPS-2024/" style="font-size: 1.1em; color: #999">NeurIPS-2024</a> <a href="/tags/NeurIPS-2025/" style="font-size: 1.1em; color: #999">NeurIPS-2025</a> <a href="/tags/%E9%AB%98%E6%95%88%E6%8E%A8%E7%90%86/" style="font-size: 1.2em; color: #999da3">高效推理</a> <a href="/tags/arXiv/" style="font-size: 1.45em; color: #99a7ba">arXiv</a> <a href="/tags/%E9%95%BF%E8%A7%86%E9%A2%91/" style="font-size: 1.35em; color: #99a3b1">长视频</a> <a href="/tags/YOLO/" style="font-size: 1.15em; color: #999b9e">YOLO</a> <a href="/tags/%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0/" style="font-size: 1.3em; color: #99a1ac">深度学习</a> <a href="/tags/%E4%B8%8D%E7%AD%89%E5%BC%8F/" style="font-size: 1.1em; color: #999">不等式</a> <a href="/tags/ICML-2026/" style="font-size: 1.25em; color: #999fa7">ICML-2026</a> <a href="/tags/CVPR-2025/" style="font-size: 1.1em; color: #999">CVPR-2025</a> <a href="/tags/CVPR-2024/" style="font-size: 1.1em; color: #999">CVPR-2024</a> <a href="/tags/%E8%8A%B1%E9%97%B4%E8%AF%8D/" style="font-size: 1.1em; color: #999">花间词</a> <a href="/tags/%E8%92%B8%E9%A6%8F%E5%8A%A0%E9%80%9F/" style="font-size: 1.4em; color: #99a5b6">蒸馏加速</a> <a href="/tags/ICLR-2026/" style="font-size: 1.1em; color: #999">ICLR-2026</a></div></div><div class="card-widget card-archives">
+    <div class="item-headline">
+      <i class="fas fa-archive"></i>
+      <span>归档</span>
+      
+    </div>
+  
+    <ul class="card-archive-list">
+      
+        <li class="card-archive-list-item">
+          <a class="card-archive-list-link" href="/archives/2026/08/">
+            <span class="card-archive-list-date">
+              八月 2026
+            </span>
+            <span class="card-archive-list-count">25</span>
+          </a>
+        </li>
+      
+        <li class="card-archive-list-item">
+          <a class="card-archive-list-link" href="/archives/2025/11/">
+            <span class="card-archive-list-date">
+              十一月 2025
+            </span>
+            <span class="card-archive-list-count">1</span>
+          </a>
+        </li>
+      
+        <li class="card-archive-list-item">
+          <a class="card-archive-list-link" href="/archives/2025/06/">
+            <span class="card-archive-list-date">
+              六月 2025
+            </span>
+            <span class="card-archive-list-count">7</span>
+          </a>
+        </li>
+      
+        <li class="card-archive-list-item">
+          <a class="card-archive-list-link" href="/archives/2025/05/">
+            <span class="card-archive-list-date">
+              五月 2025
+            </span>
+            <span class="card-archive-list-count">2</span>
+          </a>
+        </li>
+      
+    </ul>
+  </div></div></div></main><footer id="footer" style="background-image: url(/image/media/footer1.jpg);"><div id="footer-wrap"><div class="footer_custom_text">最是人间留不住，朱颜辞镜花辞树</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="translateLink" type="button" title="简繁转换">简</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="/js/tw_cn.js"></script><div class="js-pjax"></div><script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script><script src="/js/fish.js"></script><canvas class="fireworks" mobile="false"></canvas><script src="https://cdnjs.cloudflare.com/ajax/libs/butterfly-extsrc/1.1.4/fireworks.min.js"></script><script id="canvas_nest" defer="defer" color="255, 20, 147" opacity="0.7" zIndex="-1" count="99" mobile="false" src="https://cdnjs.cloudflare.com/ajax/libs/butterfly-extsrc/1.1.4/canvas-nest.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/aplayer/1.10.1/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdnjs.cloudflare.com/ajax/libs/aplayer/1.10.1/APlayer.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/butterfly-extsrc/1.1.4/metingjs/dist/Meting.min.js"></script><script>(() => {
+  const destroyAplayer = () => {
+    if (window.aplayers) {
+      for (let i = 0; i < window.aplayers.length; i++) {
+        if (!window.aplayers[i].options.fixed) {
+          window.aplayers[i].destroy()
+        }
+      }
+    }
+  }
+
+  const runMetingJS = () => {
+    typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+  }
+
+  btf.addGlobalFn('pjaxSend', destroyAplayer, 'destroyAplayer')
+  btf.addGlobalFn('pjaxComplete', loadMeting, 'runMetingJS')
+})()</script><script src="https://cdnjs.cloudflare.com/ajax/libs/pjax/0.2.8/pjax.min.js"></script><script>(() => {
+  const pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+  window.pjax = new Pjax({
+    elements: 'a:not([target="_blank"]):not([href="/notes/"]):not([href="/moments/"]):not([href="/gallery/"]):not([href="/shuoshuo/"]):not([href="/music/"]):not([href="/about/"]):not([href="/map/"])',
+    selectors: pjaxSelectors,
+    cacheBust: false,
+    analytics: false,
+    scrollRestoration: false
+  })
+
+  const triggerPjaxFn = (val) => {
+    if (!val) return
+    Object.values(val).forEach(fn => fn())
+  }
+
+  document.addEventListener('pjax:send', () => {
+    // removeEventListener
+    btf.removeGlobalFnEvent('pjaxSendOnce')
+    btf.removeGlobalFnEvent('themeChange')
+
+    // reset readmode
+    const $bodyClassList = document.body.classList
+    if ($bodyClassList.contains('read-mode')) $bodyClassList.remove('read-mode')
+
+    triggerPjaxFn(window.globalFn.pjaxSend)
+  })
+
+  document.addEventListener('pjax:complete', () => {
+    btf.removeGlobalFnEvent('pjaxCompleteOnce')
+    document.querySelectorAll('script[data-pjax]').forEach(item => {
+      const newScript = document.createElement('script')
+      const content = item.text || item.textContent || item.innerHTML || ""
+      Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+      newScript.appendChild(document.createTextNode(content))
+      item.parentNode.replaceChild(newScript, item)
+    })
+
+    triggerPjaxFn(window.globalFn.pjaxComplete)
+  })
+
+  document.addEventListener('pjax:error', e => {
+    if (e.request.status === 404) {
+      const usePjax = true
+      false 
+        ? (usePjax ? pjax.loadUrl('/404.html') : window.location.href = '/404.html')
+        : window.location.href = e.request.responseURL
+    }
+  })
+})()</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div><script src="/live2dw/lib/L2Dwidget.min.js?094cbace49a39548bed64abff5988b05"></script><script>L2Dwidget.init({"pluginRootPath":"live2dw/","pluginJsPath":"lib/","pluginModelPath":"assets/","model":{"jsonPath":"/live2dw/assets/z16.model.json"},"display":{"position":"left","width":150,"height":300,"hOffset":0,"vOffset":-20},"mobile":{"show":false,"scale":0.5},"react":{"opacityDefault":0.7,"opacityOnHover":0.9},"log":false,"tagMode":false});</script></body></html>

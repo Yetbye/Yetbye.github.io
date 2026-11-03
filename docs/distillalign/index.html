@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DistillAlign 精读 · 当 mode covering 遇见 mode seeking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  MathJax = {
+    tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$'],['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+<style>
+:root{
+  --lav-50:#faf5ff;--lav-100:#f3e8ff;--lav-200:#e9d5ff;--lav-300:#d8b4fe;--lav-400:#c084fc;
+  --lav-500:#a855f7;--lav-600:#9333ea;--lav-700:#7e22ce;
+  --coral-100:#ffe4e6;--coral-200:#fecdd3;--coral-300:#fda4af;--coral-400:#fb7185;--coral-500:#f43f5e;
+  --mint-100:#d1fae5;--mint-200:#a7f3d0;--mint-300:#6ee7b7;--mint-400:#34d399;--mint-500:#10b981;
+  --warm-100:#fef3c7;--warm-200:#fde68a;--warm-400:#fbbf24;--warm-500:#f59e0b;
+  --ink:#1e1b4b;--ink-soft:#4c4b5e;--ink-muted:#787887;--paper:#ffffff;--paper-warm:#faf8f5;
+  --seek:#a855f7;--cover:#f43f5e;--anchor:#10b981;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Noto Sans SC',sans-serif;color:var(--ink);background:var(--paper-warm);
+  line-height:1.8;font-size:16px;-webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{font-family:'Noto Serif SC',serif;color:var(--ink);line-height:1.3}
+a{color:var(--lav-600);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ===== NAV ===== */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(255,255,255,0.72);backdrop-filter:blur(14px) saturate(1.6);
+  border-bottom:1px solid rgba(192,132,252,0.15);
+}
+.nav-inner{max-width:1100px;margin:0 auto;padding:12px 28px;display:flex;align-items:center;justify-content:space-between}
+.nav-brand{font-family:'Noto Serif SC',serif;font-weight:700;font-size:15px;letter-spacing:-.01em}
+.nav-brand span{background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.nav-links{display:flex;gap:22px;font-size:13px;font-weight:500}
+.nav-links a{color:var(--ink-soft)}
+.nav-links a:hover{color:var(--lav-600);text-decoration:none}
+@media(max-width:720px){.nav-links{display:none}}
+
+/* ===== HERO (template A) ===== */
+.hero{
+  position:relative;min-height:96vh;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;padding:120px 24px 80px;
+  background:linear-gradient(135deg,#faf5ff 0%,#f3e8ff 18%,#fdf4e3 50%,#fffbeb 100%);
+}
+.hero::before{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 520px 320px at 12% 22%,rgba(192,132,252,0.18),transparent 60%),
+    radial-gradient(ellipse 520px 320px at 88% 78%,rgba(251,191,36,0.14),transparent 60%),
+    radial-gradient(ellipse 400px 300px at 70% 18%,rgba(251,113,133,0.10),transparent 60%);
+}
+.hero-wrap{position:relative;z-index:2;width:100%;max-width:820px;text-align:center}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,0.65);backdrop-filter:blur(12px) saturate(1.5);
+  border:1px solid rgba(192,132,252,0.3);color:var(--lav-600);
+  padding:7px 20px;border-radius:100px;
+  font-size:11px;font-weight:600;letter-spacing:3px;margin-bottom:22px;
+  box-shadow:0 4px 20px rgba(192,132,252,0.12);
+}
+.hero h1{
+  font-size:clamp(2.6rem,7vw,4.6rem);font-weight:900;letter-spacing:-.03em;
+  margin:10px 0 14px;
+  background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 38%,var(--coral-500) 68%,var(--warm-500) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero-tagline{font-family:'Noto Serif SC',serif;font-size:clamp(1.05rem,2.4vw,1.35rem);font-weight:600;color:var(--ink-soft);margin-bottom:10px}
+.hero-desc{font-size:15px;color:var(--ink-muted);max-width:620px;margin:0 auto 26px;line-height:1.7}
+.hero-art{margin:10px auto 8px;max-width:780px;width:100%}
+.hero-img{width:100%;height:auto;border-radius:24px;box-shadow:0 24px 70px -24px rgba(30,27,75,0.22);border:1px solid rgba(192,132,252,0.14)}
+.hero-caption{font-size:11px;color:var(--ink-muted);margin-top:10px;font-style:italic}
+.hero-stats{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:26px}
+.hstat{background:rgba(255,255,255,0.7);border:1px solid rgba(192,132,252,0.2);border-radius:14px;padding:12px 20px;min-width:130px}
+.hstat .num{font-family:'Noto Serif SC',serif;font-size:22px;font-weight:900;background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hstat .lbl{font-size:11px;color:var(--ink-muted);margin-top:2px;letter-spacing:.5px}
+.scroll-hint{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:3px;color:var(--ink-muted);display:flex;flex-direction:column;align-items:center;gap:6px;z-index:2}
+.scroll-hint span{animation:bounce 2s infinite}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
+
+/* ===== LAYOUT ===== */
+article{max-width:860px;margin:0 auto;padding:60px 28px 40px}
+section{margin-bottom:72px;scroll-margin-top:80px}
+.sec-label{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:3px;color:var(--lav-600);text-transform:uppercase;margin-bottom:12px}
+.sec-label::before{content:'';width:28px;height:2px;background:linear-gradient(90deg,var(--lav-500),transparent);border-radius:2px}
+h2{font-size:clamp(1.7rem,3.6vw,2.3rem);font-weight:900;letter-spacing:-.02em;margin-bottom:18px;position:relative}
+h3{font-size:1.25rem;font-weight:700;margin:30px 0 12px;color:var(--ink)}
+h4{font-size:1.05rem;font-weight:700;margin:20px 0 8px}
+p{margin-bottom:16px;color:var(--ink-soft)}
+strong{color:var(--ink);font-weight:600}
+em{color:var(--lav-700);font-style:normal;font-weight:600}
+ul,ol{margin:12px 0 18px 22px;color:var(--ink-soft)}
+li{margin-bottom:8px}
+blockquote{border-left:4px solid var(--lav-400);background:var(--lav-50);padding:16px 22px;border-radius:0 12px 12px 0;margin:22px 0;color:var(--ink-soft);font-style:italic}
+
+/* lead paragraph */
+.lead{font-size:1.08rem;color:var(--ink);line-height:1.85}
+.lead::first-letter{font-family:'Noto Serif SC',serif;font-size:3.2rem;font-weight:900;float:left;line-height:.9;margin:6px 10px 0 0;background:linear-gradient(135deg,var(--lav-600),var(--coral-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+
+/* ===== FIGURES ===== */
+.fig{margin:30px 0;text-align:center}
+.fig img{max-width:100%;border-radius:14px;box-shadow:0 12px 40px -16px rgba(30,27,75,0.25);border:1px solid rgba(192,132,252,0.1)}
+.fig svg{max-width:100%;height:auto}
+.fig-caption{font-size:12.5px;color:var(--ink-muted);margin-top:10px;line-height:1.6;padding:0 8px}
+.fig-caption b{color:var(--lav-700)}
+
+/* ===== TABLES ===== */
+.table-wrap{overflow-x:auto;margin:26px 0;border-radius:14px;box-shadow:0 8px 30px -16px rgba(30,27,75,0.2)}
+table{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff}
+th{background:linear-gradient(135deg,var(--lav-600),var(--lav-500));color:#fff;padding:11px 12px;text-align:center;font-weight:600;font-size:12.5px;letter-spacing:.3px}
+td{padding:9px 12px;text-align:center;border-bottom:1px solid #f0edf7;color:var(--ink-soft)}
+tr:nth-child(even) td{background:#fcfbff}
+tr:hover td{background:var(--lav-50)}
+td.hi{font-weight:700;color:var(--lav-700)}
+td.win{background:linear-gradient(135deg,rgba(16,185,129,0.10),rgba(16,185,129,0.04));font-weight:700;color:#047857}
+td.bad{color:var(--coral-500);font-weight:600}
+.tnote{font-size:11.5px;color:var(--ink-muted);margin-top:6px;text-align:left;padding:0 4px}
+
+/* ===== INSIGHT BOX ===== */
+.insight-box{
+  background:linear-gradient(135deg,#d1fae5,#a7f3d0);
+  border-radius:16px;padding:24px 26px;margin:28px 0;
+  border-left:5px solid var(--mint-500);
+  box-shadow:0 8px 28px -18px rgba(16,185,129,0.5);
+}
+.insight-box .tag{background:var(--mint-500);color:#fff;padding:3px 14px;border-radius:12px;font-size:11px;font-weight:700;letter-spacing:1px}
+.insight-box h4{margin-top:12px;color:#065f46;font-size:1.08rem}
+.insight-box p{color:#064e3b;margin-bottom:0}
+.insight-box p+p{margin-top:10px}
+
+/* warn box */
+.warn-box{
+  background:linear-gradient(135deg,#ffe4e6,#fecdd3);
+  border-radius:16px;padding:24px 26px;margin:28px 0;
+  border-left:5px solid var(--coral-500);
+}
+.warn-box .tag{background:var(--coral-500);color:#fff;padding:3px 14px;border-radius:12px;font-size:11px;font-weight:700;letter-spacing:1px}
+.warn-box h4{margin-top:12px;color:#9f1239}
+.warn-box p{color:#881337;margin-bottom:0}
+
+/* math card */
+.math-card{background:#fff;border:1px solid rgba(192,132,252,0.2);border-radius:16px;padding:22px 26px;margin:24px 0;box-shadow:0 6px 24px -18px rgba(30,27,75,0.2)}
+.math-card .mc-label{font-size:11px;font-weight:700;letter-spacing:2px;color:var(--lav-600);margin-bottom:8px}
+.math-card p{font-size:14px;margin-bottom:8px}
+.math-card p:last-child{margin-bottom:0}
+
+/* dual personality cards */
+.dual{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:26px 0}
+.dual-card{border-radius:16px;padding:22px;position:relative;overflow:hidden}
+.dual-card.cover{background:linear-gradient(150deg,#fff1f2,#ffe4e6);border:1px solid rgba(244,63,94,0.25)}
+.dual-card.seek{background:linear-gradient(150deg,#faf5ff,#f3e8ff);border:1px solid rgba(168,85,247,0.25)}
+.dual-card h4{margin-top:0;display:flex;align-items:center;gap:8px}
+.dual-card.cover h4{color:#be123c}
+.dual-card.seek h4{color:#7e22ce}
+.dual-card .dl{font-size:11px;font-weight:700;letter-spacing:2px;opacity:.7;margin-bottom:6px}
+.dual-card ul{margin-left:18px;font-size:13.5px}
+.dual-card li{margin-bottom:5px}
+@media(max-width:680px){.dual{grid-template-columns:1fr}}
+
+/* research question */
+.rq{background:#fff;border:1px solid rgba(251,191,36,0.35);border-radius:16px;padding:24px 26px;margin:22px 0;box-shadow:0 8px 28px -20px rgba(245,158,11,0.4)}
+.rq .rq-tag{display:inline-block;background:linear-gradient(135deg,var(--warm-400),var(--warm-500));color:#fff;padding:3px 14px;border-radius:12px;font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:10px}
+.rq h4{color:#92400e;margin-top:4px}
+.rq p{font-size:14px;color:var(--ink-soft)}
+.rq .rq-meta{font-size:12px;color:var(--warm-500);font-weight:600;margin-top:10px;padding-top:10px;border-top:1px dashed rgba(245,158,11,0.3)}
+
+/* code */
+.code-card{background:#fff;border:1px solid rgba(192,132,252,0.2);border-radius:16px;margin:26px 0;overflow:hidden;box-shadow:0 8px 30px -20px rgba(30,27,75,0.25)}
+.code-head{background:linear-gradient(135deg,#1e1b4b,#312e81);color:#e9d5ff;padding:12px 20px;font-size:12px;display:flex;justify-content:space-between;align-items:center}
+.code-head .cred{background:rgba(16,185,129,0.25);color:#a7f3d0;padding:2px 10px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.5px}
+.code-head .cred.sketch{background:rgba(251,191,36,0.25);color:#fde68a}
+pre{margin:0;padding:20px 22px;overflow-x:auto;background:#faf8ff;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word;color:#2e2a5e}
+.code-note{padding:12px 20px;background:var(--lav-50);font-size:12px;color:var(--ink-soft);border-top:1px solid rgba(192,132,252,0.12)}
+
+.kw{color:var(--lav-700);font-weight:600}
+.str{color:#be123c}
+.num{color:#047857}
+.com{color:var(--ink-muted);font-style:italic}
+.fn{color:#b45309}
+
+/* timeline / pipeline chips */
+.chip-row{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+.chip{padding:5px 14px;border-radius:100px;font-size:12px;font-weight:600;border:1px solid}
+.chip.lav{background:var(--lav-50);color:var(--lav-700);border-color:rgba(168,85,247,0.3)}
+.chip.coral{background:var(--coral-100);color:#be123c;border-color:rgba(244,63,94,0.3)}
+.chip.mint{background:var(--mint-100);color:#047857;border-color:rgba(16,185,129,0.3)}
+.chip.warm{background:var(--warm-100);color:#92400e;border-color:rgba(245,158,11,0.3)}
+
+/* footer */
+footer{border-top:1px solid rgba(192,132,252,0.15);padding:40px 28px;text-align:center;color:var(--ink-muted);font-size:13px;background:#fff}
+footer .flinks{margin-top:10px;display:flex;gap:18px;justify-content:center;flex-wrap:wrap}
+footer a{color:var(--lav-600)}
+
+/* divider */
+.divider{height:1px;background:linear-gradient(90deg,transparent,rgba(192,132,252,0.3),transparent);margin:40px 0;border:0}
+
+@media(max-width:680px){
+  article{padding:40px 18px}
+  .hero-stats{gap:10px}
+  .hstat{min-width:100px;padding:10px 14px}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <div class="nav-brand"><span>DistillAlign</span> · 深度精读</div>
+    <div class="nav-links"><a href="../index.html">« 合辑</a>
+      <a href="#problem">问题</a>
+      <a href="#background">背景</a>
+      <a href="#hypo1">假设一</a>
+      <a href="#metric">度量</a>
+      <a href="#hypo2">假设二</a>
+      <a href="#joint">联合蒸馏</a>
+      <a href="#experiments">实验</a>
+      <a href="#research">科研问题</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <div class="hero-wrap">
+    <div class="hero-badge">arXiv 2026 · PREPRINT</div>
+    <h1>DistillAlign</h1>
+    <p class="hero-tagline">协调自回归视频蒸馏中的 mode covering 与 mode seeking</p>
+    <p class="hero-desc">当所有人都在用 VBench 挑选初始化时，这篇论文指出：<b>视觉质量是个坏 proxy</b>。DMD 只能锐化已覆盖的 mode，无法找回丢失的 mode——于是"对齐"比"教师规模"更重要。</p>
+    <div class="hero-art">
+      <img src="assets/hero_watercolor.webp" alt="DistillAlign 封面：mode covering 与 mode seeking 的对偶对齐" class="hero-img">
+      <p class="hero-caption">铺开与收拢：CD 的 mode-covering（金色流散）与 DMD 的 mode-seeking（紫色聚拢）在同一目标分布上对齐</p>
+    </div>
+    <div class="hero-stats">
+      <div class="hstat"><div class="num">84.54</div><div class="lbl">1.3B 教师 VBench ↑</div></div>
+      <div class="hstat"><div class="num">0.69</div><div class="lbl">Coverage（14B）</div></div>
+      <div class="hstat"><div class="num">λ=0.01</div><div class="lbl">联合损失权重</div></div>
+      <div class="hstat"><div class="num">3 阶段</div><div class="lbl">AR→CD→Joint</div></div>
+    </div>
+  </div>
+  <div class="scroll-hint"><span>↓</span> SCROLL TO READ</div>
+</header>
+
+<article>
+
+<!-- ============ CH 1 ============ -->
+<section id="problem">
+  <div class="sec-label">Chapter 01 · 问题</div>
+  <h2>被 VBench 掩盖的崩塌</h2>
+
+  <p class="lead">实时交互视频生成（世界模型、互动内容）正在把视频扩散模型逼到"少步、因果、流式"的墙角。主流做法是把一个多步的双向视频扩散教师，蒸馏成一个少步的自回归（AR）生成器。Self Forcing、Causal Forcing、CausVid 都遵循同一套多阶段流水线：<b>先做一个初始化，再用 DMD（Distribution Matching Distillation）精修</b>。</p>
+
+  <p>DistillAlign 审视了这套流水线里两个被默认接受、却从未被严格检验的假设：</p>
+
+  <div class="dual">
+    <div class="dual-card seek">
+      <div class="dl">HYPOTHESIS I</div>
+      <h4>跨阶段目标分布错位</h4>
+      <p style="font-size:13.5px;color:#6b21a8;margin-bottom:8px">初始化阶段的目标数据分布，与 DMD 阶段的教师分布，常常<b>不是同一个分布</b>。</p>
+      <ul>
+        <li>初始化可能在 base 模型样本/轨迹、或外部视频数据上训练</li>
+        <li>DMD 却换了一个更强的扩散教师</li>
+        <li>中间产物只看 VBench 视觉分，默认"初始化越好，最终越好"</li>
+      </ul>
+    </div>
+    <div class="dual-card cover">
+      <div class="dl">HYPOTHESIS II</div>
+      <h4>纯 DMD 的晚期漂移</h4>
+      <p style="font-size:13.5px;color:#9f1239;margin-bottom:8px">即便初始化与 DMD 目标已经对齐，长期训练下反向 KL 仍会把学生推向教师的<b>高概率区域</b>。</p>
+      <ul>
+        <li>VBench 先升后降</li>
+        <li>多样性（Vendi score）单调下跌</li>
+        <li>大运动、稀有动态等低密度 mode 被牺牲</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="fig">
+    <img src="assets/fig1_hypo1.webp" alt="假设一示意：目标分布错位导致次优精修">
+    <div class="fig-caption"><b>Figure 1.</b> 假设一：初始化与 DMD 目标分布错位时，DMD 给出"无支撑的梯度"，导致 coverage 崩塌与次优精修。</div>
+  </div>
+
+  <p>论文用一个极其干净的受控实验验证假设一：在 Causal Forcing 流水线上，<b>交换</b>初始化数据源与 DMD 教师，观察最终 VBench。</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Init 数据源</th><th>DMD 教师</th><th>对齐？</th><th>VBench ↑</th></tr></thead>
+      <tbody>
+        <tr><td>Wan-14B</td><td>Wan-14B</td><td class="win">✓</td><td class="win">84.74</td></tr>
+        <tr><td>Wan-1.3B</td><td>Wan-1.3B</td><td class="win">✓</td><td class="hi">84.50</td></tr>
+        <tr><td>Wan-14B</td><td>Wan-1.3B</td><td class="bad">✗</td><td>84.16</td></tr>
+        <tr><td>Wan-1.3B</td><td>Wan-14B</td><td class="bad">✗</td><td class="bad">83.89</td></tr>
+      </tbody>
+    </table>
+    <div class="tnote">Table 1 · 受控的目标分布交换。最后一行是原始 Causal Forcing 设置。</div>
+  </div>
+
+  <div class="insight-box">
+    <span class="tag">深度洞察</span>
+    <h4>对齐可以补偿规模——这是反 scaling law 的信号</h4>
+    <p>注意第二行：用 <b>1.3B</b> 数据初始化、再用 <b>1.3B</b> 教师做 DMD（对齐），拿到 84.50；而用 14B 数据初始化却配 1.3B 教师（错位）只有 84.16。最终表现<b>不只由教师容量或数据质量决定</b>，更由两阶段目标分布是否对齐决定。这是整篇论文最反直觉、也最有实践价值的结论：在蒸馏流水线里，"对齐"有时比"换更大的教师"更划算。</p>
+  </div>
+
+  <p>假设二的证据同样直接：在对齐设置下追踪纯 DMD 训练，VBench 在 1000 步见顶（84.74）后回落，而多样性从第一步起就<b>单调下跌</b>，从未回头。</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Step</th><th>0</th><th>500</th><th>1000</th><th>1500</th><th>2500</th></tr></thead>
+      <tbody>
+        <tr><td>VBench ↑</td><td>82.60</td><td>84.44</td><td class="win">84.74</td><td>84.21</td><td class="bad">83.90</td></tr>
+        <tr><td>Diversity ↑</td><td class="win">1.319</td><td>1.297</td><td>1.292</td><td>1.285</td><td class="bad">1.272</td></tr>
+      </tbody>
+    </table>
+    <div class="tnote">Table 2 · 纯 DMD 的晚期漂移：视觉分先升后降，多样性持续流失。</div>
+  </div>
+
+  <p>这两个观察指向同一个根源：<b>DMD 的反向 KL 是 mode-seeking 的</b>——它只会在学生已经有概率密度的地方"锐化"，却无法发现学生从未覆盖的 mode。要理解为什么，我们需要先回到三种蒸馏损失的"性格"。</p>
+</section>
+
+<hr class="divider">
+
+<!-- ============ CH 2 ============ -->
+<section id="background">
+  <div class="sec-label">Chapter 02 · 背景</div>
+  <h2>三种蒸馏损失的"性格"</h2>
+
+  <p>DistillAlign 的全部论证建立在一个分类学上：<b>不同的蒸馏目标隐含不同的散度方向，因而有截然不同的 mode 行为</b>。论文在 §2 把它们分成三类。</p>
+
+  <h3>2.1 Flow Matching：地基</h3>
+  <p>Flow matching 把生成建模为噪声 $x_1$ 与数据 $x_0$ 之间的线性插值速度场：</p>
+  <div class="math-card">
+    <div class="mc-label">EQUATION 1–2 · FLOW MATCHING</div>
+    <p>$$x_t=(1-t)x_0+t\,x_1,\qquad t\in[0,1]$$</p>
+    <p>$$\mathcal{L}_{\mathrm{FM}}(\theta)=\mathbb{E}_{t,x_0,x_1}\left[\|v_\theta(x_t,t,c)-(x_1-x_0)\|_2^2\right]$$</p>
+    <p style="font-size:13px;color:var(--ink-muted)">推理时从 $t=1$ 的噪声积分到 $t=0$ 的数据。这是教师模型本身的训练方式，也是后续所有蒸馏的起点。</p>
+  </div>
+
+  <h3>2.2 ODE 蒸馏与一致性蒸馏：mode-covering 的"铺开派"</h3>
+  <p><b>ODE 蒸馏</b>让学生直接预测教师 PF-ODE 的端点 $\Psi_{1\to0}(x_1)$：</p>
+  <div class="math-card">
+    <div class="mc-label">EQUATION 3 · ODE DISTILLATION</div>
+    <p>$$\mathcal{L}_{\mathrm{ODE}}(\theta)=\mathbb{E}_{t,x_1}\left[\|f_\theta(x_t,t)-\Psi_{1\to0}(x_1)\|_2^2\right]$$</p>
+  </div>
+  <p><b>一致性蒸馏（CD）</b>不直接回归端点，而是强制相邻时间步的学生输出一致：</p>
+  <div class="math-card">
+    <div class="mc-label">EQUATION 4–5 · CONSISTENCY DISTILLATION</div>
+    <p>$$\hat{x}_{t_n}=x_{t_{n+1}}+(t_n-t_{n+1})\,v_\varphi(x_{t_{n+1}},t_{n+1})$$</p>
+    <p>$$\mathcal{L}_{\mathrm{CD}}(\theta)=\mathbb{E}_{n,x_0,x_1}\left[\|f_\theta(x_{t_{n+1}},t_{n+1})-f_{\theta^-}(\hat{x}_{t_n},t_n)\|_2^2\right]$$</p>
+    <p style="font-size:13px;color:var(--ink-muted)">$\theta^-$ 是 $\theta$ 的 EMA/stop-gradient 副本。收敛时 $f_\theta(x_t,t)=\Psi_{t\to0}(x_t)$。</p>
+  </div>
+
+  <div class="insight-box">
+    <span class="tag">深度洞察</span>
+    <h4>为什么"回归教师端点"必然 mode-covering？</h4>
+    <p>ODE 蒸馏和 CD 本质上都是<b>对教师轨迹的回归</b>（regression onto teacher endpoints）。回归损失在多模分布下的最优解是条件均值——当一个输入对应教师的多个可能输出时，模型学到的是它们的<b>平均</b>。平均保住了支撑集（coverage），代价是模糊和锐度损失。这正是论文反复观察到的"Causal CD 初始化更糊但覆盖更广"的数学根源。这类目标对应<b>前向散度（forward divergence）/ mean-seeking</b> 行为。</p>
+  </div>
+
+  <h3>2.3 DMD：mode-seeking 的"收拢派"</h3>
+  <p>DMD 最小化的是学生与教师在各噪声层级上的<b>反向 KL</b>：</p>
+  <div class="math-card">
+    <div class="mc-label">EQUATION 6–7 · DISTRIBUTION MATCHING DISTILLATION</div>
+    <p>$$\mathcal{L}_{\mathrm{DMD}}(\theta)=\mathbb{E}_t\left[w(t)\,\mathrm{KL}(p_{\theta,t}\,\|\,p_{\mathrm{teacher},t})\right]$$</p>
+    <p>$$\nabla_\theta\mathcal{L}_{\mathrm{DMD}}=\mathbb{E}_{t,x_1,\epsilon}\left[w(t)\big(s_{\mathrm{fake}}(x_t,t)-s_{\mathrm{teacher}}(x_t,t)\big)\frac{\partial x_t}{\partial\theta}\right],\quad x_t=(1-t)G_\theta(x_1)+t\epsilon$$</p>
+    <p style="font-size:13px;color:var(--ink-muted)">$s_{\mathrm{teacher}}$ 由冻结教师提供，$s_{\mathrm{fake}}$ 由一个在生成样本上在线训练的 critic 估计。梯度是两个分数函数之差。</p>
+  </div>
+
+  <div class="insight-box">
+    <span class="tag">深度洞察</span>
+    <h4>反向 KL 的"零回避"如何导致 mode collapse</h4>
+    <p>这是理解整篇论文的钥匙。对 $\mathrm{KL}(p_{\mathrm{student}}\|p_{\mathrm{teacher}})$：若 $p_{\mathrm{teacher}}\approx0$ 而 $p_{\mathrm{student}}>0$，KL 趋于无穷——学生被<b>禁止</b>在教师没有质量的地方放质量；但反过来，若 $p_{\mathrm{teacher}}>0$ 而 $p_{\mathrm{student}}=0$，该区域对 KL 的贡献是 $0$（因为期望是对 $p_{\mathrm{student}}$ 取的）——学生<b>没有义务</b>覆盖教师的低密度 mode。于是学生质量会集中到教师的高概率峰上，获得锐度，但牺牲 coverage 和多样性。这就是"mode-seeking"。</p>
+  </div>
+
+  <div class="fig">
+    <svg viewBox="0 0 860 340" xmlns="http://www.w3.org/2000/svg" font-family="'Noto Sans SC',sans-serif">
+      <defs>
+        <linearGradient id="gSeek" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a855f7" stop-opacity="0.55"/><stop offset="1" stop-color="#a855f7" stop-opacity="0.05"/></linearGradient>
+        <linearGradient id="gCover" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fb7185" stop-opacity="0.45"/><stop offset="1" stop-color="#fb7185" stop-opacity="0.05"/></linearGradient>
+      </defs>
+      <!-- left: mode covering -->
+      <text x="215" y="28" text-anchor="middle" font-size="15" font-weight="700" fill="#be123c">mode-covering（前向散度 / CD·ODE）</text>
+      <line x1="50" y1="290" x2="380" y2="290" stroke="#787887" stroke-width="1.5"/>
+      <!-- teacher dashed 3 modes -->
+      <path d="M70,290 Q90,290 100,260 Q110,220 120,180 Q130,220 140,260 Q150,290 170,290" fill="none" stroke="#be123c" stroke-width="2" stroke-dasharray="5,4"/>
+      <path d="M170,290 Q190,290 200,250 Q215,180 225,140 Q235,180 250,250 Q260,290 280,290" fill="none" stroke="#be123c" stroke-width="2" stroke-dasharray="5,4"/>
+      <path d="M280,290 Q300,290 310,260 Q320,225 330,200 Q340,225 350,260 Q360,290 375,290" fill="none" stroke="#be123c" stroke-width="2" stroke-dasharray="5,4"/>
+      <!-- student broad cover -->
+      <path d="M60,290 Q100,285 130,265 Q170,235 225,225 Q280,235 320,265 Q350,285 380,290 Z" fill="url(#gCover)" stroke="#f43f5e" stroke-width="2.5"/>
+      <text x="215" y="320" text-anchor="middle" font-size="12" fill="#9f1239">保住所有 mode，但峰被平均 → 模糊、覆盖广</text>
+
+      <!-- right: mode seeking -->
+      <text x="645" y="28" text-anchor="middle" font-size="15" font-weight="700" fill="#7e22ce">mode-seeking（反向 KL / DMD）</text>
+      <line x1="480" y1="290" x2="810" y2="290" stroke="#787887" stroke-width="1.5"/>
+      <path d="M500,290 Q520,290 530,260 Q540,220 550,180 Q560,220 570,260 Q580,290 600,290" fill="none" stroke="#7e22ce" stroke-width="2" stroke-dasharray="5,4"/>
+      <path d="M600,290 Q620,290 630,250 Q645,180 655,140 Q665,180 680,250 Q690,290 710,290" fill="none" stroke="#7e22ce" stroke-width="2" stroke-dasharray="5,4"/>
+      <path d="M710,290 Q730,290 740,260 Q750,225 760,200 Q770,225 780,260 Q790,290 805,290" fill="none" stroke="#7e22ce" stroke-width="2" stroke-dasharray="5,4"/>
+      <!-- student sharp on main mode -->
+      <path d="M610,290 Q625,290 635,230 Q645,130 655,80 Q665,130 675,230 Q685,290 700,290 Z" fill="url(#gSeek)" stroke="#9333ea" stroke-width="2.5"/>
+      <text x="645" y="320" text-anchor="middle" font-size="12" fill="#6b21a8">锐化主峰，丢弃两侧 mode → 清晰、多样性差</text>
+      <!-- legend -->
+      <line x1="340" y1="338" x2="360" y2="338" stroke="#be123c" stroke-width="2" stroke-dasharray="5,4"/><text x="366" y="342" font-size="11" fill="#787887">教师分布</text>
+      <line x1="440" y1="338" x2="460" y2="338" stroke="#9333ea" stroke-width="2.5"/><text x="466" y="342" font-size="11" fill="#787887">学生分布</text>
+    </svg>
+    <div class="fig-caption"><b>图 2-1.</b> 两类蒸馏目标的 mode 行为对比：CD/ODE 是前向散度、铺开覆盖；DMD 是反向 KL、收拢锐化。DistillAlign 的核心主张是<b>两者必须协调</b>。</div>
+  </div>
+
+  <div class="warn-box">
+    <span class="tag">关键推论</span>
+    <h4>DMD 是"锐化器"，不是"发现器"</h4>
+    <p>从 Eq.7 的梯度形式看，分数差 $(s_{\mathrm{fake}}-s_{\mathrm{teacher}})$ 只在学生采样到的 $x_t$ 上计算。如果某个教师 mode 初始化时根本没被覆盖，学生永远不会在那里采样，该 mode 收到的梯度永远是零——<b>DMD 无法找回丢失的 mode</b>。这直接导出假设一：初始化必须先覆盖 DMD 教师的 mode。</p>
+  </div>
+
+  <p>这一"前向铺开 vs 反向收拢"的互补性并非 DistillAlign 首次发现。Zheng et al. 2026 的 <b>rCM</b> 在图像蒸馏里用 score 正则化的连续时间一致性模型，明确提出 CM 是前向散度、DMD 是反向散度，二者互补；Cai et al. 2026 的 "Mode Seeking meets Mean Seeking" 也在长视频生成里解耦了两个头。DistillAlign 的独特贡献在于：<b>把这对矛盾从"损失函数内部"提升到"多阶段流水线之间"，并增加了跨阶段目标分布对齐这一新维度</b>。</p>
+</section>
+
+<hr class="divider">
+
+<!-- ============ CH 3 ============ -->
+<section id="hypo1">
+  <div class="sec-label">Chapter 03 · 假设一</div>
+  <h2>对齐比规模更重要</h2>
+
+  <p>Table 1 已经给出信号，但 VBench 只是间接证据。要证明"对齐的作用机制是 coverage"，需要一个能<b>直接测量分布覆盖</b>的工具。论文先用一个初步指标验证：在 Table 1 的四种设置下，分别计算初始化后和 DMD 后、相对于对应 DMD 教师的 coverage。</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Init 数据源</th><th>DMD 教师</th><th>对齐</th><th>VBench ↑</th><th>Coverage (Init) ↑</th><th>Coverage (After DMD) ↑</th></tr></thead>
+      <tbody>
+        <tr><td>Wan-14B</td><td>Wan-14B</td><td class="win">✓</td><td class="win">84.74</td><td class="win">0.648</td><td class="win">0.527</td></tr>
+        <tr><td>Wan-1.3B</td><td>Wan-1.3B</td><td class="win">✓</td><td class="hi">84.50</td><td>0.516</td><td>0.461</td></tr>
+        <tr><td>Wan-14B</td><td>Wan-1.3B</td><td class="bad">✗</td><td>84.16</td><td>0.503</td><td>0.430</td></tr>
+        <tr><td>Wan-1.3B</td><td>Wan-14B</td><td class="bad">✗</td><td class="bad">83.89</td><td class="bad">0.453</td><td class="bad">0.435</td></tr>
+      </tbody>
+    </table>
+    <div class="tnote">Table 3 · 对齐设置在 DMD 前后都有更高 coverage；且 DMD 普遍降低 coverage（与 mode-seeking 一致）。</div>
+  </div>
+
+  <p>因果链清晰了：</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 860 200" xmlns="http://www.w3.org/2000/svg" font-family="'Noto Sans SC',sans-serif">
+      <defs>
+        <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#9333ea"/></marker>
+      </defs>
+      <g font-size="13" font-weight="600" text-anchor="middle">
+        <rect x="20" y="70" width="170" height="64" rx="12" fill="#faf5ff" stroke="#a855f7" stroke-width="2"/>
+        <text x="105" y="98" fill="#7e22ce">初始化目标分布</text><text x="105" y="118" font-size="11" fill="#787887" font-weight="400">≠ DMD 教师分布</text>
+        <line x1="195" y1="102" x2="250" y2="102" stroke="#9333ea" stroke-width="2" marker-end="url(#arr)"/>
+        <rect x="255" y="70" width="170" height="64" rx="12" fill="#faf5ff" stroke="#a855f7" stroke-width="2"/>
+        <text x="340" y="98" fill="#7e22ce">未覆盖的教师 mode</text><text x="340" y="118" font-size="11" fill="#787887" font-weight="400">学生在该处密度≈0</text>
+        <line x1="430" y1="102" x2="485" y2="102" stroke="#9333ea" stroke-width="2" marker-end="url(#arr)"/>
+        <rect x="490" y="70" width="170" height="64" rx="12" fill="#fff1f2" stroke="#f43f5e" stroke-width="2"/>
+        <text x="575" y="98" fill="#be123c">DMD 梯度无支撑</text><text x="575" y="118" font-size="11" fill="#787887" font-weight="400">分数差信号为零</text>
+        <line x1="665" y1="102" x2="720" y2="102" stroke="#f43f5e" stroke-width="2" marker-end="url(#arr)"/>
+        <rect x="725" y="70" width="120" height="64" rx="12" fill="#ffe4e6" stroke="#f43f5e" stroke-width="2"/>
+        <text x="785" y="98" fill="#9f1239">Coverage</text><text x="785" y="118" fill="#9f1239">崩塌</text>
+      </g>
+      <text x="430" y="170" text-anchor="middle" font-size="12" fill="#787887">对齐时（绿色路径）：初始化已覆盖目标 mode → DMD 梯度有支撑 → 锐化有效</text>
+      <rect x="20" y="150" width="825" height="34" rx="10" fill="#d1fae5" opacity="0"/>
+    </svg>
+    <div class="fig-caption"><b>图 3-1.</b> 假设一的因果机制：DMD 的分数差梯度只在学生已有密度处非零，错位意味着关键 mode 上"没有梯度信号"。</div>
+  </div>
+
+  <h3>3.1 五种初始化流水线的横评</h3>
+  <p>论文进一步构造了五条流水线（都用 Wan-14B 作 DMD 教师、用其采样数据作初始化目标），其中 (D) ODE Init+DMD 和 (E) Causal CD Init+DMD 分别对应 Self Forcing 和 Causal Forcing。</p>
+
+  <div class="fig">
+    <img src="assets/fig3_pipelines.webp" alt="五种蒸馏流水线对比">
+    <div class="fig-caption"><b>Figure 3.</b> 五条流水线的架构与 VBench/Coverage 对比。注意 (C) Causal DMD Init 初始化 VBench 最高（82.41），但最终 coverage 最低之一；(E) Causal CD Init 初始化更糊（81.85），最终 coverage 最高。</div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>流水线</th><th>Init VBench ↑</th><th>Init Precision ↑</th><th>Re-noised Coverage ↑</th><th>Final VBench ↑</th><th>Final Coverage ↑</th><th>Diversity ↑</th></tr></thead>
+      <tbody>
+        <tr><td>(A) Bidirectional</td><td class="bad">59.09</td><td>0.000</td><td>0.000</td><td class="bad">80.86</td><td class="bad">0.055</td><td class="bad">1.197</td></tr>
+        <tr><td>(B) AR Init</td><td>67.41</td><td>0.238</td><td>0.164</td><td>84.48</td><td>0.348</td><td>1.247</td></tr>
+        <tr><td>(C) Causal DMD Init</td><td class="win">82.41</td><td>0.645</td><td>0.324</td><td>84.51</td><td>0.422</td><td>1.253</td></tr>
+        <tr><td>(D) ODE Init</td><td>71.24</td><td>0.488</td><td>0.326</td><td>84.62</td><td>0.484</td><td>1.265</td></tr>
+        <tr><td>(E) Causal CD Init</td><td>81.85</td><td class="win">0.770</td><td class="win">0.648</td><td class="win">84.74</td><td class="win">0.527</td><td class="win">1.272</td></tr>
+      </tbody>
+    </table>
+    <div class="tnote">Table 7 · 完整流水线指标。Causal DMD Init 是"VBench 悖论"的典型：初始化分最高，但 coverage 低，最终不是最好。</div>
+  </div>
+
+  <div class="insight-box">
+    <span class="tag">深度洞察</span>
+    <h4>"VBench 悖论"与 Goodhart 法则</h4>
+    <p>(C) Causal DMD Init 拿到最高的初始化 VBench（82.41），却没有产出最好的最终模型。原因在于：DMD 初始化本身就是 mode-seeking 的，它拿到高分是因为<b>坍缩到了一小撮高质量 mode</b>（precision 0.645 但 coverage 仅 0.324）。当后续 DMD 试图精修时，已经没有别的 mode 可锐化了。这是典型的 <b>Goodhart 法则</b>：当 VBench 成为目标，它就不再是好的度量——因为你可以靠牺牲 coverage 来刷高它。论文的 distributional 协议正是为了识破这种"高分假象"。</p>
+  </div>
+
+  <p>Coverage 差异也直接体现在样本多样性上：</p>
+  <div class="fig">
+    <img src="assets/fig4_diversity.webp" alt="不同流水线的视觉多样性对比">
+    <div class="fig-caption"><b>Figure 4.</b> 固定 16 个 seed 生成 81 帧视频、取中间帧拼成网格。(D) ODE Init 和 (E) Causal CD Init 的多样性（1.265 / 1.272）明显高于 (A) Bidirectional（1.197）。</div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ============ CH 4 ============ -->
+<section id="metric">
+  <div class="sec-label">Chapter 04 · 度量</div>
+  <h2>教师归一化的分布评估协议</h2>
+
+  <p>这是论文的方法论贡献，也是整个论证的"测量仪器"。要测初始化的 coverage，有三个难点：</p>
+  <ol>
+    <li><b>跑完整 DMD 太贵</b>，不能为每个初始化器都跑一遍；</li>
+    <li><b>最终视频质量指标不直接测 coverage</b>；</li>
+    <li><b>直接比较原始输出不可靠</b>：不同初始化器可能保留了相似的高层语义，但锐度和残留去噪伪影差异巨大——这些低层差异会主导传统视频指标，<b>掩盖</b>分布层面的好坏。</li>
+  </ol>
+
+  <h3>4.1 核心技巧：re-noise 再去噪，归一化掉低层差异</h3>
+  <p>论文的做法很巧妙：让初始化器先产出样本 $x_\theta=G_\theta(c,z)$，然后在潜空间把它<b>重新加噪到 $\rho=0.9$</b>，再用一个<b>固定的归一化教师</b> $T_{\mathrm{norm}}$ 去噪回干净视频：</p>
+
+  <div class="math-card">
+    <div class="mc-label">EQUATION 8 &amp; 12 · 教师归一化细化</div>
+    <p>$$z_{\theta,\rho}=(1-\rho)\,z_{\theta,0}+\rho\,\epsilon,\qquad \tilde{x}^{(\rho)}_\theta=R_{T_{\mathrm{norm}},\rho}(x_{\theta,\rho};c)$$</p>
+    <p style="font-size:13px;color:var(--ink-muted)">所有初始化器用相同的 $\rho=0.9$、相同的归一化教师（Wan2.1-14B，CFG=5.0）、相同的 Flow-UniPC 调度（22 次函数评估）。噪声 seed 跨初始化器共享，不引入方法相关随机性。</p>
+  </div>
+
+  <div class="fig">
+    <svg viewBox="0 0 860 260" xmlns="http://www.w3.org/2000/svg" font-family="'Noto Sans SC',sans-serif">
+      <defs><marker id="arr2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#7e22ce"/></marker></defs>
+      <g font-size="12.5" text-anchor="middle" font-weight="600">
+        <rect x="15" y="95" width="130" height="70" rx="12" fill="#f3e8ff" stroke="#a855f7" stroke-width="2"/>
+        <text x="80" y="125" fill="#7e22ce">初始化器输出</text><text x="80" y="145" font-size="10.5" fill="#787887" font-weight="400">$z_{\theta,0}$（可能模糊）</text>
+        <line x1="150" y1="130" x2="195" y2="130" stroke="#7e22ce" stroke-width="2" marker-end="url(#arr2)"/>
+        <rect x="200" y="95" width="130" height="70" rx="12" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+        <text x="265" y="120" fill="#92400e">重新加噪</text><text x="265" y="140" fill="#92400e">ρ = 0.9</text><text x="265" y="156" font-size="10" fill="#787887" font-weight="400">共享噪声 seed</text>
+        <line x1="335" y1="130" x2="380" y2="130" stroke="#7e22ce" stroke-width="2" marker-end="url(#arr2)"/>
+        <rect x="385" y="95" width="140" height="70" rx="12" fill="#d1fae5" stroke="#10b981" stroke-width="2"/>
+        <text x="455" y="120" fill="#065f46">固定归一化教师</text><text x="455" y="138" fill="#065f46">$T_{\mathrm{norm}}$ = Wan-14B</text><text x="455" y="155" font-size="10" fill="#787887" font-weight="400">Flow-UniPC 22 NFE</text>
+        <line x1="530" y1="130" x2="575" y2="130" stroke="#7e22ce" stroke-width="2" marker-end="url(#arr2)"/>
+        <rect x="580" y="95" width="130" height="70" rx="12" fill="#f3e8ff" stroke="#a855f7" stroke-width="2"/>
+        <text x="645" y="125" fill="#7e22ce">归一化样本</text><text x="645" y="145" font-size="10.5" fill="#787887" font-weight="400">$\tilde{x}^{(0.9)}_\theta$</text>
+        <line x1="715" y1="130" x2="760" y2="130" stroke="#7e22ce" stroke-width="2" marker-end="url(#arr2)"/>
+        <rect x="765" y="95" width="80" height="70" rx="12" fill="#fff" stroke="#787887" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <text x="805" y="125" fill="#4c4b5e">V-JEPA2</text><text x="805" y="143" font-size="10" fill="#787887" font-weight="400">特征 $\phi(\cdot)$</text>
+      </g>
+      <text x="430" y="210" text-anchor="middle" font-size="12.5" fill="#065f46" font-weight="600">低层保真差异被归一化掉，语义盆地被保留</text>
+      <text x="430" y="232" text-anchor="middle" font-size="11.5" fill="#787887">归一化教师 $T_{\mathrm{norm}}$ 与定义目标支撑的参考教师 $T_{\mathrm{ref}}$ 可以不同——前者是"尺子"，后者是"标准答案"</text>
+    </svg>
+    <div class="fig-caption"><b>图 4-1.</b> 教师归一化评估流程。re-noise 相当于把所有初始化器的输出"拉到同一个去噪阶段"再比较，像一台分布望远镜。</div>
+  </div>
+
+  <div class="insight-box">
+    <span class="tag">深度洞察</span>
+    <h4>re-noise 是"分布望远镜"，不是数据增强</h4>
+    <p>为什么 $\rho=0.9$ 这么大的噪声反而有用？因为加噪到 0.9 几乎摧毁了所有低层细节（锐度、伪影），但<b>没有摧毁样本所在的语义盆地</b>——场景布局、物体配置、运动模式仍潜在于 $z_{\theta,\rho}$ 中。用同一个强教师去噪，相当于问："如果从这个初始化器到达的语义区域出发，一个完美的去噪器会还原出什么？"这把"初始化器到没到过这个 mode"与"初始化器在这个 mode 上画得清不清楚"两件事<b>解耦</b>了。ODE 初始化就是受益者：原始 coverage 仅 0.020（因为糊），re-noise 后 0.326，与它 DMD 后的表现一致。</p>
+  </div>
+
+  <h3>4.2 特征空间与 precision/coverage</h3>
+  <p>归一化后的样本与教师参考样本都过冻结的 <b>V-JEPA2</b>（ViT-H, 256 维输出 token），取前 5 秒 8 帧，token 级均值与标准差拼接成 2560 维描述子并 L2 归一化：</p>
+  <div class="math-card">
+    <div class="mc-label">EQUATION 9 &amp; 13 · 特征</div>
+    <p>$$f(x)=\left[\frac{1}{L}\sum_{\ell=1}^L h_\ell\,;\;\mathrm{std}_{\ell=1}^L(h_\ell)\right]\in\mathbb{R}^{2560},\qquad \phi(x)=\frac{f(x)}{\|f(x)\|_2}$$</p>
+    <p>$$u_i=\frac{\phi(\tilde{x}_i)}{\|\phi(\tilde{x}_i)\|_2},\quad v_j=\frac{\phi(x_{T,j})}{\|\phi(x_{T,j})\|_2}$$</p>
+  </div>
+
+  <p>然后用 k-NN（$k=5$，全局固定不调）估计教师支撑集的自适应半径 $r_k(v_j)$，并计算两个互补指标：</p>
+
+  <div class="math-card">
+    <div class="mc-label">EQUATION 10–11 &amp; 16–17 · PRECISION / COVERAGE</div>
+    <p>$$\mathrm{Precision}=\frac{1}{N}\sum_{i=1}^N\mathbf{1}\!\left[\exists j:\|u_i-v_j\|_2\le r_k(v_j)\right]$$</p>
+    <p>$$\mathrm{Coverage}=\frac{1}{M}\sum_{j=1}^M\mathbf{1}\!\left[\min_i\|u_i-v_j\|_2\le r_k(v_j)\right]$$</p>
+    <p style="font-size:13px;color:var(--ink-muted)">Precision：学生样本落在教师支撑内的比例（保真度）。Coverage：教师邻域被学生触达的比例（多样性）。注意 coverage 刻意<b>只用教师半径</b>，使目标支撑在所有方法间固定，避免学生离群点凭空制造大区域。</p>
+  </div>
+
+  <div class="fig">
+    <svg viewBox="0 0 860 300" xmlns="http://www.w3.org/2000/svg" font-family="'Noto Sans SC',sans-serif">
+      <!-- teacher support blob -->
+      <ellipse cx="430" cy="160" rx="300" ry="110" fill="#f3e8ff" opacity="0.5" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="6,4"/>
+      <text x="430" y="60" text-anchor="middle" font-size="13" fill="#7e22ce" font-weight="700">教师分布支撑集（k-NN 邻域并集）</text>
+      <!-- teacher crosses -->
+      <g fill="#7e22ce">
+        <circle cx="250" cy="140" r="4"/><circle cx="320" cy="180" r="4"/><circle cx="400" cy="130" r="4"/><circle cx="480" cy="190" r="4"/><circle cx="560" cy="150" r="4"/><circle cx="620" cy="170" r="4"/><circle cx="350" cy="210" r="4"/><circle cx="520" cy="110" r="4"/>
+      </g>
+      <!-- student points: inside (green) and outside (red) -->
+      <g>
+        <circle cx="300" cy="160" r="6" fill="#10b981"/><circle cx="420" cy="170" r="6" fill="#10b981"/><circle cx="500" cy="140" r="6" fill="#10b981"/><circle cx="580" cy="180" r="6" fill="#10b981"/><circle cx="380" cy="200" r="6" fill="#10b981"/>
+        <circle cx="150" cy="100" r="6" fill="#f43f5e"/><circle cx="700" cy="230" r="6" fill="#f43f5e"/>
+      </g>
+      <!-- uncovered teacher mode -->
+      <circle cx="660" cy="120" r="9" fill="none" stroke="#f59e0b" stroke-width="2"/>
+      <text x="660" y="95" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">未覆盖的教师 mode</text>
+      <!-- legend -->
+      <g font-size="12">
+        <circle cx="120" cy="260" r="6" fill="#10b981"/><text x="135" y="264" fill="#065f46">学生在支撑内 → 计入 Precision</text>
+        <circle cx="400" cy="260" r="6" fill="#f43f5e"/><text x="415" y="264" fill="#9f1239">学生在支撑外 → 降低 Precision</text>
+        <circle cx="640" cy="260" r="4" fill="#7e22ce"/><text x="655" y="264" fill="#7e22ce">教师样本</text>
+      </g>
+    </svg>
+    <div class="fig-caption"><b>图 4-2.</b> Precision 看学生"靠不靠谱"，Coverage 看教师 mode"有没有被触达"。一个坍缩到主峰的模型可以 precision 很高但 coverage 很低——这正是 VBench 单独看不出来的。</div>
+  </div>
+
+  <p>多样性用 <b>Vendi score</b>（Friedman &amp; Dieng, 2023）：在归一化特征上构造移位余弦核，计算归一化核矩阵特征值的指数熵（即 effective rank）：</p>
+  <div class="math-card">
+    <div class="mc-label">EQUATION 18–19 · VENDI SCORE</div>
+    <p>$$K=\frac{UU^\top+\mathbf{1}\mathbf{1}^\top}{2},\quad \bar{K}=\frac{K}{N},\qquad \mathrm{Vendi}(U)=\exp\!\left(-\sum_q\lambda_q\log\lambda_q\right)$$</p>
+    <p style="font-size:13px;color:var(--ink-muted)">可解释为"有效唯一样本数"。论文报告原始值（不与教师做比），它是方法内多样性统计，不参与 precision/coverage 计算。</p>
+  </div>
+
+  <div class="fig">
+    <img src="assets/fig8_renoise.webp" alt="re-noise 前后对比">
+    <div class="fig-caption"><b>Figure 8.</b> Re-noise 效果：Causal CD 与 ODE 的原始输出锐度差异巨大，但经 90% re-noise + 共享教师细化后，语义结构被保留、低层差异被拉平，分布比较不再被原始锐度绑架。</div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ============ CH 5 ============ -->
+<section id="hypo2">
+  <div class="sec-label">Chapter 05 · 假设二</div>
+  <h2>纯 DMD 的晚期漂移</h2>
+
+  <p>解决了"怎么测"，论文接着追踪<b>同一次对齐训练</b>中学生分布的动态演化。方法是把各 checkpoint 的 V-JEPA2 特征投影到同一个从教师样本拟合的 PCA 基上，画协方差等高线。</p>
+
+  <div class="fig">
+    <img src="assets/fig5_evolution.webp" alt="分布演化：Causal CD init / +DMD / +joint distillation">
+    <div class="fig-caption"><b>Figure 5.</b> 三种训练轨迹在共享 V-JEPA2 PCA 空间中的分布演化。左：Causal CD 初始化逐步扩张 coverage；中：+DMD 后向高密度区收缩；右：+联合蒸馏在精修的同时保住 coverage。</div>
+  </div>
+
+  <p>三幅图讲了三个故事：</p>
+  <ul>
+    <li><b>左（Causal CD init）</b>：早期蓝色等高线还远离教师虚线等高线，随训练推进，少步生成器逐步扩张支撑、向教师靠拢——典型的 mode-covering，coverage 从 0.02 升到 0.66，但样本偏糊。</li>
+    <li><b>中（+ DMD）</b>：DMD 不再扩张 coverage，而是把学生分布<b>拉向教师高密度区</b>。coverage 从 0.66 一路跌到 0.53，precision 升到 0.75 后回落。这就是 RKL 式漂移。</li>
+    <li><b>右（+ 联合蒸馏）</b>：学生在匹配教师高概率区的同时保住了更广的支撑（coverage 0.68），precision 0.79。</li>
+  </ul>
+
+  <div class="fig">
+    <svg viewBox="0 0 860 320" xmlns="http://www.w3.org/2000/svg" font-family="'Noto Sans SC',sans-serif">
+      <line x1="70" y1="270" x2="810" y2="270" stroke="#787887" stroke-width="1.5"/>
+      <line x1="70" y1="30" x2="70" y2="270" stroke="#787887" stroke-width="1.5"/>
+      <text x="40" y="50" font-size="11" fill="#787887" transform="rotate(-90,40,50)">coverage</text>
+      <text x="440" y="305" text-anchor="middle" font-size="12" fill="#787887">training step</text>
+      <!-- grid -->
+      <g stroke="#e9d5ff" stroke-width="1">
+        <line x1="70" y1="80" x2="810" y2="80"/><line x1="70" y1="130" x2="810" y2="130"/><line x1="70" y1="180" x2="810" y2="180"/><line x1="70" y1="230" x2="810" y2="230"/>
+      </g>
+      <g font-size="10" fill="#787887" text-anchor="end">
+        <text x="62" y="274">0.52</text><text x="62" y="224">0.58</text><text x="62" y="174">0.64</text><text x="62" y="124">0.70</text><text x="62" y="74">0.76</text>
+      </g>
+      <g font-size="10" fill="#787887" text-anchor="middle">
+        <text x="70" y="288">0</text><text x="218" y="288">500</text><text x="366" y="288">1000</text><text x="514" y="288">1500</text><text x="662" y="288">2000</text><text x="810" y="288">2500</text>
+      </g>
+      <!-- CD init coverage rising: 0.02 -> 0.66 (steps 0-2500 within stage) map to 0-~833? simplify: show three curves over 0-2500 -->
+      <!-- Joint: 0.66,0.67,0.68,0.69,0.68 -->
+      <polyline fill="none" stroke="#10b981" stroke-width="3" points="70,160 218,152 366,143 514,135 662,143 810,143"/>
+      <g fill="#10b981"><circle cx="70" cy="160" r="4"/><circle cx="218" cy="152" r="4"/><circle cx="366" cy="143" r="4"/><circle cx="514" cy="135" r="4"/><circle cx="662" cy="143" r="4"/><circle cx="810" cy="143" r="4"/></g>
+      <!-- Pure DMD: 0.66,0.56,0.53,0.55,0.53 -->
+      <polyline fill="none" stroke="#f43f5e" stroke-width="3" points="70,160 218,237 366,262 514,245 662,262 810,262"/>
+      <g fill="#f43f5e"><circle cx="70" cy="160" r="4"/><circle cx="218" cy="237" r="4"/><circle cx="366" cy="262" r="4"/><circle cx="514" cy="245" r="4"/><circle cx="662" cy="262" r="4"/><circle cx="810" cy="262" r="4"/></g>
+      <!-- CD init (first stage, shown as dashed rising): approximate -->
+      <polyline fill="none" stroke="#a855f7" stroke-width="2.5" stroke-dasharray="7,4" points="70,268 180,210 300,165 430,140 560,150 700,155"/>
+      <!-- legend -->
+      <g font-size="12">
+        <line x1="540" y1="50" x2="575" y2="50" stroke="#10b981" stroke-width="3"/><text x="582" y="54" fill="#065f46">联合蒸馏 coverage</text>
+        <line x1="540" y1="72" x2="575" y2="72" stroke="#f43f5e" stroke-width="3"/><text x="582" y="76" fill="#9f1239">纯 DMD coverage</text>
+        <line x1="540" y1="94" x2="575" y2="94" stroke="#a855f7" stroke-width="2.5" stroke-dasharray="7,4"/><text x="582" y="98" fill="#7e22ce">CD 初始化阶段</text>
+      </g>
+      <text x="200" y="60" font-size="11.5" fill="#7e22ce" font-style="italic">mode-covering：铺开</text>
+      <text x="600" y="250" font-size="11.5" fill="#9f1239" font-style="italic">mode-seeking：收缩漂移</text>
+    </svg>
+    <div class="fig-caption"><b>图 5-1.</b> Coverage 随训练步数的变化（依据 Table 6 数据重绘）。纯 DMD 在 500 步内就把 coverage 从 0.66 砸到 0.56；联合蒸馏把它稳在 0.67–0.69。</div>
+  </div>
+
+  <div class="insight-box">
+    <span class="tag">深度洞察</span>
+    <h4>高概率区 ≠ 所有好视频</h4>
+    <p>漂移的危害不止于多样性。教师分布的高概率区域对应"常见、平稳、保守"的视频；而<b>大运动、丰富细节、稀有动态</b>往往落在相对低密度的区域。过度 mode-seeking 会压制这些有价值的 mode，用局部真实感换走多样性——有时连整体质量也一起换掉（Table 2 中 VBench 在 1000 步后下跌）。这解释了为什么联合蒸馏在后期不仅 coverage 更高，<b>total VBench 也更高</b>（84.83 vs 83.91）：保住低密度 mode 反而避免了 proxy 的过优化。</p>
+  </div>
+
+  <p>Table 6 的逐指标对比把这个趋势量化得更清楚：</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th rowspan="2">Step</th><th colspan="4">联合蒸馏 (λ=0.01)</th><th colspan="4">纯 DMD (λ=0)</th></tr><tr><th>Total</th><th>Precision</th><th>Coverage</th><th>Diversity</th><th>Total</th><th>Precision</th><th>Coverage</th><th>Diversity</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>82.60</td><td>0.69</td><td>0.66</td><td>1.319</td><td>82.60</td><td>0.69</td><td>0.66</td><td>1.319</td></tr>
+        <tr><td>500</td><td>84.60</td><td class="win">0.82</td><td>0.67</td><td>1.305</td><td>84.44</td><td>0.75</td><td class="bad">0.56</td><td>1.297</td></tr>
+        <tr><td>1000</td><td>84.78</td><td>0.80</td><td>0.68</td><td>1.304</td><td>84.74</td><td>0.72</td><td>0.53</td><td>1.292</td></tr>
+        <tr><td>1500</td><td class="win">84.83</td><td>0.79</td><td class="win">0.69</td><td>1.304</td><td>84.40</td><td>0.76</td><td>0.55</td><td>1.285</td></tr>
+        <tr><td>2500</td><td>84.27</td><td>0.79</td><td>0.68</td><td>1.307</td><td class="bad">83.91</td><td>0.75</td><td class="bad">0.53</td><td class="bad">1.272</td></tr>
+      </tbody>
+    </table>
+    <div class="tnote">Table 6 · 联合蒸馏在整个训练过程中维持更高 coverage/diversity，后期 total 分也更高。</div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ============ CH 6 ============ -->
+<section id="joint">
+  <div class="sec-label">Chapter 06 · 方法</div>
+  <h2>联合蒸馏：收拢与铺开的力学平衡</h2>
+
+  <p>解决方案简单到像一句口号：在<b>同一个目标分布</b>下，把 mode-seeking 的 DMD 损失与 mode-covering 的 CD 约束直接相加：</p>
+
+  <div class="math-card">
+    <div class="mc-label">JOINT DISTILLATION · 核心损失</div>
+    <p style="text-align:center;font-size:1.2rem;margin:10px 0">$$\mathcal{L}_{\mathrm{joint}}=\mathcal{L}_{\mathrm{DMD}}+\lambda\,\mathcal{L}_{\mathrm{CD}},\qquad \lambda=0.01$$</p>
+    <p style="font-size:13.5px;color:var(--ink-muted)">$\mathcal{L}_{\mathrm{CD}}$ 是第二阶段的一致性蒸馏损失，作为学生的<b>分布锚点</b>。DMD 负责选择并锐化高概率 mode，CD 负责维持对教师分布的覆盖、阻止过度坍缩。</p>
+  </div>
+
+  <div class="fig">
+    <svg viewBox="0 0 860 300" xmlns="http://www.w3.org/2000/svg" font-family="'Noto Sans SC',sans-serif">
+      <!-- student distribution center -->
+      <ellipse cx="430" cy="160" rx="120" ry="55" fill="#f3e8ff" opacity="0.6" stroke="#a855f7" stroke-width="2"/>
+      <text x="430" y="165" text-anchor="middle" font-size="14" font-weight="700" fill="#7e22ce">学生分布 $p_\theta$</text>
+      <!-- DMD arrow inward -->
+      <g stroke="#9333ea" stroke-width="3" marker-end="url(#arr)" fill="none">
+        <line x1="330" y1="160" x2="380" y2="160"/>
+        <line x1="530" y1="160" x2="480" y2="160"/>
+        <line x1="430" y1="220" x2="430" y2="190"/>
+      </g>
+      <text x="200" y="150" font-size="13" font-weight="700" fill="#9333ea">DMD（反向 KL）</text><text x="200" y="170" font-size="11" fill="#7e22ce">向内收拢 · 锐化</text>
+      <text x="640" y="150" font-size="13" font-weight="700" fill="#9333ea">mode-seeking</text>
+      <!-- CD anchor outward -->
+      <g stroke="#10b981" stroke-width="3" fill="none">
+        <line x1="380" y1="100" x2="320" y2="80" marker-end="url(#arr)"/>
+        <line x1="480" y1="100" x2="540" y2="80" marker-end="url(#arr)"/>
+        <line x1="430" y1="100" x2="430" y2="60" marker-end="url(#arr)"/>
+      </g>
+      <text x="600" y="60" font-size="13" font-weight="700" fill="#047857">CD 锚点（前向散度）</text><text x="600" y="78" font-size="11" fill="#065f46">向外拉住 · 保 coverage</text>
+      <!-- teacher dashed contour -->
+      <ellipse cx="430" cy="160" rx="230" ry="95" fill="none" stroke="#f43f5e" stroke-width="2" stroke-dasharray="8,5"/>
+      <text x="430" y="265" text-anchor="middle" font-size="12" fill="#be123c" font-weight="600">教师分布支撑集（虚线）</text>
+      <text x="430" y="285" text-anchor="middle" font-size="11.5" fill="#787887">λ 是两股力量的"摩擦力"：太小则漂移，太大则糊化</text>
+    </svg>
+    <div class="fig-caption"><b>图 6-1.</b> 联合蒸馏的力学平衡：DMD 把学生往教师主峰拉，CD 把学生往教师支撑边界"锚"，λ 控制锚定强度。</div>
+  </div>
+
+  <h3>6.1 为什么是 CD，而不是别的正则项？</h3>
+  <p>CD 作为锚点有三个结构性优势：</p>
+  <ul>
+    <li><b>目标分布天然一致</b>：CD 教师就是第二阶段的 causal 教师，与初始化目标同源，不需要额外引入新分布；</li>
+    <li><b>行为恰好互补</b>：CD 是回归教师端点（前向散度、mode-covering），与 DMD 的反向 KL 形成对偶；</li>
+    <li><b>零额外成本</b>：CD 损失所需的教师 ODE 一步和 EMA 学生在第二阶段已经存在，联合阶段只是复用。</li>
+  </ul>
+
+  <div class="insight-box">
+    <span class="tag">深度洞察</span>
+    <h4>λ=0.01 为什么这么小？</h4>
+    <p>$\lambda=0.01$ 意味着 CD 项只占总损失的 1%。这符合两个损失的"职责分工"：DMD 是<b>主力</b>，负责把质量拉上去（它的梯度尺度大、直接优化感知质量）；CD 是<b>安全带</b>，只需要在学生快要漂出支撑集时轻轻拽一下。Table 5 的消融证实了这种不对称性：$\lambda=1$ 时 coverage 最高（0.71）但 VBench 掉到 84.18（CD 过强、回到模糊）；$\lambda=0$ 时 coverage 崩塌到 0.53；而 $\lambda=0.01$ 在 VBench（84.83）、precision（0.79）、coverage（0.69）之间取得最优。这是一个典型的"正则项系数应远小于主损失"的工程经验，但论文用分布指标给出了明确的选择依据。</p>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>λ</th><th>Total ↑</th><th>Quality ↑</th><th>Semantic ↑</th><th>Precision ↑</th><th>Coverage ↑</th><th>Diversity ↑</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>84.18</td><td>85.17</td><td>80.18</td><td>0.73</td><td class="win">0.71</td><td class="win">1.311</td></tr>
+        <tr><td>0.1</td><td>84.67</td><td>85.72</td><td>80.46</td><td>0.76</td><td>0.69</td><td>1.303</td></tr>
+        <tr><td class="win">0.01</td><td class="win">84.83</td><td class="win">85.92</td><td>80.47</td><td class="win">0.79</td><td>0.69</td><td>1.304</td></tr>
+        <tr><td>0.001</td><td>84.78</td><td>85.85</td><td class="win">80.55</td><td>0.78</td><td>0.64</td><td>1.307</td></tr>
+        <tr><td>0（纯 DMD）</td><td>84.74</td><td>85.78</td><td>80.54</td><td>0.72</td><td class="bad">0.53</td><td class="bad">1.292</td></tr>
+      </tbody>
+    </table>
+    <div class="tnote">Table 5 · λ 消融（Wan-14B 设置，2500 步内最佳 checkpoint）。λ=0.01 是质量与覆盖的最优折衷。</div>
+  </div>
+
+  <h3>6.2 完整三阶段流水线</h3>
+  <div class="fig">
+    <svg viewBox="0 0 860 220" xmlns="http://www.w3.org/2000/svg" font-family="'Noto Sans SC',sans-serif">
+      <defs><marker id="arr3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#4c4b5e"/></marker></defs>
+      <g font-size="12" text-anchor="middle">
+        <rect x="20" y="60" width="180" height="100" rx="14" fill="#f3e8ff" stroke="#a855f7" stroke-width="2"/>
+        <text x="110" y="88" font-weight="700" fill="#7e22ce" font-size="13">Stage 1 · AR Diffusion</text>
+        <text x="110" y="110" fill="#4c4b5e">teacher forcing</text>
+        <text x="110" y="128" fill="#4c4b5e">5K steps</text>
+        <text x="110" y="148" font-size="10.5" fill="#787887">双向模型 → 因果模型</text>
+        <line x1="205" y1="110" x2="245" y2="110" stroke="#4c4b5e" stroke-width="2" marker-end="url(#arr3)"/>
+        <rect x="250" y="60" width="180" height="100" rx="14" fill="#d1fae5" stroke="#10b981" stroke-width="2"/>
+        <text x="340" y="88" font-weight="700" fill="#065f46" font-size="13">Stage 2 · CD</text>
+        <text x="340" y="110" fill="#4c4b5e">一致性蒸馏</text>
+        <text x="340" y="128" fill="#4c4b5e">2.5K steps</text>
+        <text x="340" y="148" font-size="10.5" fill="#787887">→ 少步因果生成器</text>
+        <line x1="435" y1="110" x2="475" y2="110" stroke="#4c4b5e" stroke-width="2" marker-end="url(#arr3)"/>
+        <rect x="480" y="60" width="200" height="100" rx="14" fill="#fef3c7" stroke="#f59e0b" stroke-width="2.5"/>
+        <text x="580" y="88" font-weight="700" fill="#92400e" font-size="13">Stage 3 · Joint DMD+CD</text>
+        <text x="580" y="110" fill="#4c4b5e">$\mathcal{L}_{DMD}+0.01\,\mathcal{L}_{CD}$</text>
+        <text x="580" y="128" fill="#4c4b5e">1.5K steps</text>
+        <text x="580" y="148" font-size="10.5" fill="#787887">DMD 教师 = 数据源教师</text>
+        <line x1="685" y1="110" x2="725" y2="110" stroke="#4c4b5e" stroke-width="2" marker-end="url(#arr3)"/>
+        <rect x="730" y="60" width="115" height="100" rx="14" fill="#fff" stroke="#1e1b4b" stroke-width="2"/>
+        <text x="787" y="105" font-weight="700" fill="#1e1b4b" font-size="13">少步实时</text>
+        <text x="787" y="125" font-weight="700" fill="#1e1b4b" font-size="13">AR 视频</text>
+        <text x="787" y="148" font-size="10.5" fill="#787887">81 帧 832×480</text>
+      </g>
+      <g font-size="11" font-weight="600">
+        <text x="110" y="190" text-anchor="middle" fill="#7e22ce">mode-covering 基础</text>
+        <text x="340" y="190" text-anchor="middle" fill="#065f46">mode-covering 初始化</text>
+        <text x="580" y="190" text-anchor="middle" fill="#92400e">seeking ↔ covering 平衡</text>
+      </g>
+      <text x="430" y="212" text-anchor="middle" font-size="11" fill="#be123c" font-weight="600">关键约束：Stage 2/3 的目标分布必须与 Stage 1 数据源对齐（同一 Wan 模型族）</text>
+    </svg>
+    <div class="fig-caption"><b>图 6-2.</b> DistillAlign 在 Causal Forcing 三阶段流水线基础上的改动：Stage 3 从纯 DMD 换成联合 DMD+CD，并保证 DMD 教师与初始化数据源同分布。</div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ============ CH 7 ============ -->
+<section id="experiments">
+  <div class="sec-label">Chapter 07 · 实验</div>
+  <h2>小教师击败大教师</h2>
+
+  <p>主实验在 Wan2.1-T2V-1.3B 基座上做（81 帧、832×480），25K 蒸馏数据（VidProM prompt），与开放少步系统和自回归蒸馏基线对比。</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>方法</th><th>DMD 教师</th><th>Total ↑</th><th>Quality ↑</th><th>Semantic ↑</th><th>Precision ↑</th><th>Coverage ↑</th><th>Diversity ↑</th></tr></thead>
+      <tbody>
+        <tr><td colspan="8" style="text-align:left;font-weight:700;color:var(--lav-700);background:#faf5ff">双向模型</td></tr>
+        <tr><td>LTX Video</td><td>—</td><td>81.37</td><td>83.05</td><td>74.66</td><td>—</td><td>—</td><td>1.281</td></tr>
+        <tr><td>Wan2.1-1.3B</td><td>—</td><td>83.56</td><td>84.31</td><td>80.55</td><td>—</td><td>—</td><td>1.334</td></tr>
+        <tr><td colspan="8" style="text-align:left;font-weight:700;color:var(--lav-700);background:#faf5ff">蒸馏自回归模型</td></tr>
+        <tr><td>CausVid</td><td>Wan-14B</td><td>83.03</td><td>83.99</td><td>79.18</td><td>0.51</td><td class="bad">0.21</td><td>1.223</td></tr>
+        <tr><td>Self-Forcing</td><td>Wan-14B</td><td>84.21</td><td>85.04</td><td>80.87</td><td class="win">0.78</td><td>0.53</td><td>1.269</td></tr>
+        <tr><td>Causal-Forcing</td><td>Wan-14B</td><td>84.38</td><td>85.47</td><td>80.01</td><td>0.61</td><td>0.29</td><td>1.250</td></tr>
+        <tr><td><b>Ours (weak)</b></td><td>Wan-<b>1.3B</b></td><td class="win">84.54</td><td>85.61</td><td>80.28</td><td>0.77</td><td>0.59</td><td class="win">1.305</td></tr>
+        <tr><td><b>Ours (full)</b></td><td>Wan-14B</td><td class="win">84.83</td><td class="win">85.92</td><td>80.47</td><td>0.79</td><td class="win">0.69</td><td>1.304</td></tr>
+      </tbody>
+    </table>
+    <div class="tnote">Table 4 · 主对比。Ours(weak) 用 1.3B DMD 教师就超过了所有用 14B 教师的基线；coverage 从基线的 0.21–0.53 提升到 0.59–0.69。</div>
+  </div>
+
+  <div class="insight-box">
+    <span class="tag">深度洞察</span>
+    <h4>头条结果的解读边界</h4>
+    <p>"1.3B 教师击败 14B 基线"是论文最响亮的标题，但要准确理解：它击败的是<b>用 14B 教师做 DMD 但初始化错位/纯 DMD 漂移</b>的基线，而不是说 1.3B 教师的天花板高于 14B。事实上 Ours(full) 用 14B 教师还能进一步升到 84.83。结论是：<b>当瓶颈在 mode 支撑而非逐 mode 保真度时，对齐的收益大于换大教师</b>；但对齐不能突破教师本身的能力上限。CausVid 的 coverage 只有 0.21 尤其刺眼——它用 ODE 初始化（目标错位）+ DMD，双重问题叠加。</p>
+  </div>
+
+  <p>定性结果上，联合蒸馏更好地保留了物体一致性和运动细节，同时避免了纯 mode-covering 初始化的过度平滑：</p>
+  <div class="fig">
+    <img src="assets/fig6_qualitative.webp" alt="定性对比">
+    <div class="fig-caption"><b>Figure 6.</b> 与代表性双向和蒸馏自回归基线的定性对比。本文方法主体更锐利、运动更强、时间细节更连贯。</div>
+  </div>
+
+  <div class="fig">
+    <img src="assets/fig7_diversity_qual.webp" alt="多样性定性对比">
+    <div class="fig-caption"><b>Figure 7.</b> 固定 prompt、不同 seed 下的多样性。低 coverage 方法倾向于产生相似外观/运动模式；本文方法在保持高保真的同时保留更丰富的变化。</div>
+  </div>
+
+  <h3>7.1 弱教师设置下的一致性验证</h3>
+  <p>附录 B 在 Wan-1.3B 弱设置下重复了 λ 消融和 step 消融，结论一致：$\lambda=0.01$ 仍是最优（84.54 / coverage 0.59），纯 DMD 的 coverage 从 0.52 持续跌到 0.43，而联合蒸馏维持在 0.51–0.59。这说明联合蒸馏的收益<b>不依赖大教师</b>，是一种稳健的训练动力学改进。</p>
+
+  <div class="warn-box">
+    <span class="tag">实验局限</span>
+    <h4>需要注意的几点</h4>
+    <p>（1）所有分布指标都<b>条件于 V-JEPA2 特征空间</b>——编码器的语义偏向会影响 coverage 的含义；（2）precision/coverage 在不同参考教师下不可直接跨表比较；（3）re-noise 的 $\rho=0.9$、$k=5$ 全局固定但未做敏感性消融；（4）实验只在 Wan2.1 单一基座上验证，跨架构的普适性有待确认。这些都是后续可以追问的点。</p>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ============ CH 8 ============ -->
+<section id="research">
+  <div class="sec-label">Chapter 08 · 延伸</div>
+  <h2>自主科研问题</h2>
+  <p>以下是我在精读过程中认为值得继续追问的 5 个问题，它们超出了论文自身的局限讨论。</p>
+
+  <div class="rq">
+    <span class="rq-tag">Q1 · 优化理论</span>
+    <h4>λ 能否从固定系数升级为自适应的约束拉格朗日乘子？</h4>
+    <p>论文用固定 $\lambda=0.01$，但 Fig.5 显示 coverage 的流失主要发生在 DMD 早期（0→500 步暴跌），后期趋于平稳。这暗示约束的"需求量"随训练阶段变化。一个自然的形式化是把联合蒸馏写成约束优化：$\min_\theta \mathcal{L}_{\mathrm{DMD}}$ s.t. $\mathrm{Cov}(\theta)\ge C_{\mathrm{target}}$，用带约束的拉格朗日 $\mathcal{L}+\lambda_t(\mathcal{L}_{\mathrm{CD}}-\epsilon)$ 并按 coverage 缺口在线更新 $\lambda_t$。理论上这与 reverse-KL 的 Frank-Wolfe/镜像下降视角有关；实践上可能避免 $\lambda=1$ 时的糊化和 $\lambda=0$ 时的漂移两个极端。</p>
+    <div class="rq-meta">连接：约束优化 / 拉格朗日乘子法 · 可在 Table 6 的 step 曲线上验证早期 λ 应更大</div>
+  </div>
+
+  <div class="rq">
+    <span class="rq-tag">Q2 · Scaling 边界</span>
+    <h4>"对齐补偿规模"的边界在哪里？</h4>
+    <p>1.3B 对齐教师击败 14B 错位基线，但 14B 对齐教师仍更好。这中间存在一个 coverage-capacity 权衡：对齐解决的是"mode 有没有被覆盖"，而教师容量决定的是"每个 mode 能画多好"。可以形式化为 DMD 梯度偏差分解：$\nabla\mathcal{L}_{\mathrm{DMD}}$ 的估计误差来自 critic（与教师分数质量相关）和 mode 支撑（与初始化 coverage 相关）。当 critic 误差主导时（教师太弱），对齐也救不回来；当支撑误差主导时（论文设定），对齐收益最大。找到这两个区域的相变点，对"该买更大教师还是该做对齐"的工程决策有直接价值。</p>
+    <div class="rq-meta">连接：DMD2 的 critic 分析 · score estimation error bias-variance 分解</div>
+  </div>
+
+  <div class="rq">
+    <span class="rq-tag">Q3 · 度量学</span>
+    <h4>分布评估对编码器与超参的敏感性如何？</h4>
+    <p>论文的 precision/coverage 完全建立在 V-JEPA2 特征上。V-JEPA2 是面向"理解/预测/规划"的自监督编码器，对动作和几何敏感，但对纹理/风格的感知可能不同于 CLIP 或 DINO。不同编码器会讲不同的"mode 故事"吗？$k=5$、$\rho=0.9$、8 帧/5 秒窗口这些选择如何影响 coverage 的绝对数值和方法间排序？一个严谨的后续工作应该做编码器-超参的敏感性网格，并报告 Kendall's τ 等排序一致性指标——否则"coverage 高 0.10"的论断可能部分是度量假象。</p>
+    <div class="rq-meta">连接：improved precision/recall (Kynkäänniemi 2019) · density/coverage (Naeem 2020) · 生成模型度量的编码器依赖问题</div>
+  </div>
+
+  <div class="rq">
+    <span class="rq-tag">Q4 · 范式迁移</span>
+    <h4>"跨阶段分布对齐"能否推广到其他多阶段生成系统？</h4>
+    <p>论文的核心原则——<b>流水线每一阶段的目标分布必须被上一阶段的输出支撑所覆盖</b>——是普适的。它是否适用于：(a) 图像蒸馏（progressive distillation → DMD）？(b) LLM 的投机解码（draft model 必须覆盖 target model 的输出 mode，否则会被持续拒绝）？(c) 语音转换或 TTS 的多阶段声码器？(d) 层级式规划（coarse-to-fine）？在每个场景里找到对应的"mode coverage 度量"和"锚点损失"，可能催生一系列 DistillAlign 的对应工作。</p>
+    <div class="rq-meta">连接：多阶段优化的 error propagation · speculative decoding 的 acceptance rate 即一种 coverage</div>
+  </div>
+
+  <div class="rq">
+    <span class="rq-tag">Q5 · 长时交互</span>
+    <h4>Coverage 保持在长时自回归 rollout 中是否复利？</h4>
+    <p>论文动机是实时交互世界模型，但实验只测了 5 秒/81 帧。在流式生成中，错误随帧累积，而每一步的 mode-seeking 漂移可能在时间维度上<b>复利</b>：早期丢掉的运动 mode 会让后续帧越来越保守。联合蒸馏保住的 coverage 是"逐 chunk 独立"的，还是能在自回归条件下跨 chunk 传播？需要在 Self-Forcing++/Rolling Forcing 的分钟级设定下，测量 coverage 随 rollout 长度的衰减曲线，并检验 CD 锚点是否能同时缓解 exposure bias 与分布漂移——这两者可能是同一枚硬币的两面。</p>
+    <div class="rq-meta">连接：Self-Forcing 的 train-test gap · exposure bias 与 mode collapse 的等价性 · HiAR/BiWM 的 forward-KL 正则</div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ============ CODE APPENDIX ============ -->
+<section id="code">
+  <div class="sec-label">Appendix · 代码</div>
+  <h2>关键模块示意实现</h2>
+  <p>以下三段代码对应论文的三个核心机制，均为基于论文公式的<b>示意性实现</b>（非作者官方代码），变量维度与论文公式交叉核对过。</p>
+
+  <div class="code-card">
+    <div class="code-head"><span>① 教师归一化 precision / coverage 计算</span><span class="cred sketch">示意性实现</span></div>
+<pre><span class="com"># Eq.8-11, 13-17: 初始化器样本经 re-noise + 固定教师细化后，在 V-JEPA2 空间算 precision/coverage</span>
+<span class="kw">import</span> torch
+
+<span class="kw">def</span> <span class="fn">teacher_normalized_distributional_metrics</span>(
+    initializer, norm_teacher, vjepa2,
+    prompts, seeds, ref_features,   <span class="com"># ref_features: [M, 2560] L2 归一化的教师特征 v_j</span>
+    rho=<span class="num">0.9</span>, k=<span class="num">5</span>,
+):
+    student_feats = []
+    <span class="kw">for</span> c, z <span class="kw">in</span> zip(prompts, seeds):
+        z0 = initializer(c, z)                     <span class="com"># 终端潜变量 z_{θ,0}  [C,T,H,W]</span>
+        eps = torch.randn_like(z0)                 <span class="com"># 共享 seed，跨初始化器固定</span>
+        z_noisy = (<span class="num">1</span>-rho)*z0 + rho*eps            <span class="com"># Eq.12: 重新加噪到 ρ</span>
+        x_refined = norm_teacher.denoise(z_noisy, c, schedule=<span class="str">"flow_unipc_22"</span>)  <span class="com"># Eq.8</span>
+        f = vjepa2(x_refined)                      <span class="com"># [2560] = [mean(h); std(h)]</span>
+        student_feats.append(f / f.norm())         <span class="com"># Eq.9/13: L2 归一化</span>
+    U = torch.stack(student_feats)                 <span class="com"># [N, 2560]</span>
+    V = ref_features                               <span class="com"># [M, 2560]</span>
+
+    <span class="com"># Eq.15: 每个教师样本到其第 k 近邻（排除自身）的距离，作为自适应半径</span>
+    dist_vv = torch.cdist(V, V)                    <span class="com"># [M, M]</span>
+    dist_vv.fill_diagonal_(float(<span class="str">"inf"</span>))
+    rk, _ = dist_vv.kthvalue(k, dim=<span class="num">1</span>)             <span class="com"># [M]</span>
+
+    <span class="com"># Eq.10: Precision = 学生样本落在任一教师邻域内的比例</span>
+    dist_uv = torch.cdist(U, V)                    <span class="com"># [N, M]</span>
+    inside = (dist_uv <= rk[<span class="kw">None</span>, :]).any(dim=<span class="num">1</span>)  <span class="com"># [N] bool</span>
+    precision = inside.float().mean()
+
+    <span class="com"># Eq.11: Coverage = 教师邻域被至少一个学生样本触达的比例（只用教师半径）</span>
+    hit = (dist_uv <= rk[<span class="kw">None</span>, :]).any(dim=<span class="num">0</span>)      <span class="com"># [M] bool</span>
+    coverage = hit.float().mean()
+    <span class="kw">return</span> precision.item(), coverage.item()</pre>
+    <div class="code-note">自检：U/V 最后一维 2560 与 Eq.13 一致；cdist 距离等价于 $\|a-b\|_2$（Eq.14 排序等价于余弦距离）；coverage 用教师半径而非学生半径，符合论文对 recall 的刻意区分。</div>
+  </div>
+
+  <div class="code-card">
+    <div class="code-head"><span>② DMD 分数差梯度更新</span><span class="cred sketch">示意性实现</span></div>
+<pre><span class="com"># Eq.6-7: DMD 反向 KL 的梯度 = 加权分数差 × 生成器雅可比</span>
+<span class="kw">def</span> <span class="fn">dmd_score_diff_step</span>(G, critic, teacher, opt, x1, t, w_t):
+    <span class="com"># G: 少步生成器 G_θ(x1) -> x0 ; critic 在线估计 s_fake ; teacher 冻结给 s_teacher</span>
+    x0_fake = G(x1)                               <span class="com"># [B,C,T,H,W] 学生生成样本</span>
+    eps = torch.randn_like(x0_fake)
+    x_t = (<span class="num">1</span>-t)*x0_fake + t*eps                  <span class="com"># Eq.7: 扰动到噪声层 t</span>
+
+    s_fake = critic.score(x_t, t)                 <span class="com"># 在学生样本上在线训练的 critic</span>
+    s_teacher = teacher.score(x_t, t)             <span class="com"># 冻结教师分数</span>
+
+    <span class="com"># Eq.7: ∇θ L_DMD = E[ w(t) (s_fake - s_teacher) ∂x_t/∂θ ]</span>
+    <span class="com"># ∂x_t/∂θ = (1-t) ∂G/∂θ，autograd 自动处理</span>
+    grad_proxy = (w_t * (s_fake - s_teacher)).detach()
+    loss = (grad_proxy * x0_fake).sum()           <span class="com"># 反向传播得到 (1-t)·分数差 方向的梯度</span>
+    opt.zero_grad(); loss.backward(); opt.step()
+    <span class="kw">return</span> loss.item()
+    <span class="com"># 关键：梯度只在学生采样到的 x_t 上计算——学生从未覆盖的 mode 收不到任何梯度</span></pre>
+    <div class="code-note">自检：$x_t=(1-t)G_\theta(x_1)+t\epsilon$ 与 Eq.7 一致；分数差方向 $s_{\mathrm{fake}}-s_{\mathrm{teacher}}$ 与论文一致（注意符号，它把学生从 fake 分数推向 teacher 分数）；critic 在生成样本上训练，是 on-policy 的，这正是 reverse-KL mode-seeking 的来源。</div>
+  </div>
+
+  <div class="code-card">
+    <div class="code-head"><span>③ 联合蒸馏训练循环（Stage 3）</span><span class="cred sketch">示意性实现</span></div>
+<pre><span class="com"># L_joint = L_DMD + λ L_CD  (Sec 3.3.2)</span>
+<span class="kw">def</span> <span class="fn">joint_distillation_train</span>(
+    G, G_ema, teacher_dmd, teacher_causal, critic, opt,
+    dataloader, total_steps=<span class="num">1500</span>, lam=<span class="num">0.01</span>,
+):
+    <span class="kw">for</span> step <span class="kw">in</span> range(total_steps):
+        x1, c = next(dataloader)               <span class="com"># 噪声 + prompt；数据来自与 DMD 教师同源的分布</span>
+        t = sample_noise_level()
+        w_t = dmd_weight(t)
+
+        <span class="com"># ---- L_DMD: mode-seeking 主力 ----</span>
+        x0_fake = G(x1, c)
+        eps = torch.randn_like(x0_fake)
+        x_t = (<span class="num">1</span>-t)*x0_fake + t*eps
+        s_fake = critic.score(x_t, t)
+        s_teacher = teacher_dmd.score(x_t, t)
+        loss_dmd = (w_t*(s_fake - s_teacher)).detach() * x_t
+        loss_dmd = loss_dmd.sum()
+
+        <span class="com"># ---- L_CD: mode-covering 锚点（Eq.4-5）----</span>
+        <span class="com"># 用 causal 教师 ODE 走一步估计 x̂_{t_n}，再让学生在两端一致</span>
+        with torch.no_grad():
+            v_next = teacher_causal.velocity(x_t, t)
+            t_prev = t - dt
+            x_hat = x_t + (t_prev - t)*v_next   <span class="com"># Eq.4: 教师一步估计</span>
+        cd_target = G_ema(x_hat, t_prev)        <span class="com"># f_{θ^-}(x̂_{t_n}, t_n)，stop-grad via EMA</span>
+        loss_cd = ((G(x_t, t) - cd_target)**<span class="num">2</span>).mean()  <span class="com"># Eq.5</span>
+
+        <span class="com"># ---- 联合损失 ----</span>
+        loss = loss_dmd + lam*loss_cd           <span class="com"># λ=0.01: DMD 主导，CD 安全带</span>
+        opt.zero_grad(); loss.backward(); opt.step()
+        update_ema(G, G_ema)                    <span class="com"># 维护 θ^-</span>
+        critic.update(G)                        <span class="com"># 在线更新 fake-score critic</span></pre>
+    <div class="code-note">自检：CD 项复用 Stage 2 的 causal 教师与 EMA 学生（零额外分布）；$\lambda=0.01$ 与实验一致；DMD 教师必须与初始化数据源同分布（对齐约束）。变量 $x_0,x_1,x_t,t,\epsilon$ 维度与 Eq.1/4/7 一致。</div>
+  </div>
+</section>
+
+</article>
+
+<footer>
+  <div><b>DistillAlign</b> · Coordinating Mode Covering and Mode Seeking in Autoregressive Video Distillation</div>
+  <div style="margin-top:6px">arXiv:2607.26811v1 · Li, Zou, Zhou et al., 2026 · Riemann Dynamics / NTU</div>
+  <div class="flinks">
+    <a href="https://arxiv.org/abs/2607.26811" target="_blank">arXiv</a>
+    <a href="https://lijiaxing0213.github.io/DistillAlign" target="_blank">Project Page</a>
+    <a href="#problem">回到顶部</a>
+  </div>
+  <div style="margin-top:14px;font-size:11px;color:#a0a0b0">本博客为基于论文原文的深度解读，公式均从 PDF 文本提取核验，相关工作经联网核实 · 仅供学术交流</div>
+</footer>
+
+</body>
+</html>

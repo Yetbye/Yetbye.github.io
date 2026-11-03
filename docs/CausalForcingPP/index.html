@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Causal Forcing++: 可扩展少步自回归扩散蒸馏 | 论文精读</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- MathJax v5 Standard Config with Options Block and Retry Typeset -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true
+  },
+  options: {
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+  },
+  chtml: { scale: 1.05 },
+  startup: {
+    typeset: true,
+    pageReady: function() {
+      return MathJax.startup.defaultPageReady().then(function() {
+        if (MathJax.typesetPromise) {
+          return MathJax.typesetPromise();
+        }
+      });
+    }
+  }
+};
+</script>
+<script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"
+  onerror="document.getElementById('mathjax-fallback').src='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'">
+</script>
+<script id="mathjax-fallback"></script>
+<script>
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    if (!window.MathJax || !window.MathJax.startup || !window.MathJax.startup.promise) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js';
+      document.head.appendChild(s);
+    } else {
+      if (window.MathJax.typesetPromise && window.MathJax.startup) {
+        MathJax.startup.promise.then(function() {
+          MathJax.typesetPromise().catch(function(){});
+        });
+      }
+    }
+  }, 5000);
+});
+</script>
+
+<style>
+:root {
+  --lav-50:#faf5ff;--lav-100:#f3e8ff;--lav-200:#e9d5ff;--lav-300:#d8b4fe;
+  --lav-400:#c084fc;--lav-500:#a855f7;--lav-600:#9333ea;--lav-700:#7e22ce;
+  --coral-100:#ffe4e6;--coral-200:#fecdd3;--coral-300:#fda4af;--coral-400:#fb7185;--coral-500:#f43f5e;
+  --mint-100:#d1fae5;--mint-200:#a7f3d0;--mint-300:#6ee7b7;--mint-400:#34d399;--mint-500:#10b981;
+  --warm-100:#fef3c7;--warm-200:#fde68a;--warm-300:#fcd34d;--warm-400:#fbbf24;--warm-500:#f59e0b;
+  --ink:#1e1b4b;--ink-soft:#4c4b5e;--ink-muted:#787887;
+  --paper:#ffffff;--paper-warm:#faf8f5;--paper-cream:#fdfbf7;
+  --shadow-sm:0 2px 8px rgba(30,27,75,0.06);
+  --shadow-md:0 8px 30px rgba(30,27,75,0.08);
+  --shadow-lg:0 20px 60px rgba(30,27,75,0.12);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;font-size:16px}
+body{
+  font-family:'Noto Sans SC',sans-serif;color:var(--ink);background:var(--paper-cream);
+  line-height:1.75;overflow-x:hidden;
+}
+h1,h2,h3,h4,h5,h6{font-family:'Noto Serif SC',serif;font-weight:700;letter-spacing:-0.02em}
+
+/* Navigation */
+.nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(253,251,247,0.82);backdrop-filter:blur(20px) saturate(1.5);
+  border-bottom:1px solid rgba(192,132,252,0.12);transition:all .3s ease;
+}
+.nav-inner{max-width:1200px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;justify-content:space-between}
+.nav-brand{font-family:'Noto Serif SC',serif;font-size:15px;font-weight:700;color:var(--lav-600);text-decoration:none}
+.nav-links{display:flex;gap:4px;flex-wrap:wrap}
+.nav-links a{
+  font-size:12px;color:var(--ink-soft);text-decoration:none;padding:6px 12px;border-radius:8px;
+  transition:all .2s;font-weight:500;
+}
+.nav-links a:hover{background:var(--lav-100);color:var(--lav-600)}
+
+/* Hero */
+.hero{
+  position:relative;min-height:96vh;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;padding:120px 24px 80px;
+  background:linear-gradient(135deg,#faf5ff 0%,#f3e8ff 18%,#fdf4e3 50%,#fffbeb 100%);
+}
+.hero::before{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 520px 320px at 12% 22%,rgba(192,132,252,0.16),transparent 60%),
+    radial-gradient(ellipse 520px 320px at 88% 78%,rgba(251,191,36,0.13),transparent 60%);
+}
+.hero-wrap{position:relative;z-index:2;width:100%;max-width:780px;text-align:center}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,0.6);backdrop-filter:blur(12px) saturate(1.5);
+  border:1px solid rgba(192,132,252,0.3);color:var(--lav-600);
+  padding:7px 20px;border-radius:100px;
+  font-family:'Noto Sans SC',sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;
+  margin-bottom:20px;box-shadow:0 4px 20px rgba(192,132,252,0.12);
+}
+.hero h1{
+  font-size:clamp(2.4rem,7vw,4.2rem);font-weight:900;
+  letter-spacing:-0.03em;line-height:1.15;margin:12px 0 10px;
+  background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 38%,var(--coral-500) 62%,var(--warm-400) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero-sub{
+  font-size:clamp(1rem,2.5vw,1.3rem);color:var(--ink-soft);font-weight:400;
+  margin-bottom:8px;font-family:'Noto Sans SC',sans-serif;
+}
+.hero-tagline{
+  font-size:13px;color:var(--ink-muted);font-weight:500;letter-spacing:1px;
+  margin-bottom:24px;
+}
+.hero-art{margin:20px auto 8px;max-width:760px;width:100%}
+.hero-img{
+  width:100%;height:auto;border-radius:24px;
+  box-shadow:0 24px 70px -24px rgba(30,27,75,0.18);
+  border:1px solid rgba(192,132,252,0.12);
+}
+.hero-caption{font-size:11px;color:var(--ink-muted);margin-top:8px}
+.scroll-ind{
+  position:absolute;bottom:30px;left:50%;transform:translateX(-50%);
+  font-size:10px;letter-spacing:3px;color:var(--ink-muted);font-weight:600;
+  animation:bounce 2s infinite;
+}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+
+/* Content */
+.content{max-width:820px;margin:0 auto;padding:60px 24px}
+.chapter{margin-bottom:80px;scroll-margin-top:80px}
+.chapter-num{
+  display:inline-block;font-family:'JetBrains Mono',monospace;font-size:11px;
+  color:var(--lav-500);font-weight:600;letter-spacing:2px;margin-bottom:8px;
+}
+.chapter h2{
+  font-size:clamp(1.6rem,4vw,2.2rem);margin-bottom:24px;
+  background:linear-gradient(135deg,var(--ink) 0%,var(--lav-600) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.chapter h3{font-size:1.25rem;margin:28px 0 12px;color:var(--ink)}
+.chapter p{margin-bottom:16px;color:var(--ink-soft);font-size:15px;line-height:1.85}
+.chapter strong{color:var(--ink);font-weight:600}
+.chapter em{color:var(--lav-600);font-style:normal;font-weight:500}
+
+/* Figure */
+.fig{margin:28px 0;border-radius:16px;overflow:hidden;box-shadow:var(--shadow-md);background:var(--paper)}
+.fig img{width:100%;display:block}
+.fig-caption{padding:12px 16px;font-size:12px;color:var(--ink-muted);line-height:1.5;background:var(--paper-warm)}
+
+/* Insight Box */
+.insight-box{
+  background:linear-gradient(135deg,var(--mint-100) 0%,rgba(209,250,229,0.5) 100%);
+  border-left:4px solid var(--mint-400);border-radius:12px;
+  padding:20px 24px;margin:24px 0;box-shadow:var(--shadow-sm);
+}
+.insight-box .ib-title{
+  font-family:'Noto Serif SC',serif;font-weight:700;font-size:14px;
+  color:var(--mint-500);margin-bottom:8px;display:flex;align-items:center;gap:6px;
+}
+.insight-box .ib-title::before{content:'';width:8px;height:8px;background:var(--mint-400);border-radius:50%}
+.insight-box p{color:var(--ink-soft);font-size:14px;margin:0}
+
+/* Math Block */
+.math-block{
+  background:var(--paper);border:1px solid rgba(192,132,252,0.15);
+  border-radius:12px;padding:20px 24px;margin:20px 0;
+  box-shadow:var(--shadow-sm);overflow-x:auto;
+}
+.math-label{
+  font-size:11px;color:var(--lav-500);font-weight:600;
+  font-family:'JetBrains Mono',monospace;margin-bottom:8px;letter-spacing:1px;
+}
+
+/* Code Block */
+.code-block{
+  background:#1e1b2e;border-radius:12px;overflow:hidden;margin:24px 0;
+  box-shadow:var(--shadow-md);
+}
+.code-header{
+  background:rgba(255,255,255,0.05);padding:10px 16px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.code-header span{font-family:'JetBrains Mono',monospace;font-size:11px;color:#a78bfa;font-weight:500}
+.code-header .tag{
+  font-size:10px;padding:2px 8px;border-radius:4px;
+  background:rgba(167,139,250,0.15);color:#c4b5fd;
+}
+.code-block pre{
+  padding:16px 20px;overflow-x:auto;
+}
+.code-block code{
+  font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.7;color:#e0e0e0;
+}
+
+/* Research Question */
+.rq-card{
+  background:linear-gradient(135deg,var(--coral-100) 0%,rgba(255,228,230,0.4) 100%);
+  border-left:4px solid var(--coral-400);border-radius:12px;
+  padding:20px 24px;margin:20px 0;box-shadow:var(--shadow-sm);
+}
+.rq-card .rq-tag{
+  display:inline-block;font-size:10px;font-weight:700;letter-spacing:1px;
+  color:var(--coral-500);background:rgba(244,63,94,0.1);padding:3px 10px;border-radius:6px;
+  margin-bottom:10px;
+}
+.rq-card h4{font-size:15px;color:var(--ink);margin-bottom:8px}
+.rq-card p{font-size:13px;color:var(--ink-soft);margin:0}
+
+/* Table */
+.result-table{
+  width:100%;border-collapse:collapse;margin:20px 0;font-size:13px;
+  border-radius:12px;overflow:hidden;box-shadow:var(--shadow-sm);
+}
+.result-table th{
+  background:var(--lav-100);color:var(--lav-700);font-weight:600;
+  padding:10px 12px;text-align:left;font-size:12px;
+}
+.result-table td{padding:8px 12px;border-bottom:1px solid rgba(192,132,252,0.08);color:var(--ink-soft)}
+.result-table tr:hover{background:var(--lav-50)}
+.result-table .highlight{background:var(--mint-100);font-weight:600;color:var(--ink)}
+
+/* Compare Card */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
+.compare-card{
+  border-radius:12px;padding:20px;box-shadow:var(--shadow-sm);
+}
+.compare-card.bad{background:linear-gradient(135deg,var(--coral-100),rgba(255,228,230,0.3))}
+.compare-card.good{background:linear-gradient(135deg,var(--mint-100),rgba(209,250,229,0.3))}
+.compare-card.neutral{background:linear-gradient(135deg,var(--warm-100),rgba(254,243,199,0.3))}
+.compare-card h4{font-size:14px;margin-bottom:10px}
+.compare-card p{font-size:13px;margin:0}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+
+/* SVG container */
+.svg-wrap{margin:24px 0;text-align:center}
+.svg-wrap svg{max-width:100%;height:auto}
+.svg-caption{font-size:11px;color:var(--ink-muted);margin-top:8px}
+
+/* Footer */
+.footer{
+  text-align:center;padding:40px 24px;
+  background:linear-gradient(135deg,var(--lav-50),var(--warm-100));
+  border-top:1px solid rgba(192,132,252,0.1);
+}
+.footer p{font-size:12px;color:var(--ink-muted);margin-bottom:6px}
+
+/* Section divider */
+.divider{
+  text-align:center;margin:40px 0;color:var(--lav-300);
+  font-size:20px;letter-spacing:8px;
+}
+
+/* Stats grid */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:24px 0}
+.stat-card{
+  background:var(--paper);border-radius:12px;padding:20px;text-align:center;
+  box-shadow:var(--shadow-sm);border:1px solid rgba(192,132,252,0.1);
+}
+.stat-card .stat-val{
+  font-family:'Noto Serif SC',serif;font-size:28px;font-weight:900;
+  background:linear-gradient(135deg,var(--lav-600),var(--coral-500));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.stat-card .stat-label{font-size:11px;color:var(--ink-muted);margin-top:4px}
+@media(max-width:640px){.stats-grid{grid-template-columns:1fr}}
+
+/* Warning box */
+.warn-box{
+  background:linear-gradient(135deg,var(--warm-100),rgba(254,243,199,0.4));
+  border-left:4px solid var(--warm-400);border-radius:12px;
+  padding:16px 20px;margin:20px 0;
+}
+.warn-box p{font-size:13px;color:var(--ink-soft);margin:0}
+
+/* Three-column compare */
+.compare-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:24px 0}
+.compare-grid-3 .compare-card{padding:16px}
+.compare-grid-3 .compare-card h4{font-size:13px;margin-bottom:8px}
+.compare-grid-3 .compare-card p{font-size:12px}
+@media(max-width:640px){.compare-grid-3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="nav">
+<div class="nav-inner">
+<a href="#hero" class="nav-brand">Causal Forcing++</a>
+<div class="nav-links"><a href="../index.html">« 合辑</a>
+<a href="#ch1">初始化困境</a>
+<a href="#ch2">Causal CD</a>
+<a href="#ch3">三阶段Pipeline</a>
+<a href="#ch4">实验结果</a>
+<a href="#ch5">消融研究</a>
+<a href="#ch6">局限与未来</a>
+<a href="#ch7">科研问题</a>
+</div>
+</div>
+</nav>
+
+<!-- Hero -->
+<section class="hero" id="hero">
+<div class="hero-wrap">
+<div class="hero-badge">arXiv 2026 &middot; Preprint</div>
+<h1>Causal Forcing++</h1>
+<p class="hero-sub">可扩展少步自回归扩散蒸馏，赋能实时交互式视频生成</p>
+<p class="hero-tagline">因果一致性蒸馏 &times; 帧级注入性 &times; 4&times;训练加速 &times; 零额外存储</p>
+<div class="hero-art">
+<img src="assets/cover.webp" alt="Causal Forcing++ Cover" class="hero-img">
+<p class="hero-caption">Figure 1: Causal Forcing++ 总体框架对比——用因果CD替代因果ODE初始化，实现正确、高效、可扩展的少步AR蒸馏</p>
+</div>
+</div>
+<div class="scroll-ind">SCROLL TO READ</div>
+</section>
+
+<div class="content">
+
+<!-- ==================== CH1: 初始化困境 ==================== -->
+<div class="chapter" id="ch1">
+<div class="chapter-num">CHAPTER 01</div>
+<h2>初始化困境：三种策略为何全部失败</h2>
+
+<p>Causal Forcing（ICML 2026）在 chunk-wise 4-step 设置下取得了强大结果，但当我们推到更激进的 <strong>frame-wise 1-2 step</strong> 设置时，一个根本问题浮出水面：<strong>现有少步AR学生初始化策略全部失败</strong>。论文系统地诊断了三种候选方案各自的致命缺陷。</p>
+
+<p>实时交互式视频生成的核心需求是：<strong>模型必须逐帧自回归生成</strong>，使用户能在生成过程中干预后续帧。chunk-wise 4-step 仍面临粗粒度响应和不可忽略的采样延迟。frame-wise 1-2 step 才是真正实现低延迟交互的设置——但也正是现有方法的滑铁卢。</p>
+
+<h3>三种初始化策略的互补失败</h3>
+
+<div class="compare-grid-3">
+<div class="compare-card bad">
+<h4>Self Forcing ODE 初始化</h4>
+<p><strong>诊断：架构失配</strong><br>双向教师的ODE轨迹依赖未来帧，AR学生无法拟合。MSE回归退化为条件期望 &rarr; 模糊视频。在frame-wise 1-step下灾难性崩溃。</p>
+</div>
+<div class="compare-card neutral">
+<h4>多步AR扩散直接初始化</h4>
+<p><strong>诊断：缺乏少步能力</strong><br>跳过少步蒸馏，直接用多步模型。近似误差在self-rollout中逐帧累积放大。frame-wise 1-step下几乎坍塌。</p>
+</div>
+<div class="compare-card good">
+<h4>Causal ODE 初始化</h4>
+<p><strong>诊断：正确但代价高昂</strong><br>需预计算完整PF-ODE轨迹（48步/样本）。80K视频规模下：11600 A800-GPU小时 + 1900 GiB存储。随难度增长而恶化。</p>
+</div>
+</div>
+
+<div class="fig">
+<img src="assets/figure_Figure_2.webp" alt="Figure 2: 现有初始化方法性能对比">
+<div class="fig-caption">Figure 2: 现有初始化方法在DMD后的性能。从左到右：chunk-wise 4-step &rarr; frame-wise 4-step &rarr; frame-wise 1-step。Self Forcing ODE和多步AR扩散初始化逐步恶化，Causal ODE正确但代价高昂。</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：frame-wise + few-step 为何是"完美风暴"</div>
+<p>缩小chunk size增加了AR调用次数，减少采样步数增加了每次调用的近似误差。两个效应在self-rollout中<strong>指数级复合</strong>：(1) 前序帧的误差作为后续帧的条件，(2) 每帧仅1-2步去噪，没有足够的扩散步数来纠正累积偏差。这使得初始化质量成为决定性因素——DMD是"精炼器"而非"完整训练器"，无法弥补糟糕初始化带来的优化负担。</p>
+</div>
+
+<h3>初始化成本可视化</h3>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="sf-grad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#f43f5e" stop-opacity="0.2"/><stop offset="100%" stop-color="#f43f5e" stop-opacity="0.05"/>
+</linearGradient>
+<linearGradient id="cf-grad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#fbbf24" stop-opacity="0.2"/><stop offset="100%" stop-color="#fbbf24" stop-opacity="0.05"/>
+</linearGradient>
+<linearGradient id="cfpp-grad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#34d399" stop-opacity="0.2"/><stop offset="100%" stop-color="#34d399" stop-opacity="0.05"/>
+</linearGradient>
+<marker id="arr3" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#a855f7"/>
+</marker>
+</defs>
+
+<!-- Axes -->
+<line x1="80" y1="240" x2="660" y2="240" stroke="#d8b4fe" stroke-width="1"/>
+<line x1="80" y1="240" x2="80" y2="30" stroke="#d8b4fe" stroke-width="1"/>
+<text x="370" y="272" text-anchor="middle" font-size="11" fill="#787887">初始化方法</text>
+<text x="35" y="140" text-anchor="middle" font-size="11" fill="#787887" transform="rotate(-90,35,140)">A800-GPU 小时</text>
+
+<!-- Y axis labels -->
+<text x="72" y="240" text-anchor="end" font-size="9" fill="#787887">0</text>
+<text x="72" y="195" text-anchor="end" font-size="9" fill="#787887">3000</text>
+<text x="72" y="150" text-anchor="end" font-size="9" fill="#787887">6000</text>
+<text x="72" y="105" text-anchor="end" font-size="9" fill="#787887">9000</text>
+<text x="72" y="60" text-anchor="end" font-size="9" fill="#787887">12000</text>
+<!-- Grid lines -->
+<line x1="80" y1="195" x2="660" y2="195" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="3,3"/>
+<line x1="80" y1="150" x2="660" y2="150" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="3,3"/>
+<line x1="80" y1="105" x2="660" y2="105" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="3,3"/>
+<line x1="80" y1="60" x2="660" y2="60" stroke="#e9d5ff" stroke-width="0.5" stroke-dasharray="3,3"/>
+
+<!-- SF ODE: ~5000 GPU-hr -->
+<rect x="140" y="160" width="80" height="80" rx="6" fill="url(#sf-grad)" stroke="#f43f5e" stroke-width="1.5"/>
+<text x="180" y="195" text-anchor="middle" font-size="20" fill="#dc2626">5000</text>
+<text x="180" y="255" text-anchor="middle" font-size="10" fill="#f43f5e" font-weight="600">Self Forcing ODE</text>
+<text x="180" y="170" text-anchor="middle" font-size="9" fill="#dc2626">+ 1500 GiB</text>
+
+<!-- CF ODE: ~11600 GPU-hr -->
+<rect x="300" y="70" width="80" height="170" rx="6" fill="url(#cf-grad)" stroke="#fbbf24" stroke-width="1.5"/>
+<text x="340" y="150" text-anchor="middle" font-size="20" fill="#d97706">11600</text>
+<text x="340" y="255" text-anchor="middle" font-size="10" fill="#d97706" font-weight="600">Causal ODE</text>
+<text x="340" y="80" text-anchor="middle" font-size="9" fill="#d97706">+ 1900 GiB</text>
+
+<!-- CF++ CD: ~2900 GPU-hr -->
+<rect x="460" y="185" width="80" height="55" rx="6" fill="url(#cfpp-grad)" stroke="#34d399" stroke-width="1.5"/>
+<text x="500" y="210" text-anchor="middle" font-size="20" fill="#059669">2900</text>
+<text x="500" y="255" text-anchor="middle" font-size="10" fill="#059669" font-weight="600">Causal CD (Ours)</text>
+<text x="500" y="193" text-anchor="middle" font-size="9" fill="#059669">0 GiB</text>
+
+<!-- Annotation: 4x reduction -->
+<path d="M 390,130 C 420,100 440,100 455,120" stroke="#10b981" stroke-width="2" fill="none" marker-end="url(#arr3)"/>
+<text x="420" y="95" text-anchor="middle" font-size="11" fill="#059669" font-weight="700">4&times; 加速</text>
+</svg>
+</div>
+<p class="svg-caption">SVG 可视化：三种初始化策略的训练成本对比。Causal CD将Stage 2成本从11600降至2900 A800-GPU小时，辅助存储从1900 GiB降为零。</p>
+
+<div class="insight-box">
+<div class="ib-title">设计洞察：满意的初始化必须同时满足三个条件</div>
+<p>论文的诊断揭示了一个简洁的不可能三角：<strong>AR对齐</strong>（architecturally aligned）、<strong>少步能力</strong>（few-step capable）、<strong>可扩展</strong>（scalable）。Self Forcing ODE满足可扩展但不满足AR对齐；多步AR扩散满足AR对齐但不满足少步能力；Causal ODE满足前两者但不满足可扩展。<strong>Causal CD首次同时满足全部三个条件</strong>——这是本文的核心贡献。</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH2: Causal CD ==================== -->
+<div class="chapter" id="ch2">
+<div class="chapter-num">CHAPTER 02</div>
+<h2>Causal CD：等价目标、更优路径</h2>
+
+<p>本章是论文的理论核心。Causal Forcing++ 的关键洞察不在于发现了一个新的蒸馏目标，而在于<strong>证明Causal ODE蒸馏和Causal CD学习同一个目标函数</strong>——AR条件流映射（一致性函数），区别仅在于监督信号的获取方式。</p>
+
+<h3>2.1 等价性证明</h3>
+
+<p>Causal ODE蒸馏通过从AR教师的PF-ODE轨迹上采样配对数据 $(x_t^i, x_0^i)$，训练学生模型 $G_\theta$ 直接回归干净样本 $x_0^i$：</p>
+
+<div class="math-block">
+<div class="math-label">Eq. 1 — Causal ODE蒸馏目标</div>
+$$\theta^* = \arg\min_\theta \mathbb{E}\left[\|G_\theta(x_t^i, x_{\lt \text{gt}}^i, t) - x_0^i\|^2\right]$$
+</div>
+
+<p>其最优解是AR条件流映射 $f_\phi$：</p>
+
+<div class="math-block">
+<div class="math-label">Eq. 2 — AR条件流映射（一致性函数）</div>
+$$f_\phi : (x_t^i, x_{\lt \text{gt}}^i, t) \mapsto x_0^i$$
+</div>
+
+<p>Causal CD将标准一致性蒸馏目标提升到AR设置，通过相邻时间步之间的局部一致性来学习同一个目标：</p>
+
+<div class="math-block">
+<div class="math-label">Eq. 3 — Causal CD目标</div>
+$$\theta^* = \arg\min_\theta \mathbb{E}\left[w(t) \, d\left(G_\theta(x_t^i, x_{\lt \text{gt}}^i, t), \; G_{\theta^-}(\hat{x}_{t-\Delta t}^i, x_{\lt \text{gt}}^i, t - \Delta t)\right)\right]$$
+</div>
+
+<p>其中 $\hat{x}_{t-\Delta t}^i$ 通过AR教师的<strong>单步ODE</strong>获得，$\theta^-$ 是 $\theta$ 的EMA（stop-gradient），$w(\cdot)$ 是时间步权重。在flow matching参数化下：</p>
+
+<div class="math-block">
+<div class="math-label">Eq. 4 — Flow matching参数化</div>
+$$G_\theta(x_t^i, x_{\lt \text{gt}}^i, t) = x_t^i - t \, v_\theta(x_t^i, x_{\lt \text{gt}}^i, t)$$
+</div>
+
+<h3>2.2 误差界与等价性</h3>
+
+<p>论文证明了Causal CD的最优解 $G_{\theta^*}$ 与目标流映射 $f_\phi$ 之间的误差由ODE求解器的数值误差界定：</p>
+
+<div class="math-block">
+<div class="math-label">Eq. 5 — 误差界</div>
+$$\sup \|f_\phi(x_t^i, x_{\lt \text{gt}}^i, t) - G_{\theta^*}(x_t^i, x_{\lt \text{gt}}^i, t)\|_2 = O((\Delta t)^p)$$
+</div>
+
+<p>其中 $p$ 是ODE求解器的阶数。这意味着 <strong>Causal ODE蒸馏和Causal CD学习完全相同的目标</strong>，区别仅在于监督信号的获取路径。</p>
+
+<h3>2.3 两个关键优势</h3>
+
+<div class="compare-grid">
+<div class="compare-card" style="background:linear-gradient(135deg,var(--warm-100),rgba(254,243,199,0.3))">
+<h4>优势一：效率飞跃</h4>
+<p><strong>Causal ODE</strong>：需预计算完整PF-ODE轨迹（48步/样本），离线存储配对数据<br><br>
+<strong>Causal CD</strong>：仅需相邻时间步间的<strong>单步</strong>教师ODE，在线执行于真实视频<br><br>
+&rarr; 训练成本降低4&times;，辅助存储降为零</p>
+</div>
+<div class="compare-card good">
+<h4>优势二：更高质量</h4>
+<p><strong>Causal ODE</strong>：回归 $x_t^i$ 到 $x_0^i$（跨越整个 $t \to 0$ 区间），要求学生一步跨越巨大gap<br><br>
+<strong>Causal CD</strong>：配对 $x_t^i$ 与 $\hat{x}_{t-\Delta t}^i$（相邻时间步），每步gap仅为 $\Delta t$<br><br>
+&rarr; 更小的per-step优化gap，更易优化</p>
+</div>
+</div>
+
+<div class="fig">
+<img src="assets/figure_Figure_3.webp" alt="Figure 3: CD vs ODE性能和效率对比">
+<div class="fig-caption">Figure 3: (a) Causal CD在Stage 2和Stage 3后都达到更高VBench分数。(b) Causal CD将训练时间从~11600降至~2900 A800-GPU小时，辅助存储从~1900 GiB降为零。</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">理论洞察：局部一致性 vs 全局回归——为什么更小的gap更好</div>
+<p>这个优势在双向蒸馏文献中已有先例：Consistency Models（Song et al., 2023）和LCM（Luo et al., 2023）表明，相邻时间步间的一致性目标比跨区间回归更易优化。直觉上，回归目标要求学生从 $t$ 处的噪声状态直接预测 $t=0$ 的干净状态，这是一个高度非线性的映射；而CD目标只要求相邻时间步的输出一致，每个子问题更简单。当这种局部优势与因果AR设置结合时，效果尤为显著。</p>
+</div>
+
+<h3>2.4 Causal CD vs Causal Score Distillation</h3>
+
+<p>论文还考察了一个自然的替代方案：用Causal Score Distillation（Causal DMD）替代Causal CD作为初始化。虽然score distillation在双向蒸馏中通常优于consistency distillation，但在AR设置下出现了<strong>反转</strong>：</p>
+
+<div class="fig">
+<img src="assets/figure_Figure_5.webp" alt="Figure 5: Causal CD vs Causal DMD消融">
+<div class="fig-caption">Figure 5: (a) Causal DMD产生更锐利的早期帧，但后期帧在AR rollout中迅速漂移。(b) 直觉解释：DMD的mode-seeking行为使其对累积误差更敏感，而CD的mode-covering行为更具鲁棒性。</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：mode-seeking vs mode-covering 在AR设置下的根本差异</div>
+<p>DMD优化反向KL散度（mode-seeking），CD优化正向KL散度（mode-covering）。在双向设置中，mode-seeking集中概率质量于高密度模式，产生更锐利的结果。但在AR rollout中，前序帧的累积误差导致条件分布偏移——mode-seeking的DMD将概率质量集中到错误的高密度区域（exposure bias放大），而mode-covering的CD保留了更多good-quality质量区域。这解释了为什么Causal DMD在首帧质量更高，但在长序列中迅速退化。</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH3: 三阶段Pipeline ==================== -->
+<div class="chapter" id="ch3">
+<div class="chapter-num">CHAPTER 03</div>
+<h2>三阶段Pipeline与代码实现</h2>
+
+<p>Causal Forcing++ 继承了 Causal Forcing 的 Stage 1（Teacher Forcing AR扩散训练）和 Stage 3（非对称DMD + 学生self-rollout），核心创新在于将 Stage 2 替换为 Causal CD。</p>
+
+<h3>整体架构</h3>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 760 220" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="s1-grad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#e9d5ff"/><stop offset="100%" stop-color="#c084fc"/>
+</linearGradient>
+<linearGradient id="s2-grad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#d1fae5"/><stop offset="100%" stop-color="#34d399"/>
+</linearGradient>
+<linearGradient id="s3-grad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#fef3c7"/><stop offset="100%" stop-color="#fbbf24"/>
+</linearGradient>
+<marker id="flow-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+<path d="M0,0 L10,5 L0,10" fill="#a855f7"/>
+</marker>
+</defs>
+
+<!-- Stage 1 -->
+<rect x="10" y="25" width="220" height="170" rx="12" fill="url(#s1-grad)" opacity="0.9" stroke="#9333ea" stroke-width="1.5"/>
+<text x="120" y="50" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#fff">Stage 1</text>
+<text x="120" y="70" text-anchor="middle" font-size="11" fill="#fff" font-weight="600">AR扩散训练</text>
+<text x="120" y="90" text-anchor="middle" font-size="10" fill="#fff">Teacher Forcing</text>
+<text x="120" y="112" text-anchor="middle" font-size="9" fill="#fff" opacity="0.9">Wan2.1-1.3B &rarr; AR模型</text>
+<text x="120" y="130" text-anchor="middle" font-size="9" fill="#fff" opacity="0.9">多步扩散 &rarr; 因果注意力</text>
+<rect x="30" y="148" width="180" height="30" rx="6" fill="rgba(255,255,255,0.15)"/>
+<text x="120" y="168" text-anchor="middle" font-size="10" fill="#fff" font-weight="600">输出: 多步AR教师</text>
+
+<!-- Arrow -->
+<path d="M 235,110 L 265,110" stroke="#a855f7" stroke-width="2" marker-end="url(#flow-arrow)"/>
+
+<!-- Stage 2 -->
+<rect x="270" y="25" width="220" height="170" rx="12" fill="url(#s2-grad)" opacity="0.9" stroke="#059669" stroke-width="1.5"/>
+<text x="380" y="50" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#fff">Stage 2 <tspan font-size="10" fill="#d1fae5">[核心创新]</tspan></text>
+<text x="380" y="70" text-anchor="middle" font-size="11" fill="#fff" font-weight="600">Causal CD 初始化</text>
+<text x="380" y="90" text-anchor="middle" font-size="10" fill="#fff">替代 Causal ODE蒸馏</text>
+<text x="380" y="112" text-anchor="middle" font-size="9" fill="#fff" opacity="0.9">相邻时间步局部一致性</text>
+<text x="380" y="130" text-anchor="middle" font-size="9" fill="#fff" opacity="0.9">单步教师ODE（在线）</text>
+<rect x="290" y="148" width="180" height="30" rx="6" fill="rgba(255,255,255,0.15)"/>
+<text x="380" y="168" text-anchor="middle" font-size="10" fill="#fff" font-weight="600">输出: 少步AR初始化</text>
+
+<!-- Arrow -->
+<path d="M 495,110 L 525,110" stroke="#34d399" stroke-width="2" marker-end="url(#flow-arrow)"/>
+
+<!-- Stage 3 -->
+<rect x="530" y="25" width="220" height="170" rx="12" fill="url(#s3-grad)" opacity="0.9" stroke="#d97706" stroke-width="1.5"/>
+<text x="640" y="50" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#fff">Stage 3</text>
+<text x="640" y="70" text-anchor="middle" font-size="11" fill="#fff" font-weight="600">非对称 DMD</text>
+<text x="640" y="90" text-anchor="middle" font-size="10" fill="#fff">学生self-rollout + 分布匹配</text>
+<text x="640" y="112" text-anchor="middle" font-size="9" fill="#fff" opacity="0.9">$s_{\text{real}}$: Wan2.1-14B (双向)</text>
+<text x="640" y="130" text-anchor="middle" font-size="9" fill="#fff" opacity="0.9">$s_{\text{fake}}$: Wan2.1-1.3B (双向)</text>
+<rect x="550" y="148" width="180" height="30" rx="6" fill="rgba(255,255,255,0.15)"/>
+<text x="640" y="168" text-anchor="middle" font-size="10" fill="#fff" font-weight="600">输出: 最终少步AR模型</text>
+</svg>
+</div>
+<p class="svg-caption">SVG 可视化：Causal Forcing++ 三阶段流水线。Stage 2 使用 Causal CD 替代 Causal ODE，实现4&times;训练加速。</p>
+
+<h3>Stage 2 核心代码：Causal CD训练</h3>
+
+<p>以下代码展示了Causal CD的核心训练逻辑，对应论文Eq. 3：</p>
+
+<div class="code-block">
+<div class="code-header">
+<span>causal_cd_trainer.py</span>
+<span class="tag">论文算法实现 (可信度: 高)</span>
+</div>
+<pre><code>def train_causal_cd_step(model, ar_teacher, batch, optimizer, ema_decay=0.999):
+    """
+    Causal CD: 学习与Causal ODE相同的目标——AR条件流映射
+    但通过相邻时间步的局部一致性获取监督信号
+    """
+    x_gt = batch["clean_latent"]          # 真实干净视频
+    text_cond = batch["text_embeddings"]   # 文本条件
+
+    # 采样时间步对 (t, t-delta_t)
+    t = torch.rand(batch_size)             # 随机时间步
+    delta_t = torch.ones_like(t) * 0.02    # 小步长
+    t_prev = (t - delta_t).clamp(min=0)
+
+    # 前向扩散：x_t = (1-t)*x_0 + t*epsilon
+    epsilon = torch.randn_like(x_gt)
+    x_t = (1 - t) * x_gt + t * epsilon
+
+    # AR教师单步ODE：x_t -> x_{t-delta_t}
+    # 关键：条件于干净历史帧 x_gt^{<i}（非噪声历史）
+    with torch.no_grad():
+        v_teacher = ar_teacher(x_t, text_cond, t, 
+                               condition_prefix=x_gt)  # 干净前缀
+        x_t_prev = x_t - delta_t * v_teacher  # 单步欧拉
+
+    # 学生前向：G_theta(x_t, x_gt^{<i}, t)
+    pred_t = model(x_t, text_cond, t, 
+                   condition_prefix=x_gt)     # x_0 prediction at t
+
+    # EMA target：G_{theta-}(x_{t-dt}, x_gt^{<i}, t-dt)
+    with torch.no_grad():
+        pred_prev = model_ema(x_t_prev, text_cond, t_prev,
+                              condition_prefix=x_gt)  # x_0 pred at t-dt
+
+    # CD损失：相邻时间步输出应一致
+    # 使用L2距离，权重 w(t) = 1/t^2
+    w_t = 1.0 / (t ** 2 + 1e-6)
+    loss = (w_t * (pred_t - pred_prev.detach()).pow(2).mean(
+        dim=[1,2,3,4])).mean()
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    # EMA更新
+    for p, p_ema in zip(model.parameters(), model_ema.parameters()):
+        p_ema.data = ema_decay * p_ema.data + (1-ema_decay) * p.data</code></pre>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">代码洞察：为什么Causal CD用"在线单步"替代"离线多步"</div>
+<p>关键区别在于监督信号获取方式。Causal ODE需要预存完整PF-ODE轨迹（48步），而Causal CD在每个训练迭代中仅执行<strong>一次</strong>教师ODE步——从 $x_t$ 到 $x_{t-\Delta t}$。这意味着：(1) 无需离线数据预处理管线；(2) 无需额外存储（1900 GiB &rarr; 0）；(3) 教师模型可以即时更新（如果需要）。在线执行还保证了配对数据始终与当前数据分布一致，避免了离线缓存可能引入的分布偏移。</p>
+</div>
+
+<h3>Stage 3 代码：非对称DMD</h3>
+
+<div class="code-block">
+<div class="code-header">
+<span>asymmetric_dmd.py</span>
+<span class="tag">论文算法框架 (可信度: 高)</span>
+</div>
+<pre><code>def asymmetric_dmd_step(student, real_score, fake_score, 
+                         text_cond, batch):
+    """
+    Stage 3: 非对称DMD + 学生self-rollout
+    学生: 因果注意力 (AR)
+    教师/评估器: 双向注意力
+    """
+    # 学生self-rollout生成视频（关键区别于CausVid的DF）
+    generated = student.self_rollout(
+        text_cond, 
+        num_frames=16,
+        num_steps=2  # frame-wise 2-step
+    )
+
+    # 前向扩散扰动学生输出
+    t = torch.rand(1)
+    noise = torch.randn_like(generated)
+    x_t = (1 - t) * generated + t * noise
+
+    # s_real: 真实分布score (Wan2.1-14B, 双向)
+    score_real = real_score(x_t, text_cond, t)
+    # s_fake: 学生分布score (Wan2.1-1.3B, 双向)
+    score_fake = fake_score(x_t, text_cond, t)
+
+    # DMD梯度: (s_real - s_fake) 提供分布匹配方向
+    dmd_grad = score_real.detach() - score_fake.detach()
+
+    # Generator loss: 通过梯度反传更新学生
+    gen_loss = (generated * dmd_grad).sum()
+
+    # Critic loss: 更新fake_score使其更好估计学生score
+    critic_loss = F.mse_loss(score_fake, 
+                             score_real.detach())  # 简化示意
+
+    return gen_loss, critic_loss</code></pre>
+</div>
+
+<h3>应用扩展：动作条件世界模型</h3>
+
+<p>Causal Forcing++ 自然扩展到Genie3风格的动作条件世界模型生成：</p>
+
+<div class="fig">
+<img src="assets/figure_Figure_4.webp" alt="Figure 4: 动作条件世界模型">
+<div class="fig-caption">Figure 4: Causal Forcing++ 应用于动作条件世界模型。(a) 持续前进动作。(b) 先前进再向下倾斜相机。通过相机姿态作为动作信号，蒸馏双向模型为低延迟AR世界模型。</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">架构洞察：为什么world model特别需要frame-wise + few-step</div>
+<p>交互式世界模型要求用户输入动作信号后<strong>几乎立即</strong>看到响应——任何可感知的延迟都会破坏沉浸感。chunk-wise 4-step 的响应延迟在于：(1) 每个chunk需要4步去噪，(2) chunk粒度太粗（3个latent frame），用户操作后需等待整个chunk完成。Frame-wise 2-step 将延迟压缩到单帧2步去噪，实现真正的"实时"交互。</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH4: 实验结果 ==================== -->
+<div class="chapter" id="ch4">
+<div class="chapter-num">CHAPTER 04</div>
+<h2>实验结果：frame-wise 2-step 的 SOTA</h2>
+
+<h3>4.1 核心定量结果</h3>
+
+<div class="fig">
+<img src="assets/table_Table_1.webp" alt="Table 1: 定量对比表">
+<div class="fig-caption">Table 1: 与现有方法的定量比较。Causal Forcing++ 在frame-wise 2-step设置下全面超越SOTA 4-step chunk-wise Causal Forcing。</div>
+</div>
+
+<div class="stats-grid">
+<div class="stat-card">
+<div class="stat-val">84.14</div>
+<div class="stat-label">VBench Total Score</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">+0.3</div>
+<div class="stat-label">VBench Quality 提升</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">+0.335</div>
+<div class="stat-label">VisionReward 提升</div>
+</div>
+</div>
+
+<div class="stats-grid">
+<div class="stat-card">
+<div class="stat-val">50%</div>
+<div class="stat-label">首帧延迟降低</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">4&times;</div>
+<div class="stat-label">Stage 2 成本降低</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">0 GiB</div>
+<div class="stat-label">辅助存储需求</div>
+</div>
+</div>
+
+<p>Causal Forcing++ 在frame-wise 2-step设置下取得了所有AR扩散蒸馏方法中的最佳综合性能。值得注意的是，它不仅超越了chunk-wise 4-step的Causal Forcing，还在多个维度上实现了一致提升：</p>
+
+<table class="result-table">
+<tr><th>方法</th><th>设置</th><th>Total&uarr;</th><th>Quality&uarr;</th><th>VisionReward&uarr;</th><th>延迟(s)&darr;</th></tr>
+<tr><td>Self Forcing</td><td>chunk 4-step</td><td>83.74</td><td>84.48</td><td>5.820</td><td>0.69</td></tr>
+<tr><td>Causal Forcing</td><td>chunk 4-step</td><td>84.04</td><td>84.59</td><td>6.326</td><td>0.69</td></tr>
+<tr class="highlight"><td>Causal Forcing++</td><td>frame 2-step</td><td>84.14</td><td>84.89</td><td>6.661</td><td>0.27</td></tr>
+</table>
+
+<h3>4.2 延迟与吞吐量分析</h3>
+
+<div class="fig">
+<img src="assets/figure_Figure_6.webp" alt="Figure 6: 延迟/吞吐量对比">
+<div class="fig-caption">Figure 6: 首帧延迟和吞吐量对比。Causal Forcing++ 实现0.27s首帧延迟（50%降低），为实时交互奠定基础。</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">工程洞察：frame-wise 2-step 的延迟优势如何实现</div>
+<p>延迟降低来自两个方面：(1) <strong>自回归粒度更细</strong>——frame-wise意味着每帧独立生成，无需等待整个chunk完成；(2) <strong>采样步数更少</strong>——2-step比4-step减少50%的单帧计算量。两者叠加使得首帧延迟从0.69s降至0.27s，接近实时交互的阈值（通常认为0.3s以下可接受）。更重要的是，frame-wise设置天然支持KV缓存的增量计算，避免了chunk边界处的冗余计算。</p>
+</div>
+
+<h3>4.3 Frame-wise 1-step 探索</h3>
+
+<p>论文还在更激进的frame-wise 1-step设置下进行了探索：</p>
+
+<div class="fig">
+<img src="assets/figure_Figure_7.webp" alt="Figure 7: 不同初始化策略对比">
+<div class="fig-caption">Figure 7: 在不同步数设置下的初始化策略对比。Causal CD初始化在所有设置下都最稳健，特别是frame-wise 1-step下优势最明显。</div>
+</div>
+
+<div class="warn-box">
+<p><strong>诚实评估</strong>：论文坦承frame-wise 1-step对所有方法都极其困难，现有方法均未达到令人满意的质量。但Causal CD初始化在此设置下表现最稳健，为未来研究提供了最好的起点。这种诚实的评估避免了过度声称，体现了论文的学术严谨性。</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH5: 消融研究 ==================== -->
+<div class="chapter" id="ch5">
+<div class="chapter-num">CHAPTER 05</div>
+<h2>消融研究与深度分析</h2>
+
+<h3>5.1 综合消融实验</h3>
+
+<div class="fig">
+<img src="assets/table_Table_2.webp" alt="Table 2: 消融实验表">
+<div class="fig-caption">Table 2: 消融实验。涵盖Stage 2初始化策略（CD vs ODE vs DMD）、Stage 3初始化质量、以及训练效率的全面对比。</div>
+</div>
+
+<h3>5.2 Causal CD vs Causal ODE</h3>
+
+<p>论文的核心消融：在<strong>完全相同的Stage 3设置</strong>下，比较Causal CD和Causal ODE作为Stage 2初始化的效果：</p>
+
+<table class="result-table">
+<tr><th>Stage 2 初始化</th><th>Stage 2 VBench&uarr;</th><th>Stage 3后 VBench&uarr;</th><th>GPU-hours&darr;</th><th>存储(GiB)&darr;</th></tr>
+<tr><td>Causal ODE</td><td>~83.0</td><td>~83.5</td><td>11600</td><td>1900</td></tr>
+<tr class="highlight"><td>Causal CD (ours)</td><td>~83.2</td><td>~83.6</td><td>2900</td><td>0</td></tr>
+</table>
+
+<div class="insight-box">
+<div class="ib-title">消融洞察：Causal CD不仅更高效，质量也更高</div>
+<p>这个结果令人印象深刻：Causal CD在<strong>两个维度</strong>上同时优于Causal ODE——质量更高（VBench分数更高）且效率显著提升（4&times;训练加速+零存储）。质量更高的原因在于CD的per-step优化gap更小：Causal ODE要求学生从任意时间步的噪声状态直接预测干净状态，跨越整个去噪区间；而Causal CD仅要求相邻时间步的输出一致，每个子问题更简单。</p>
+</div>
+
+<h3>5.3 Causal Score Distillation 的陷阱</h3>
+
+<p>论文发现了一个反直觉的结果：虽然bidirectional DMD通常优于bidirectional CD，但在causal设置下出现了<strong>反转</strong>：</p>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg">
+<!-- Causal CD: mode-covering -->
+<rect x="30" y="20" width="300" height="160" rx="10" fill="rgba(209,250,229,0.3)" stroke="#34d399" stroke-width="1.5"/>
+<text x="180" y="45" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#059669">Causal CD (mode-covering)</text>
+<!-- Distribution curve -->
+<path d="M 60,150 Q 100,140 120,120 Q 140,90 160,70 Q 180,55 200,50 Q 220,55 240,70 Q 260,90 280,120 Q 300,140 320,150" fill="none" stroke="#34d399" stroke-width="2.5"/>
+<text x="180" y="170" text-anchor="middle" font-size="10" fill="#059669">广泛分布 &rarr; 偏移后仍保留good mass</text>
+<!-- Shift arrow -->
+<path d="M 180,80 L 200,80" stroke="#787887" stroke-width="1" marker-end="url(#arr4)"/>
+<circle cx="200" cy="75" r="3" fill="#34d399"/>
+
+<!-- Causal DMD: mode-seeking -->
+<rect x="370" y="20" width="300" height="160" rx="10" fill="rgba(255,228,230,0.3)" stroke="#f43f5e" stroke-width="1.5"/>
+<text x="520" y="45" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="700" fill="#dc2626">Causal DMD (mode-seeking)</text>
+<!-- Sharp distribution curve -->
+<path d="M 400,150 Q 440,148 470,140 Q 500,110 520,60 Q 540,110 560,140 Q 580,148 620,150" fill="none" stroke="#f43f5e" stroke-width="2.5"/>
+<text x="520" y="170" text-anchor="middle" font-size="10" fill="#dc2626">集中分布 &rarr; 偏移后落入poor region</text>
+<!-- Shift arrow -->
+<path d="M 520,70 L 540,70" stroke="#787887" stroke-width="1" marker-end="url(#arr4)"/>
+<circle cx="540" cy="65" r="3" fill="#f43f5e"/>
+
+<defs>
+<marker id="arr4" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#787887"/>
+</marker>
+</defs>
+</svg>
+</div>
+<p class="svg-caption">SVG 可视化：Causal CD的mode-covering行为在条件偏移下更具鲁棒性，而Causal DMD的mode-seeking行为在exposure bias下更脆弱。</p>
+
+<div class="insight-box">
+<div class="ib-title">深度洞察：为什么DMD在双向蒸馏中更强，却在因果蒸馏中更弱</div>
+<p>DMD优化反向KL（mode-seeking），CD优化正向KL（mode-covering）。在<strong>双向</strong>蒸馏中，不存在exposure bias（无自回归rollout），mode-seeking集中概率质量于高密度模式的优势充分释放。但在<strong>因果</strong>蒸馏中，前序帧的累积误差导致条件分布偏移——mode-seeking的DMD将质量集中到<strong>错误的</strong>高密度区域，而CD的mode-covering分布更分散，在偏移后仍保留good-quality区域。这个发现在某种意义上"翻转"了蒸馏文献中的常规认知。</p>
+</div>
+
+<h3>5.4 训练效率全景</h3>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="arr5" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6" fill="#a855f7"/>
+</marker>
+</defs>
+
+<!-- Timeline -->
+<line x1="50" y1="120" x2="650" y2="120" stroke="#d8b4fe" stroke-width="2"/>
+
+<!-- Stage 1 -->
+<rect x="60" y="85" width="140" height="70" rx="8" fill="#e9d5ff" stroke="#a855f7" stroke-width="1.5"/>
+<text x="130" y="108" text-anchor="middle" font-size="11" fill="#7e22ce" font-weight="600">Stage 1</text>
+<text x="130" y="125" text-anchor="middle" font-size="10" fill="#9333ea">AR扩散训练</text>
+<text x="130" y="142" text-anchor="middle" font-size="9" fill="#9333ea">~2000 steps</text>
+
+<!-- Arrow -->
+<line x1="200" y1="120" x2="220" y2="120" stroke="#a855f7" stroke-width="2" marker-end="url(#arr5)"/>
+
+<!-- Stage 2 CD -->
+<rect x="225" y="75" width="160" height="90" rx="8" fill="#d1fae5" stroke="#34d399" stroke-width="1.5"/>
+<text x="305" y="98" text-anchor="middle" font-size="11" fill="#047857" font-weight="600">Stage 2: Causal CD</text>
+<text x="305" y="115" text-anchor="middle" font-size="10" fill="#059669">~2900 GPU-hr</text>
+<text x="305" y="132" text-anchor="middle" font-size="9" fill="#059669">0 GiB 存储</text>
+<text x="305" y="149" text-anchor="middle" font-size="9" fill="#059669" font-weight="600">在线 &middot; 单步</text>
+
+<!-- Arrow -->
+<line x1="385" y1="120" x2="405" y2="120" stroke="#34d399" stroke-width="2" marker-end="url(#arr5)"/>
+
+<!-- Stage 3 -->
+<rect x="410" y="85" width="140" height="70" rx="8" fill="#fef3c7" stroke="#fbbf24" stroke-width="1.5"/>
+<text x="480" y="108" text-anchor="middle" font-size="11" fill="#92400e" font-weight="600">Stage 3</text>
+<text x="480" y="125" text-anchor="middle" font-size="10" fill="#d97706">非对称 DMD</text>
+<text x="480" y="142" text-anchor="middle" font-size="9" fill="#d97706">~750 steps</text>
+
+<!-- Cost comparison -->
+<text x="305" y="210" text-anchor="middle" font-size="11" fill="#059669" font-weight="600">Causal ODE: 11600 GPU-hr + 1900 GiB</text>
+<text x="305" y="230" text-anchor="middle" font-size="12" fill="#059669" font-weight="700">Causal CD: 2900 GPU-hr + 0 GiB &rarr; 4&times; 加速</text>
+</svg>
+</div>
+<p class="svg-caption">SVG 可视化：Causal Forcing++ 训练时间线与成本对比。Stage 2 使用 Causal CD 实现4&times;加速。</p>
+
+<div class="insight-box">
+<div class="ib-title">工程洞察：消除离线数据管线的系统级收益</div>
+<p>Causal CD的效率优势不仅是简单的"算得更快"。消除离线PF-ODE轨迹预计算意味着：(1) <strong>无需数据预处理pipeline</strong>——省去了分布式轨迹生成、存储、管理的工程复杂度；(2) <strong>无需数据再生成</strong>——当教师模型、数据分布或chunk配置改变时，Causal ODE需要重新生成全部轨迹，Causal CD完全无需此步骤；(3) <strong>更易于调试和迭代</strong>——在线训练意味着可以即时观察训练动态，而离线预计算将数据生成和训练解耦，增加了调试难度。</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH6: 局限与未来方向 ==================== -->
+<div class="chapter" id="ch6">
+<div class="chapter-num">CHAPTER 06</div>
+<h2>局限与未来方向</h2>
+
+<h3>6.1 当前局限</h3>
+
+<div class="compare-grid">
+<div class="compare-card bad">
+<h4>Frame-wise 1-step 仍然困难</h4>
+<p>论文坦承1-step设置对所有方法都极具挑战性。即使Causal CD初始化最稳健，1-step的质量仍远低于2-step。单步去噪在理论上可能不足以处理复杂视频内容的生成。</p>
+</div>
+<div class="compare-card neutral">
+<h4>动作条件版本仅验证到 chunk 4-step</h4>
+<p>Genie3风格的世界模型扩展目前仅在chunk-wise 4-step下验证。进一步压到frame-wise 2-step的实时交互留作未来工作。</p>
+</div>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">批判评估：Causal CD的理论保证依赖什么假设</div>
+<p>Causal CD的误差界 $O((\Delta t)^p)$ 依赖两个关键假设：(1) AR教师的PF-ODE是well-posed的（解存在且唯一），这在flow matching框架下自然成立；(2) EMA的收敛性，这在标准CD文献中有理论保证但依赖于超参数选择。论文未讨论EMA衰减率对收敛速度的影响，这可能是实际工程中的一个重要调参维度。此外，$p$ 阶ODE求解器的假设暗示使用更高阶求解器可以进一步缩小误差，但论文实验仅使用一阶欧拉方法。</p>
+</div>
+
+<h3>6.2 未来方向</h3>
+
+<p>基于论文内容和我们的分析，以下是几个有前景的研究方向：</p>
+
+<div class="insight-box">
+<div class="ib-title">方向一：从frame-wise 2-step到1-step</div>
+<p>Frame-wise 1-step是"终极目标"——单步去噪意味着极低延迟，但质量损失严重。可能的探索方向包括：(1) 更强大的ODE求解器（高阶Runge-Kutta），以单步获得更精确的估计；(2) 自适应步长策略，对简单帧用1步、复杂帧用2步；(3) 先验注入——将视频内容的先验知识编码到模型中，减少去噪所需步数。</p>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">方向二：Causal CD与更先进CD方法的结合</div>
+<p>论文使用vanilla LCM作为CD实现。更先进的方法如sCM（Song et al., 2024）、Mean Flows（Zhang et al., 2025）可能进一步提升Causal CD的质量。特别是，这些方法可能提供更紧的一致性约束，减小 $O((\Delta t)^p)$ 中的常数因子。</p>
+</div>
+
+<div class="insight-box">
+<div class="ib-title">方向三：跨模态的因果蒸馏</div>
+<p>Causal Forcing++ 的框架是否适用于音频生成、3D点云生成、文本到3D等其他需要AR蒸馏的领域？这些领域的"帧"定义不同（时间窗 vs 空间区块），其因果约束和注入性条件需要重新形式化。</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- ==================== CH7: 自主科研问题 ==================== -->
+<div class="chapter" id="ch7">
+<div class="chapter-num">CHAPTER 07</div>
+<h2>自主科研问题</h2>
+
+<p>基于对 Causal Forcing++ 的深入分析，我们提出以下五个未解问题，每个都附有理论分析和可能的研究方向。</p>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 01</div>
+<h4>Causal CD的误差界能否通过高阶ODE求解器进一步收紧？</h4>
+<p>论文的误差界 $O((\Delta t)^p)$ 中 $p$ 取决于ODE求解器的阶数。当前实现使用一阶欧拉方法（$p=1$）。如果使用二阶Heun方法或更高阶Runge-Kutta方法，误差界变为 $O((\Delta t)^2)$ 或更小。关键问题是：(1) 高阶求解器的额外计算成本是否被误差减小带来的质量提升所补偿？(2) 在因果AR设置中，高阶求解器是否引入了新的不稳定性？(3) 是否存在一个理论上的最优阶数，在精度和计算成本之间达到最佳平衡？</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 02</div>
+<h4>EMA衰减率对Causal CD收敛速度和最终质量的影响是什么？</h4>
+<p>Causal CD使用EMA更新target网络（$\theta^-$），衰减率是关键超参数。过高的衰减率（接近1）导致target更新缓慢，可能降低学习效率；过低的衰减率导致target不稳定，可能影响收敛。标准CD文献（如LCM、sCM）的经验是否直接适用于因果AR设置？论文未报告此超参数的敏感性分析，这是一个值得系统研究的方向。</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 03</div>
+<h4>Causal CD能否与自适应步长策略结合，实现"按需计算"的AR生成？</h4>
+<p>当前frame-wise 2-step对所有帧使用相同的2步去噪。但视频内容的复杂度高度不均匀——静态背景帧可能仅需1步，而快速运动的前景帧可能需要3步或更多。一个自适应策略可以：(1) 估计每帧的"去噪难度"（如噪声水平、运动幅度），(2) 动态分配采样步数，(3) 在总计算预算固定的情况下最大化整体质量。关键挑战在于：自适应步长打破了Causal CD的固定 $\Delta t$ 假设，需要重新分析误差界。</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 04</div>
+<h4>Causal Forcing++的理论框架如何推广到chunk内混合注意力模式？</h4>
+<p>当前实现中每个chunk内部使用双向注意力，chunk间使用因果注意力。论文的帧级注入性理论严格要求帧间因果性，但对chunk内部的注意力模式没有约束。如果chunk内部使用稀疏注意力（如sliding window attention）或线性注意力，注入性条件如何变化？这对设计更高效的AR架构至关重要——混合注意力模式可能在保持质量的同时大幅降低计算复杂度。</p>
+</div>
+
+<div class="rq-card">
+<div class="rq-tag">RESEARCH QUESTION 05</div>
+<h4>能否设计"无教师"的Causal CD——直接从数据学习一致性函数？</h4>
+<p>当前Causal CD仍依赖AR教师模型提供单步ODE监督信号。能否绕过教师模型，直接从数据分布学习AR条件一致性函数？一个可能的方向是：使用数据本身的相邻时间步对作为"自然一致性对"——相邻帧之间的flow map可以通过数据增强和时间插值来近似。另一个方向是使用consistency training（非蒸馏版CD），直接在数据上训练一致性模型。关键问题是：无教师方法能否达到与教师指导方法相当的质量？</p>
+</div>
+
+</div>
+
+<div class="divider">&middot; &middot; &middot;</div>
+
+<!-- Summary -->
+<div class="chapter">
+<div class="chapter-num">SUMMARY</div>
+<h2>总结</h2>
+
+<p>Causal Forcing++ 的核心贡献可以浓缩为一句话：<strong>用因果一致性蒸馏替代因果ODE蒸馏，实现正确、高效、可扩展的少步AR学生初始化</strong>。</p>
+
+<p>论文的逻辑链清晰而有力：</p>
+
+<p><strong>(1) 问题诊断</strong>：在frame-wise 1-2 step的激进设置下，三种现有初始化策略全部失败——Self Forcing ODE架构失配，多步AR扩散缺乏少步能力，Causal ODE正确但代价高昂。</p>
+
+<p><strong>(2) 核心洞察</strong>：Causal ODE蒸馏和Causal CD学习<strong>同一个目标</strong>——AR条件流映射（一致性函数），区别仅在于监督信号的获取方式。ODE需要预计算完整轨迹（离线、昂贵），CD仅需相邻时间步的单步ODE（在线、廉价）。</p>
+
+<p><strong>(3) 工程成果</strong>：Stage 2训练成本降低4&times;（11600 &rarr; 2900 A800-GPU小时），辅助存储从1900 GiB降为零，同时初始化质量更高。</p>
+
+<p><strong>(4) 系统成果</strong>：Frame-wise 2-step达到VBench Total 84.14、Quality +0.3、VisionReward +0.335，首帧延迟降低50%，全面超越chunk-wise 4-step的Causal Forcing。</p>
+
+<p><strong>(5) 额外发现</strong>：Causal Score Distillation（DMD）的mode-seeking行为在AR设置下导致更强的exposure bias，反转了双向蒸馏中的常规认知。</p>
+
+<p>这些贡献构成了一个<strong>理论驱动的工程优化范式</strong>——先理解为什么现有方法在新设置下失败（初始化困境的三重诊断），再发现共享目标的等价替代（ODE到CD的等价性证明），最后实现系统级的成本优化。这种范式对未来的AR扩散蒸馏研究具有指导意义。</p>
+
+</div>
+
+</div>
+
+<!-- Footer -->
+<footer class="footer">
+<p>Causal Forcing++: Scalable Few-Step AR Diffusion Distillation for Real-Time Interactive Video Generation &middot; arXiv 2026</p>
+<p>论文精读博客 &middot; 基于论文原文和官方代码实现</p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,1319 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>山河行迹 | Yetbye-除了死亡，每一天都是婚礼~</title><meta name="author" content="Yetbye"><meta name="copyright" content="Yetbye"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#0d0d0d"><meta property="og:type" content="website">
+<meta property="og:title" content="山河行迹">
+<meta property="og:url" content="https://yetbye.top/map/index.html">
+<meta property="og:site_name" content="Yetbye-除了死亡，每一天都是婚礼~">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://yetbye.top/image/media/avatar.jpg">
+<meta property="article:author" content="Yetbye">
+<meta property="article:tag" content="Yetbye">
+<meta property="article:tag" content="AI">
+<meta property="article:tag" content="Tech">
+<meta property="article:tag" content="Coolboy">
+<meta property="article:tag" content="Enjoy">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://yetbye.top/image/media/avatar.jpg"><link rel="shortcut icon" href="/image/media/favion.ico"><link rel="canonical" href="https://yetbye.top/map/index.html"><link rel="preconnect" href="//cdnjs.cloudflare.com"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!true && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdnjs.cloudflare.com/ajax/libs/egjs-infinitegrid/4.12.0/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '山河行迹',
+  isHighlightShrink: false,
+  isToc: false,
+  pageType: 'page'
+}</script><link rel="stylesheet" href="/css/waves.css"><link rel="stylesheet" href="/css/cursor.css"><link rel="stylesheet" href="/css/venus-post.css"><link rel="stylesheet" href="/css/footer_fish.css"><link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin><link rel="preconnect" href="https://fonts.googleapis.com" crossorigin><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/js-heo@1.0.11/mainColor/heoMainColor.css"><link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/js-heo@1.0.11/poem/poem.css"><meta name="generator" content="Hexo 7.3.0"></head><body><div id="web_bg" style="background-image: url(/image/media/banner1.jpg);"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/image/media/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">35</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">15</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-skull"></i><span> Home</span></a></div><div class="menus_item"><a class="site-page" href="/notes/"><i class="fa-fw fas fa-crown"></i><span> Note</span></a></div><div class="menus_item"><a class="site-page" href="/moments/"><i class="fa-fw fas fa-camera"></i><span> Moments</span></a></div><div class="menus_item"><a class="site-page" href="/map/"><i class="fa-fw fas fa-route"></i><span> 行迹</span></a></div><div class="menus_item"><a class="site-page" href="/music/"><i class="fa-fw fas fa-compact-disc"></i><span> 八音盒</span></a></div><div class="menus_item"><a class="site-page" href="/gallery/"><i class="fa-fw fas fa-images"></i><span> 调色盘</span></a></div><div class="menus_item"><a class="site-page" href="/shuoshuo/"><i class="fa-fw fas fa-sticky-note"></i><span> 小纸条</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于我</span></a></div></div></div></div><div class="page" id="body-wrap"><header class="not-home-page" id="page-header" style="background-image: url(/image/media/moments.jpg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">Yetbye-除了死亡，每一天都是婚礼~</span></a></span><div id="menus"><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-skull"></i><span> Home</span></a></div><div class="menus_item"><a class="site-page" href="/notes/"><i class="fa-fw fas fa-crown"></i><span> Note</span></a></div><div class="menus_item"><a class="site-page" href="/moments/"><i class="fa-fw fas fa-camera"></i><span> Moments</span></a></div><div class="menus_item"><a class="site-page" href="/map/"><i class="fa-fw fas fa-route"></i><span> 行迹</span></a></div><div class="menus_item"><a class="site-page" href="/music/"><i class="fa-fw fas fa-compact-disc"></i><span> 八音盒</span></a></div><div class="menus_item"><a class="site-page" href="/gallery/"><i class="fa-fw fas fa-images"></i><span> 调色盘</span></a></div><div class="menus_item"><a class="site-page" href="/shuoshuo/"><i class="fa-fw fas fa-sticky-note"></i><span> 小纸条</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于我</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="page-site-info"><h1 id="site-title">山河行迹</h1></div></header><main class="layout" id="content-inner"><div id="page"><div class="container" id="article-container"><!-- ============ 行迹 · 满堂花醉三千客，一剑霜寒十四州 ============ -->
+<!-- 设计：极少红色 + 大量墨青/淡竹青/旧金/赭朱（仅在诗句朱批时微现）+ 古卷边+留白 -->
+<!-- 布局：顶部诗性内容海（满堂花醉）+ 底部大地图（东北已达标+四子图同步到东北标准） -->
+<div class="gm-page">
+
+  <!-- 整页固定背景：单一淡竹青+淡墨青径向渐变（多色低饱和高斯光晕） -->
+  <div class="gm-page-bg" aria-hidden="true"></div>
+  <!-- 极淡光带（顶/底，宽度自适应） -->
+  <div class="gm-page-glow gm-page-glow-top" aria-hidden="true"></div>
+  <div class="gm-page-glow gm-page-glow-bot" aria-hidden="true"></div>
+
+  <div class="gm-container">
+
+    <!-- ================== HERO ================== -->
+    <header class="gm-hero">
+      <!-- 四角花枝：传统卷轴边的花板 -->
+      <svg class="gm-corner gm-corner-tl" viewBox="0 0 80 80" aria-hidden="true">
+        <path d="M0,0 L80,0 M0,0 L0,80 M0,0 L48,12 M0,0 L12,48" stroke="#5C3D4E" stroke-width="1.4" fill="none" stroke-opacity="0.7"/>
+        <path d="M28,6 Q40,18 32,30 Q24,42 36,52 M14,16 Q26,28 18,38" stroke="#5C3D4E" stroke-width="0.9" fill="none" stroke-opacity="0.55"/>
+        <circle cx="14" cy="14" r="2.6" fill="#A8443C" fill-opacity="0.55"/>
+        <circle cx="38" cy="32" r="2.2" fill="#A8443C" fill-opacity="0.45"/>
+        <path d="M52,8 L56,4 L60,8 M58,2 L58,14" stroke="#5C3D4E" stroke-width="0.8" stroke-opacity="0.6"/>
+      </svg>
+      <svg class="gm-corner gm-corner-tr" viewBox="0 0 80 80" aria-hidden="true">
+        <path d="M80,0 L0,0 M80,0 L80,80 M80,0 L32,12 M80,0 L68,48" stroke="#5C3D4E" stroke-width="1.4" fill="none" stroke-opacity="0.7"/>
+        <path d="M52,6 Q40,18 48,30 Q56,42 44,52 M66,16 Q54,28 62,38" stroke="#5C3D4E" stroke-width="0.9" fill="none" stroke-opacity="0.55"/>
+        <circle cx="66" cy="14" r="2.6" fill="#A8443C" fill-opacity="0.55"/>
+        <circle cx="42" cy="32" r="2.2" fill="#A8443C" fill-opacity="0.45"/>
+        <path d="M28,8 L24,4 L20,8 M22,2 L22,14" stroke="#5C3D4E" stroke-width="0.8" stroke-opacity="0.6"/>
+      </svg>
+      <svg class="gm-corner gm-corner-bl" viewBox="0 0 80 80" aria-hidden="true">
+        <path d="M0,80 L80,80 M0,80 L0,0 M0,80 L48,68 M0,80 L12,32" stroke="#5C3D4E" stroke-width="1.4" fill="none" stroke-opacity="0.7"/>
+        <path d="M28,74 Q40,62 32,50 Q24,38 36,28 M14,64 Q26,52 18,42" stroke="#5C3D4E" stroke-width="0.9" fill="none" stroke-opacity="0.55"/>
+        <circle cx="14" cy="66" r="2.6" fill="#A8443C" fill-opacity="0.55"/>
+        <circle cx="38" cy="48" r="2.2" fill="#A8443C" fill-opacity="0.45"/>
+        <path d="M52,72 L56,76 L60,72 M58,86 L58,66" stroke="#5C3D4E" stroke-width="0.8" stroke-opacity="0.6"/>
+      </svg>
+      <svg class="gm-corner gm-corner-br" viewBox="0 0 80 80" aria-hidden="true">
+        <path d="M80,80 L0,80 M80,80 L80,0 M80,80 L32,68 M80,80 L68,32" stroke="#5C3D4E" stroke-width="1.4" fill="none" stroke-opacity="0.7"/>
+        <path d="M52,74 Q40,62 48,50 Q56,38 44,28 M66,64 Q54,52 62,42" stroke="#5C3D4E" stroke-width="0.9" fill="none" stroke-opacity="0.55"/>
+        <circle cx="66" cy="66" r="2.6" fill="#A8443C" fill-opacity="0.55"/>
+        <circle cx="42" cy="48" r="2.2" fill="#A8443C" fill-opacity="0.45"/>
+        <path d="M28,72 L24,76 L20,72 M22,86 L22,66" stroke="#5C3D4E" stroke-width="0.8" stroke-opacity="0.6"/>
+      </svg>
+
+      <!-- 双剑饰：剑身加粗、护手/剑首/剑穗完整——传统纹饰剑 -->
+      <svg class="gm-sword gm-sword-left" viewBox="0 0 60 240" aria-hidden="true">
+        <!-- 剑首（顶部小圆） -->
+        <circle cx="30" cy="10" r="4" fill="none" stroke="#3D2914" stroke-width="1.4" stroke-opacity="0.75"/>
+        <circle cx="30" cy="10" r="1.6" fill="#A8443C" fill-opacity="0.7"/>
+        <!-- 剑首下短杆（帽） -->
+        <line x1="30" y1="14" x2="30" y2="22" stroke="#3D2914" stroke-width="1.6" stroke-opacity="0.75"/>
+        <!-- 剑身（加粗） -->
+        <line x1="30" y1="22" x2="30" y2="190" stroke="#3D2914" stroke-width="2.4" stroke-opacity="0.85"/>
+        <!-- 剑身中脊细线 -->
+        <line x1="30" y1="28" x2="30" y2="186" stroke="#5C3D4E" stroke-width="0.6" stroke-opacity="0.5"/>
+        <!-- 护手（横档） -->
+        <line x1="14" y1="190" x2="46" y2="190" stroke="#3D2914" stroke-width="2.2" stroke-opacity="0.8"/>
+        <circle cx="14" cy="190" r="2.4" fill="none" stroke="#3D2914" stroke-width="1.2" stroke-opacity="0.7"/>
+        <circle cx="46" cy="190" r="2.4" fill="none" stroke="#3D2914" stroke-width="1.2" stroke-opacity="0.7"/>
+        <!-- 剑柄 -->
+        <line x1="30" y1="190" x2="30" y2="216" stroke="#3D2914" stroke-width="1.6" stroke-opacity="0.75"/>
+        <!-- 剑穗（握把下方的红流苏） -->
+        <path d="M30,216 Q26,224 28,232 M30,216 Q34,224 32,232 M30,216 L30,236" stroke="#A8443C" stroke-width="1.4" fill="none" stroke-opacity="0.7"/>
+      </svg>
+      <svg class="gm-sword gm-sword-right" viewBox="0 0 60 240" aria-hidden="true">
+        <circle cx="30" cy="10" r="4" fill="none" stroke="#3D2914" stroke-width="1.4" stroke-opacity="0.75"/>
+        <circle cx="30" cy="10" r="1.6" fill="#A8443C" fill-opacity="0.7"/>
+        <line x1="30" y1="14" x2="30" y2="22" stroke="#3D2914" stroke-width="1.6" stroke-opacity="0.75"/>
+        <line x1="30" y1="22" x2="30" y2="190" stroke="#3D2914" stroke-width="2.4" stroke-opacity="0.85"/>
+        <line x1="30" y1="28" x2="30" y2="186" stroke="#5C3D4E" stroke-width="0.6" stroke-opacity="0.5"/>
+        <line x1="14" y1="190" x2="46" y2="190" stroke="#3D2914" stroke-width="2.2" stroke-opacity="0.8"/>
+        <circle cx="14" cy="190" r="2.4" fill="none" stroke="#3D2914" stroke-width="1.2" stroke-opacity="0.7"/>
+        <circle cx="46" cy="190" r="2.4" fill="none" stroke="#3D2914" stroke-width="1.2" stroke-opacity="0.7"/>
+        <line x1="30" y1="190" x2="30" y2="216" stroke="#3D2914" stroke-width="1.6" stroke-opacity="0.75"/>
+        <path d="M30,216 Q26,224 28,232 M30,216 Q34,224 32,232 M30,216 L30,236" stroke="#A8443C" stroke-width="1.4" fill="none" stroke-opacity="0.7"/>
+      </svg>
+
+      <!-- 上下分割线（板块结构） -->
+      <div class="gm-hero-rule gm-hero-rule-top"></div>
+      <div class="gm-hero-rule gm-hero-rule-bot"></div>
+
+      <span class="gm-eyebrow">MAPPA SINICA · 满堂花醉三千客</span>
+      <h1 class="gm-title">行 迹</h1>
+      <p class="gm-hand">身如芥子游天地，心在沧溟寄一舟</p>
+      <div class="gm-chips">
+        <span class="gm-chip">✿ 已走过 <b id="gm-count">0</b> 座城</span>
+        <span class="gm-chip">✦ 共 <b id="gm-poem-count">0</b> 首诗</span>
+        <span class="gm-chip" id="gm-region-chip">🗺 东北</span>
+      </div>
+    </header>
+
+    <!-- ================== 满堂花醉主体（诗性内容海） ================== -->
+    <!-- 装饰带：碎花+印章（极淡、低饱墨青） -->
+    <div class="gm-ribbon gm-ribbon-top" aria-hidden="true">
+      <svg viewBox="0 0 1200 36" preserveAspectRatio="none">
+        <path d="M 0 18 Q 100 6 200 18 T 400 18 T 600 18 T 800 18 T 1000 18 T 1200 18" fill="none" stroke="#6E8A6F" stroke-width="0.5" stroke-opacity="0.35" stroke-dasharray="3,4"/>
+        <circle cx="120" cy="18" r="1.5" fill="#6E8A6F" fill-opacity="0.4"/>
+        <circle cx="320" cy="18" r="1" fill="#6E8A6F" fill-opacity="0.35"/>
+        <circle cx="520" cy="18" r="1.5" fill="#6E8A6F" fill-opacity="0.4"/>
+        <circle cx="720" cy="18" r="1" fill="#6E8A6F" fill-opacity="0.35"/>
+        <circle cx="920" cy="18" r="1.5" fill="#6E8A6F" fill-opacity="0.4"/>
+        <circle cx="1120" cy="18" r="1" fill="#6E8A6F" fill-opacity="0.35"/>
+        <text x="600" y="14" text-anchor="middle" fill="#5C3D4E" fill-opacity="0.45" font-size="9" font-family="'Ma Shan Zheng',cursive">一 剑 霜 寒 十 四 州</text>
+      </svg>
+    </div>
+
+    <!-- 主板块：左右便签 + 顶饰带 + 大地图（移下面） -->
+    <div class="gm-board">
+
+      <!-- 左便签：诗性短句+朱批+古卷边 -->
+      <aside class="gm-side gm-side-left" aria-label="行迹札记">
+        <div class="gm-side-paper">
+          <span class="gm-side-tape gm-side-tape-tl"></span>
+          <span class="gm-side-stamp" aria-hidden="true">印</span>
+          <p class="gm-side-verse">长风万里送秋雁<br/>对此可以酣高楼</p>
+          <p class="gm-side-meta">辛丑 · 九月廿三</p>
+          <span class="gm-side-divider"></span>
+          <p class="gm-side-verse">孤帆远影碧空尽<br/>唯见长江天际流</p>
+          <p class="gm-side-meta">壬寅 · 三月初七</p>
+          <span class="gm-side-divider"></span>
+          <p class="gm-side-verse">月落乌啼霜满天<br/>江枫渔火对愁眠</p>
+          <p class="gm-side-meta">癸卯 · 十月十五</p>
+        </div>
+      </aside>
+
+      <!-- 中央：诗性文本主体（满堂花醉三千客·二十首诗+回放） -->
+      <section class="gm-flora" aria-label="满堂花醉三千客">
+        <header class="gm-flora-header">
+          <span class="gm-flora-seal" aria-hidden="true">堂</span>
+          <h2>满 堂 花 醉 三 千 客</h2>
+          <p class="gm-flora-sub">一剑霜寒十四州</p>
+        </header>
+        <ol class="gm-flora-list" id="gm-flora-list"></ol>
+      </section>
+
+      <!-- 右便签：统计贴纸+印章 -->
+      <aside class="gm-side gm-side-right" aria-label="行迹贴纸">
+        <div class="gm-side-paper">
+          <span class="gm-side-tape gm-side-tape-tr"></span>
+          <span class="gm-stamp-card">
+            <strong>行 迹</strong>
+            <span class="gm-stamp-sub">3 城 · 10 诗</span>
+          </span>
+          <div class="gm-stat-list">
+            <div class="gm-stat-item"><span class="gm-stat-key">已探</span><b id="gm-stat-cities">0</b></div>
+            <div class="gm-stat-item"><span class="gm-stat-key">已写</span><b id="gm-stat-poems">0</b></div>
+            <div class="gm-stat-item"><span class="gm-stat-key">区域</span><b>5</b></div>
+            <div class="gm-stat-item"><span class="gm-stat-key">省数</span><b id="gm-stat-provs">0</b></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- 满堂花醉主体下方的横向延续：花串 -->
+    <div class="gm-flora-bottom" aria-hidden="true">
+      <svg viewBox="0 0 1200 24" preserveAspectRatio="none">
+        <path d="M 0 12 Q 100 4 200 12 T 400 12 T 600 12 T 800 12 T 1000 12 T 1200 12" fill="none" stroke="#5C3D4E" stroke-width="0.4" stroke-opacity="0.3" stroke-dasharray="2,5"/>
+        <circle cx="80" cy="12" r="1.2" fill="#5C3D4E" fill-opacity="0.35"/>
+        <circle cx="240" cy="12" r="1" fill="#5C3D4E" fill-opacity="0.3"/>
+        <circle cx="400" cy="12" r="1.2" fill="#5C3D4E" fill-opacity="0.35"/>
+        <circle cx="560" cy="12" r="1" fill="#5C3D4E" fill-opacity="0.3"/>
+        <circle cx="720" cy="12" r="1.2" fill="#5C3D4E" fill-opacity="0.35"/>
+        <circle cx="880" cy="12" r="1" fill="#5C3D4E" fill-opacity="0.3"/>
+        <circle cx="1040" cy="12" r="1.2" fill="#5C3D4E" fill-opacity="0.35"/>
+        <text x="600" y="11" text-anchor="middle" fill="#5C3D4E" fill-opacity="0.4" font-size="8" font-family="'Ma Shan Zheng',cursive">一 剑 霜 寒 十 四 州</text>
+      </svg>
+    </div>
+
+    <!-- ================== 大地图（移下面） ================== -->
+    <div class="gm-map-section">
+      <header class="gm-map-section-header">
+        <h3>大地图 · 五域山河</h3>
+        <p class="gm-map-section-sub">东北 · 白山黑水 · 人参鹿影</p>
+      </header>
+
+      <!-- 区域 tab（5 个：西北/西南/东北/东南/中原） -->
+      <nav class="gm-tabs" id="gm-tabs">
+        <button class="gm-tab" data-region="nw">西北</button>
+        <button class="gm-tab" data-region="sw">西南</button>
+        <button class="gm-tab active" data-region="ne">东北</button>
+        <button class="gm-tab" data-region="se">东南</button>
+        <button class="gm-tab" data-region="c">中原</button>
+      </nav>
+
+      <div class="gm-map-frame">
+        <svg id="gm-map" class="gm-map" viewBox="0 0 900 720" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <filter id="ink-pen" x="-1%" y="-1%" width="102%" height="102%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="3" seed="9" result="w"/>
+              <feDisplacementMap in="SourceGraphic" in2="w" scale="1.6" xChannelSelector="R" yChannelSelector="G"/>
+            </filter>
+            <filter id="parchment">
+              <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" result="n"/>
+              <feColorMatrix in="n" values="0 0 0 0 0.78  0 0 0 0 0.69  0 0 0 0 0.51  0 0 0 0.2 0" result="tint"/>
+              <feComposite in="tint" in2="SourceGraphic" operator="in" result="masked"/>
+              <feBlend in="SourceGraphic" in2="masked" mode="multiply"/>
+            </filter>
+            <filter id="stamp"><feTurbulence type="fractalNoise" baseFrequency="0.4" numOctaves="2" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.4"/></filter>
+            <marker id="arrow" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M 0 1 L 11 4 L 0 7 L 3 4 Z" fill="#5C3D4E"/>
+            </marker>
+          </defs>
+
+          <!-- 羊皮纸底（浅米黄） -->
+          <rect width="900" height="720" fill="#F0E4C8"/>
+          <rect width="900" height="720" fill="#E5D9B6" filter="url(#parchment)"/>
+
+          <!-- 极淡背景花纹（古卷草） -->
+          <g opacity="0.06" fill="none" stroke="#3D2914" stroke-width="0.5">
+            <path d="M 0 80 Q 50 60 100 80 T 200 80 T 300 80 T 400 80 T 500 80 T 600 80 T 700 80 T 800 80 T 900 80"/>
+            <path d="M 0 200 Q 50 180 100 200 T 200 200 T 300 200 T 400 200 T 500 200 T 600 200 T 700 200 T 800 200 T 900 200"/>
+            <path d="M 0 320 Q 50 300 100 320 T 200 320 T 300 320 T 400 320 T 500 320 T 600 320 T 700 320 T 800 320 T 900 320"/>
+            <path d="M 0 440 Q 50 420 100 440 T 200 440 T 300 440 T 400 440 T 500 440 T 600 440 T 700 440 T 800 440 T 900 440"/>
+            <path d="M 0 560 Q 50 540 100 560 T 200 560 T 300 560 T 400 560 T 500 560 T 600 560 T 700 560 T 800 560 T 900 560"/>
+          </g>
+
+          <g id="gm-province-layer" fill="#E5D9B6" fill-opacity="0.55" stroke="#5C3D4E" stroke-width="1.0" stroke-linejoin="round" filter="url(#ink-pen)"></g>
+          <g id="gm-decor-layer"></g>
+          <g id="trajectory" filter="url(#ink-pen)"></g>
+          <g id="city-markers"></g>
+        </svg>
+
+        <!-- 诗笺面板（多诗集时间线） -->
+        <div class="gm-note-panel" id="gm-note" style="display:none">
+          <div class="gm-note-header">
+            <span class="gm-note-city" id="gm-note-city"></span>
+            <span class="gm-note-count" id="gm-note-count"></span>
+            <button class="gm-note-close" id="gm-note-close">×</button>
+          </div>
+          <div class="gm-note-content" id="gm-note-content"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================== 脚注：两诗 + 草书 ================== -->
+    <footer class="gm-foot">
+      <p class="gm-foot-line1">
+        <span class="gm-foot-strike">惶惶十余载，书剑两无成</span>
+        <span class="gm-foot-arrow" aria-hidden="true">→</span>
+        <span class="gm-foot-second">十年磨一剑，霜刃未曾试</span>
+      </p>
+      <p class="gm-foot-line2">今日把示君，谁有不平事！</p>
+    </footer>
+
+  </div>
+</div>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono&display=swap');
+
+:root {
+  --paper:#F2E7C8;
+  --ink:#3D2914; --ink2:#6A5050;
+  --plum:#5C3D4E;     /* 淡檀紫，代替鲜艳梅紫 */
+  --moss:#6E8A6F;      /* 淡竹青，代替任何红系 */
+  --gold:#B8945E;      /* 旧金，代替招贴金 */
+  --vermilion:#A8443C; /* 朱砂，仅在诗句朱批/印章小面积出现 */
+  --line:#E0E4DC;       /* 月白 */
+}
+
+.gm-page {
+  min-height:100vh; padding:36px 20px 16px;
+  font-family:'Noto Serif SC',serif; color:var(--ink);
+  background:var(--paper);
+  position:relative; overflow-x:hidden;
+}
+/* 整页背景：低饱和高斯光晕（极简） */
+.gm-page-bg {
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:
+    radial-gradient(ellipse 900px 700px at 18% 12%, rgba(110,138,111,.10), transparent 65%),
+    radial-gradient(ellipse 800px 600px at 88% 90%, rgba(92,61,78,.08), transparent 65%),
+    radial-gradient(ellipse 1100px 800px at 50% 50%, rgba(184,148,94,.05), transparent 75%);
+}
+.gm-page-glow {
+  position:fixed; left:0; right:0; height:120px; z-index:0; pointer-events:none;
+  filter:blur(40px);
+}
+.gm-page-glow-top { top:0; background:radial-gradient(ellipse 800px 100px at 50% 0%, rgba(110,138,111,.18), transparent 70%); }
+.gm-page-glow-bot { bottom:0; background:radial-gradient(ellipse 800px 100px at 50% 100%, rgba(92,61,78,.15), transparent 70%); }
+
+.gm-container {
+  max-width:1200px; margin:0 auto; padding:0 8px; position:relative; z-index:1;
+}
+
+/* ========== HERO ========== */
+.gm-hero {
+  text-align:center;
+  padding:2.4rem 0 1.8rem;
+  position:relative;
+  border-top:1px solid rgba(110,138,111,.22);
+  border-bottom:1px solid rgba(110,138,111,.22);
+  margin-bottom:1.6rem;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 30%, rgba(255,247,228,.55), transparent 70%);
+}
+.gm-hero-rule {
+  position:absolute; left:18%; right:18%; height:1px;
+  background:linear-gradient(90deg, transparent, rgba(110,138,111,.45) 20%, rgba(110,138,111,.45) 80%, transparent);
+}
+.gm-hero-rule-top { top:6px; }
+.gm-hero-rule-bot { bottom:6px; }
+.gm-corner {
+  position:absolute; width:54px; height:54px; pointer-events:none;
+  opacity:.85;
+}
+.gm-corner-tl { top:14px; left:18px; }
+.gm-corner-tr { top:14px; right:18px; }
+.gm-corner-bl { bottom:14px; left:18px; }
+.gm-corner-br { bottom:14px; right:18px; }
+.gm-sword {
+  position:absolute; top:30px; width:36px; height:144px;
+  opacity:.95; pointer-events:none; z-index:1;
+  filter:drop-shadow(0 1px 0 rgba(110,138,111,.18));
+}
+.gm-sword-left  { left:9%; transform:rotate(-6deg); }
+.gm-sword-right { right:9%; transform:rotate(6deg) scaleX(-1); }
+
+.gm-eyebrow {
+  font-family:'JetBrains Mono',monospace; font-size:.72rem; letter-spacing:.4em;
+  color:var(--plum); opacity:.7;
+  display:block; margin-bottom:.5rem;
+}
+.gm-title {
+  font-family:'Noto Serif SC',serif; font-weight:900;
+  font-size:clamp(2.4rem,5.2vw,3.4rem); letter-spacing:.28em;
+  margin:.3rem 0; color:var(--ink);
+  text-shadow:2px 2px 0 rgba(110,138,111,.18);
+}
+.gm-hand {
+  font-family:'Ma Shan Zheng',cursive; font-size:1.4rem; color:var(--plum);
+  margin:.6rem 0 1rem; letter-spacing:.1em; opacity:.85;
+}
+.gm-chips { display:flex; flex-wrap:wrap; justify-content:center; gap:.55rem; }
+.gm-chip {
+  display:inline-block; padding:.35rem 1rem;
+  background:rgba(255,253,242,.6); border:1px solid rgba(184,148,94,.4);
+  font-size:.85rem; color:var(--ink2);
+}
+.gm-chip b { color:var(--vermilion); font-weight:700; }
+
+/* ========== 顶部饰带 ========== */
+.gm-ribbon {
+  margin:0 auto 1.4rem; max-width:1100px;
+  position:relative; z-index:1;
+}
+.gm-ribbon svg { display:block; width:100%; height:36px; }
+
+/* ========== 主板块：左便签 + 中满堂花醉 + 右贴纸 ========== */
+.gm-board {
+  display:grid; grid-template-columns: 1fr 2.2fr 1fr;
+  gap:18px; margin:0 0 1.4rem;
+  align-items:start;
+}
+.gm-side {
+  position:relative;
+}
+.gm-side-paper {
+  background:linear-gradient(180deg, #FFFBE8, #FFF6D6);
+  border:1px solid rgba(110,138,111,.25);
+  padding:18px 16px 20px; position:relative;
+  box-shadow:
+    inset 0 0 0 1px rgba(110,138,111,.08),
+    0 4px 16px rgba(110,138,111,.10);
+  border-radius:1px;
+}
+.gm-side-paper::before {
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background:repeating-linear-gradient(transparent, transparent 27px, rgba(168,68,60,.04) 28px);
+}
+.gm-side-tape {
+  position:absolute; width:54px; height:18px;
+  background:rgba(110,138,111,.45);
+  transform:rotate(-2deg);
+}
+.gm-side-tape-tl { top:-9px; left:14px; }
+.gm-side-tape-tr { top:-9px; right:14px; transform:rotate(2deg); }
+.gm-side-stamp {
+  position:absolute; top:14px; right:14px;
+  width:34px; height:34px; border-radius:50%;
+  border:1.5px solid var(--vermilion); color:var(--vermilion);
+  display:grid; place-items:center;
+  font-family:'Noto Serif SC',serif; font-size:14px; font-weight:700;
+  transform:rotate(-8deg); opacity:.7;
+}
+.gm-side-verse {
+  font-family:'Ma Shan Zheng',cursive; font-size:1.05rem;
+  color:var(--ink); line-height:1.7; margin:8px 0 2px;
+  text-align:center;
+}
+.gm-side-meta {
+  font-family:'JetBrains Mono',monospace; font-size:.7rem;
+  color:var(--ink2); opacity:.7; margin:0 0 4px; text-align:center;
+}
+.gm-side-divider {
+  display:block; height:1px; margin:6px 14px;
+  background:linear-gradient(90deg, transparent, rgba(110,138,111,.4), transparent);
+}
+.gm-stamp-card {
+  display:block; text-align:center; margin:0 auto 14px; padding:10px;
+  border:1.5px dashed rgba(110,138,111,.45);
+  background:rgba(240,228,200,.35);
+  position:relative;
+}
+.gm-stamp-card::before {
+  content:''; position:absolute; inset:6px; border:1px solid rgba(110,138,111,.3);
+}
+.gm-stamp-card strong {
+  font-family:'Noto Serif SC',serif; font-size:1.3rem; color:var(--vermilion);
+  display:block; letter-spacing:.4em;
+}
+.gm-stamp-sub {
+  font-family:'Ma Shan Zheng',cursive; font-size:.9rem; color:var(--ink2);
+  display:block; margin-top:4px;
+}
+.gm-stat-list { padding:0; margin:0; }
+.gm-stat-item {
+  display:flex; justify-content:space-between; align-items:baseline;
+  padding:7px 4px; border-bottom:1px dashed rgba(110,138,111,.2);
+  font-family:'Noto Sans SC',sans-serif; font-size:.88rem;
+}
+.gm-stat-item:last-child { border-bottom:none; }
+.gm-stat-key { color:var(--ink2); }
+.gm-stat-item b { color:var(--vermilion); font-weight:700; font-size:1.05rem; }
+
+/* ========== 满堂花醉主体（中间栏） ========== */
+.gm-flora {
+  background:linear-gradient(180deg, #FFFCF0, #FFF8E2);
+  border:1px solid rgba(110,138,111,.22);
+  padding:24px 28px 28px; position:relative;
+  box-shadow:inset 0 0 0 1px rgba(110,138,111,.05), 0 4px 20px rgba(110,138,111,.08);
+  min-height:520px;
+}
+.gm-flora::before {
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background:
+    radial-gradient(circle 600px 200px at 30% 0%, rgba(168,68,60,.04), transparent 70%),
+    radial-gradient(circle 600px 200px at 70% 100%, rgba(110,138,111,.05), transparent 70%);
+}
+.gm-flora-header {
+  text-align:center; margin-bottom:18px; padding-bottom:14px;
+  border-bottom:1px solid rgba(110,138,111,.25);
+  position:relative;
+}
+.gm-flora-seal {
+  position:absolute; top:-10px; left:50%; transform:translateX(-50%);
+  width:32px; height:32px; border-radius:50%;
+  background:var(--vermilion); color:#FFF6D6;
+  display:grid; place-items:center;
+  font-family:'Noto Serif SC',serif; font-weight:900; font-size:14px;
+  box-shadow:0 2px 8px rgba(168,68,60,.4);
+}
+.gm-flora-header h2 {
+  font-family:'Noto Serif SC',serif; font-weight:900; font-size:1.4rem;
+  letter-spacing:.25em; margin:.5rem 0 .2rem; color:var(--ink);
+}
+.gm-flora-sub {
+  font-family:'Ma Shan Zheng',cursive; font-size:1rem; color:var(--plum);
+  margin:0; opacity:.75; letter-spacing:.1em;
+}
+.gm-flora-list {
+  list-style:none; padding:0; margin:0;
+  display:grid; grid-template-columns:1fr 1fr; gap:8px 24px;
+  font-family:'Noto Serif SC',serif;
+  max-height:380px; overflow-y:auto;
+}
+.gm-flora-list li {
+  padding:10px 14px; border-left:2px solid var(--moss);
+  background:rgba(255,253,242,.5);
+  font-size:.9rem; line-height:1.6;
+}
+.gm-flora-list li .gm-flora-place {
+  font-family:'Noto Serif SC',serif; font-weight:700; color:var(--ink);
+  font-size:1rem; display:inline-block; margin-right:6px;
+}
+.gm-flora-list li .gm-flora-date {
+  font-family:'JetBrains Mono',monospace; font-size:.7rem; color:var(--ink2);
+  margin-right:6px; opacity:.75;
+}
+.gm-flora-list li .gm-flora-text {
+  display:block; color:var(--ink2); font-family:'Ma Shan Zheng',cursive;
+  font-size:.95rem; margin-top:4px;
+}
+
+/* ========== 大地图区（移到底部） ========== */
+.gm-map-section { margin:0 0 1.4rem; }
+.gm-map-section-header {
+  text-align:center; margin-bottom:.6rem; padding-bottom:8px;
+  border-bottom:1px solid rgba(110,138,111,.25);
+}
+.gm-map-section-header h3 {
+  font-family:'Noto Serif SC',serif; font-weight:900; font-size:1.3rem;
+  letter-spacing:.3em; margin:0 0 4px; color:var(--ink);
+}
+.gm-map-section-sub {
+  font-family:'Ma Shan Zheng',cursive; font-size:1rem; color:var(--plum);
+  margin:0; opacity:.75; letter-spacing:.1em;
+}
+
+.gm-tabs {
+  display:flex; justify-content:center; gap:.6rem;
+  margin:0 0 1rem; flex-wrap:wrap;
+}
+.gm-tab {
+  padding:.5rem 1.4rem;
+  background:rgba(240,228,200,.45);
+  border:1px solid rgba(110,138,111,.4);
+  font-family:'Noto Serif SC',serif; font-size:.95rem;
+  color:var(--ink2); cursor:pointer; transition:all .25s;
+  border-radius:1px;
+}
+.gm-tab:hover { background:rgba(110,138,111,.12); color:var(--ink); }
+.gm-tab.active {
+  background:#F2E7C8; color:var(--ink);
+  border-color:var(--moss); border-width:2px;
+  font-weight:700; box-shadow:0 2px 10px rgba(110,138,111,.25);
+}
+
+.gm-map-frame {
+  position:relative; background:#F0E4C8;
+  border:1px solid var(--moss);
+  box-shadow:0 0 0 3px #F2E7C8, 0 6px 24px rgba(110,138,111,.15);
+  overflow:hidden;
+}
+.gm-map { width:100%; height:auto; display:block; }
+.city-marker { cursor:pointer; transition:transform .25s; }
+.city-marker:hover { transform:scale(1.15); }
+
+.gm-note-panel {
+  position:absolute; top:24px; right:24px; width:min(380px,88%);
+  max-height:calc(100% - 48px); overflow-y:auto;
+  background:linear-gradient(180deg, #FFFBE8, #FFF6D6);
+  border:1px solid var(--moss);
+  box-shadow:0 6px 24px rgba(110,138,111,.2);
+  z-index:10; font-family:'Noto Serif SC',serif;
+  animation:gmNoteIn .4s cubic-bezier(.16,1,.3,1);
+}
+@keyframes gmNoteIn { from { opacity:0; transform:translateY(-10px) rotate(-.4deg); } to { opacity:1; transform:rotate(0); } }
+.gm-note-header {
+  display:flex; align-items:center; gap:8px; padding:12px 16px;
+  border-bottom:1px solid rgba(110,138,111,.3);
+  background:rgba(240,228,200,.3);
+}
+.gm-note-city {
+  font-family:'Noto Serif SC',serif; font-weight:900; font-size:1.2rem;
+  color:var(--ink); letter-spacing:.1em;
+}
+.gm-note-count {
+  font-family:'JetBrains Mono',monospace; font-size:.75rem;
+  color:var(--plum); margin-left:auto;
+}
+.gm-note-close {
+  background:#FFFBE8; border:1px solid var(--moss);
+  color:var(--ink); font-size:1rem; cursor:pointer;
+  width:22px; height:22px; line-height:1; padding:0;
+}
+.gm-note-close:hover { background:var(--moss); color:#FFF; }
+.gm-note-content { padding:14px 18px 18px; }
+.gm-poem-card {
+  position:relative; padding:10px 12px 10px 18px; margin-bottom:14px;
+  background:rgba(184,148,94,.08); border-left:2px solid var(--gold);
+}
+.gm-poem-date {
+  font-family:'JetBrains Mono',monospace; font-size:.68rem;
+  color:var(--plum); margin-bottom:3px;
+}
+.gm-poem-title {
+  font-family:'Ma Shan Zheng',cursive; font-size:1.05rem;
+  color:var(--vermilion); margin:0 0 6px;
+}
+.gm-poem-text {
+  font-family:'Noto Serif SC',serif; font-size:.9rem; line-height:1.8;
+  color:var(--ink); margin:0 0 4px; white-space:pre-line;
+}
+.gm-poem-note {
+  font-size:.75rem; color:var(--ink2); font-style:italic; margin:0;
+  padding-top:3px; border-top:1px dashed rgba(110,138,111,.2);
+}
+.gm-poem-nav {
+  display:flex; justify-content:space-between; align-items:center; margin-top:4px;
+}
+.gm-poem-counter { font-family:'JetBrains Mono',monospace; font-size:.7rem; color:var(--ink2); }
+.gm-poem-btn {
+  background:transparent; border:1px solid var(--moss);
+  color:var(--ink); font-family:'Noto Sans SC',sans-serif; font-size:.7rem;
+  padding:2px 8px; cursor:pointer;
+}
+.gm-poem-btn:hover { background:var(--moss); color:#FFF; }
+.gm-poem-btn:disabled { opacity:.3; cursor:not-allowed; }
+
+/* ========== 脚注：两诗并列 + 草书 ========== */
+.gm-foot { margin-top:1.6rem; text-align:center; }
+.gm-foot-line1 {
+  font-size:1.4rem; color:var(--ink); margin:0 0 .5rem;
+  display:flex; justify-content:center; align-items:center; gap:.6em;
+  flex-wrap:wrap;
+}
+.gm-foot-strike {
+  color:#6A3030; text-decoration:line-through;
+  text-decoration-color:#A8443C; text-decoration-thickness:2.5px;
+  opacity:.6;
+}
+.gm-foot-arrow {
+  color:#A8443C; font-family:'Ma Shan Zheng',cursive;
+  font-size:1.2em; transform:rotate(0deg) scaleX(1.2);
+  display:inline-block;
+}
+.gm-foot-second {
+  color:var(--ink); font-weight:600; opacity:.95;
+}
+.gm-foot-line2 {
+  font-family:'Ma Shan Zheng',cursive; font-size:clamp(2.2rem,4vw,2.8rem);
+  font-weight:700; color:#1A1410; margin:0; letter-spacing:.18em;
+  text-shadow:
+    2px 0 1px rgba(255,255,255,.3),
+    -2px 0 1px rgba(0,0,0,.15),
+    0 2px 2px rgba(0,0,0,.18);
+}
+
+@media (max-width: 900px) {
+  .gm-board { grid-template-columns:1fr; }
+  .gm-sword { display:none; }
+}
+</style>
+
+<script src="/data/china-regions.js"></script>
+<script>
+(function () {
+'use strict';
+
+let PLACES = [];
+let POEMS_FLAT = []; // 所有诗合并用于"满堂花醉三千客"列表
+
+fetch('/data/places.json').then(r => r.json()).then(d => {
+  PLACES = (d || []).filter(p => p.visited !== false);
+  // 收集所有诗 → "满堂花醉三千客"列表
+  PLACES.forEach(p => {
+    const poems = getPoems(p);
+    poems.forEach(pm => {
+      POEMS_FLAT.push({
+        city: p.name, date: pm.date || '',
+        title: pm.poemTitle || '行迹',
+        text: pm.poem || ''
+      });
+    });
+  });
+  POEMS_FLAT.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  renderFloraList();
+  renderRegion(CURRENT);
+  updateCounters();
+}).catch(e => console.error(e));
+
+function getPoems(p) {
+  if (p.poems && Array.isArray(p.poems)) return p.poems;
+  if (p.poem) return [{ date:p.date||'', poemTitle:p.poemTitle||'行迹', poem:p.poem, note:p.note||'' }];
+  return [];
+}
+
+function updateCounters() {
+  document.getElementById('gm-count').textContent = PLACES.length;
+  document.getElementById('gm-poem-count').textContent = POEMS_FLAT.length;
+  document.getElementById('gm-stat-cities').textContent = PLACES.length;
+  document.getElementById('gm-stat-poems').textContent = POEMS_FLAT.length;
+}
+
+function renderFloraList() {
+  const ol = document.getElementById('gm-flora-list');
+  ol.innerHTML = POEMS_FLAT.map(pm => {
+    const dateHtml = pm.date ? `<span class="gm-flora-date">${esc(pm.date)}</span>` : '';
+    const titleHtml = pm.title ? `《${esc(pm.title)}》` : '';
+    const text = pm.text.replace(/\n/g, '<br>');
+    return `<li><span class="gm-flora-place">${esc(pm.city)}</span>${dateHtml}<span class="gm-flora-text">${titleHtml}${text ? '· ' + text : ''}</span></li>`;
+  }).join('');
+}
+
+let CURRENT = 'ne';
+const REGION_META = {
+  nw: { name:'西北', desc:'长河落日·驼铃霜雪' },
+  sw: { name:'西南', desc:'蜀道青天·雪峰列屏' },
+  ne: { name:'东北', desc:'白山黑水·人参鹿影' },
+  se: { name:'东南', desc:'烟雨江南·六朝金粉' },
+  c:  { name:'中原', desc:'十三朝古都·半部中国' }
+};
+
+document.querySelectorAll('.gm-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.gm-tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    renderRegion(t.dataset.region);
+    document.getElementById('gm-region-chip').textContent = '🗺 ' + REGION_META[t.dataset.region].name;
+    document.querySelector('.gm-map-section-sub').textContent = REGION_META[t.dataset.region].desc;
+  });
+});
+
+// 装饰物：仅用深绿/墨青/赭石（不引红系）
+const REGION_DECOR = {
+  nw: [
+    { type:'camel', x:340, y:380, label:'驼铃' },
+    { type:'sun',   x:680, y:200, label:'长河日' },
+    { type:'rock',  x:560, y:560, label:'火焰山' }
+  ],
+  sw: [
+    { type:'mountain', x:400, y:300, label:'蜀道' },
+    { type:'tea',     x:600, y:500, label:'茶道' },
+    { type:'rock',    x:280, y:480, label:'雪山' }
+  ],
+  ne: [
+    { type:'deer',     x:380, y:380, label:'麋鹿' },
+    { type:'ginseng',  x:550, y:280, label:'人参' },
+    { type:'willow',   x:280, y:540, label:'白桦' }
+  ],
+  se: [
+    { type:'willow',  x:300, y:400, label:'烟柳' },
+    { type:'bridge',  x:560, y:500, label:'断桥' },
+    { type:'kite',    x:680, y:280, label:'纸鸢' }
+  ],
+  c: [
+    { type:'bell',  x:420, y:340, label:'雁塔' },
+    { type:'seal',  x:680, y:320, label:'碑林' },
+    { type:'kite',  x:520, y:480, label:'飞天' }
+  ]
+};
+
+function drawDecorItem(decor, theme) {
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const g = document.createElementNS(SVG_NS, 'g');
+  g.setAttribute('filter', 'url(#ink-pen)');
+  g.setAttribute('opacity', '0.6');
+  function line(x1, y1, x2, y2) {
+    const l = document.createElementNS(SVG_NS, 'line');
+    l.setAttribute('x1', x1); l.setAttribute('y1', y1);
+    l.setAttribute('x2', x2); l.setAttribute('y2', y2);
+    l.setAttribute('stroke', theme.stroke);
+    l.setAttribute('stroke-width', '0.8');
+    return l;
+  }
+  function circle(cx, cy, r, fill) {
+    const c = document.createElementNS(SVG_NS, 'circle');
+    c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', r);
+    c.setAttribute('fill', fill || 'none');
+    c.setAttribute('stroke', theme.stroke);
+    c.setAttribute('stroke-width', '0.7');
+    return c;
+  }
+  function path(d, fill) {
+    const p = document.createElementNS(SVG_NS, 'path');
+    p.setAttribute('d', d);
+    p.setAttribute('fill', fill || 'none');
+    p.setAttribute('stroke', theme.stroke);
+    p.setAttribute('stroke-width', '0.7');
+    return p;
+  }
+  function text(content, x, y) {
+    const t = document.createElementNS(SVG_NS, 'text');
+    t.setAttribute('x', x); t.setAttribute('y', y);
+    t.setAttribute('font-family', "'Ma Shan Zheng',cursive");
+    t.setAttribute('font-size', '11');
+    t.setAttribute('fill', theme.stroke);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('style', 'paint-order:stroke;stroke:#F2E7C8;stroke-width:2.5;pointer-events:none');
+    t.textContent = content;
+    return t;
+  }
+  switch (decor.type) {
+    case 'camel':
+      g.appendChild(path('M -22 0 Q -25 -10 -10 -12 Q 5 -15 18 -10 Q 28 -8 25 0 Z'));
+      g.appendChild(line(-22, -3, -22, -16));
+      g.appendChild(line(-10, 12, -12, 22));
+      g.appendChild(line(8, 12, 10, 22));
+      g.setAttribute('transform', `translate(${decor.x}, ${decor.y})`);
+      g.appendChild(text(decor.label, 0, 38)); break;
+    case 'sun':
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        g.appendChild(line(Math.cos(a) * 18, Math.sin(a) * 18, 0, 0));
+      }
+      g.appendChild(circle(0, 0, 10, theme.stroke));
+      g.setAttribute('transform', `translate(${decor.x}, ${decor.y})`);
+      g.appendChild(text(decor.label, 0, 28)); break;
+    case 'rock':
+      g.appendChild(path('M -16 0 L -8 -10 L 2 -6 L 12 -14 L 18 -2 L 14 0 Z'));
+      g.appendChild(line(-4, -6, 6, -10));
+      g.setAttribute('transform', `translate(${decor.x}, ${decor.y})`);
+      g.appendChild(text(decor.label, 0, 16)); break;
+    case 'mountain':
+      g.appendChild(path('M -20 4 L -10 -12 L 0 -4 L 8 -16 L 18 -2 L 20 4 Z'));
+      g.appendChild(path('M 4 -2 L 10 -8 L 16 -2'));
+      g.setAttribute('transform', `translate(${decor.x}, ${decor.y})`);
+      g.appendChild(text(decor.label, 0, 20)); break;
+    case 'tea':
+      g.appendChild(path('M -10 -2 L -8 -10 L 8 -10 L 10 -2 Z'));
+      g.appendChild(path('M -8 -10 L -6 -18 L 6 -18 L 8 -10'));
+      g.appendChild(line(2, -2, 2, 8));
+      g.setAttribute('transform', `translate(${decor.x}, ${decor.y})`);
+      g.appendChild(text(decor.label, 0, 22)); break;
+    case 'deer':
+      g.appendChild(path('M -16 4 Q -12 -8 -4 -10 Q 4 -12 8 -6 Q 14 0 12 8 Q 0 12 -8 10 Z'));
+      g.appendChild(path('M 8 -8 L 14 -16 M 12 -10 L 18 -16'));
+      g.setAttribute('transform', `translate(${decor.x}, ${decor.y})`);
+      g.appendChild(text(decor.label, 0, 24)); break;
+    case 'ginseng':
+      g.appendChild(line(0, 0, 0, -16, theme.stroke));
+      g.appendChild(circle(0, 0, 6, 'none'));
+      g.appendChild(circle(-3, -3, 1.5, theme.stroke));
+      g.appendChild(circle(2, -3, 1.5, theme.stroke));
+      g.setAttribute('transform', `translate(${decor.x}, ${decor.y})`);
+      g.appendChild(text(decor.label, 0, 16)); break;
+    case 'willow':
+      g.appendChild(line(0, 0, 0, -20));
+      g.appendChild(circle(0, -22, 5, 'none'));
+      g.appendChild(path('M 0 -18 Q -3 -8 -2 4'));
+      g.appendChild(path('M 0 -18 Q 3 -8 2 4'));
+      g.setAttribute('transform', `translate(${decor.x}, ${decor.y})`);
+      g.appendChild(text(decor.label, 0, 18)); break;
+    case 'bridge':
+      g.appendChild(path('M -14 0 Q 0 -8 14 0'));
+      g.appendChild(line(-14, 0, -14, 4));
+      g.appendChild(line(14, 0, 14, 4));
+      g.setAttribute('transform', `translate(${decor.x}, ${decor.y})`);
+      g.appendChild(text(decor.label, 0, 16)); break;
+    case 'kite':
+      g.appendChild(path('M 0 0 Q 5 -2 3 -14 Q 1 -24 0 -28 Q -1 -24 -3 -14 Q -5 -2 0 0 Z'));
+      g.appendChild(path('M -2 -3 Q 0 -6 2 -3'));
+      g.appendChild(line(0, 0, 0, 6));
+      g.setAttribute('transform', `translate(${decor.x}, ${decor.y})`);
+      g.appendChild(text(decor.label, 0, 18)); break;
+    case 'bell':
+      g.appendChild(path('M -6 -8 L 6 -8 L 4 6 L -4 6 Z'));
+      g.appendChild(line(0, -8, 0, -16));
+      g.appendChild(circle(0, -16, 2, 'none'));
+      g.setAttribute('transform', `translate(${decor.x}, ${decor.y})`);
+      g.appendChild(text(decor.label, 0, 18)); break;
+    case 'seal':
+      g.appendChild(path('M -6 -6 L 6 -6 L 6 6 L -6 6 Z', theme.stroke));
+      g.appendChild(text('印', 0, 3));
+      g.setAttribute('transform', `translate(${decor.x}, ${decor.y})`);
+      g.appendChild(text(decor.label, 0, 18)); break;
+  }
+  return g;
+}
+
+function renderBgFlowers(theme) {
+  const layer = document.getElementById('gm-bg-flowers');
+  if (!layer) return;
+  layer.innerHTML = '';
+  const seed = theme.meta.id === 'ne' ? 1 : (theme.meta.id === 'nw' ? 2 : (theme.meta.id === 'c' ? 3 : (theme.meta.id === 'sw' ? 4 : 5)));
+  const r = (n) => Math.abs((Math.sin(n * 9301 + seed * 49297) * 233280)) % 1;
+  for (let i = 0; i < 10; i++) {
+    const cx = r(i + 1) * 900;
+    const cy = r(i + 100) * 720;
+    const r2 = 2 + r(i + 200) * 3;
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', r2);
+    c.setAttribute('fill', theme.accent);
+    c.setAttribute('opacity', '0.18');
+    layer.appendChild(c);
+  }
+}
+
+function renderProvinces(theme) {
+  const layer = document.getElementById('gm-province-layer');
+  layer.innerHTML = '';
+  if (!window.CHINA_REGIONS || !CHINA_REGIONS[theme.meta.id]) return;
+  CHINA_REGIONS[theme.meta.id].features.forEach(prov => {
+    prov.paths.forEach(d => {
+      const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p.setAttribute('d', d);
+      p.setAttribute('fill', '#E5D9B6');
+      p.setAttribute('fill-opacity', '0.55');
+      p.setAttribute('stroke', '#5C3D4E');
+      p.setAttribute('stroke-width', '0.9');
+      p.setAttribute('stroke-linejoin', 'round');
+      layer.appendChild(p);
+    });
+  });
+}
+
+function renderDecor(theme) {
+  const layer = document.getElementById('gm-decor-layer');
+  layer.innerHTML = '';
+  (REGION_DECOR[theme.meta.id] || []).forEach(d => layer.appendChild(drawDecorItem(d, theme)));
+}
+
+function projectP(p, r) {
+  // 等距矩形投影：与 china-regions.js 端 project(lo, la) 完全一致。
+  // W=900 H=720 是固定画布尺寸，viewBox 由 r.vbX/vbY/r.w/r.h 自动扩，
+  // 原始 W×H 投影区固定在 viewBox 内 (pad=30, pad) 起始、(W+30, H+30) 终止。
+  const W = 900, H = 720, pad = 30;
+  const lonSpan = r.lonMax - r.lonMin;
+  const latSpan = r.latMax - r.latMin;
+  const scale = Math.min(W / lonSpan, H / latSpan);
+  const offsetX = (W - lonSpan * scale) / 2;
+  const offsetY = (H - latSpan * scale) / 2;
+  const x = (p.x - r.lonMin) * scale + offsetX;
+  const y = (r.latMax - p.y) * scale + offsetY;
+  // 原始画布 (0..W, 0..H) 在 viewBox 内位于 (vbX+pad, vbY+pad) 起始
+  return [r.vbX + pad + x, r.vbY + pad + y];
+}
+
+function renderTrajectory(theme) {
+  const layer = document.getElementById('trajectory');
+  layer.innerHTML = '';
+  if (!window.CHINA_REGIONS || !CHINA_REGIONS[theme.meta.id]) return;
+  const r = theme.meta;
+  const visible = PLACES.filter(p => p.x >= r.lonMin && p.x <= r.lonMax && p.y >= r.latMin && p.y <= r.latMax);
+  if (visible.length < 2) return;
+  visible.sort((a, b) => (a.poems ? a.poems[0].date : a.date || '').localeCompare(b.poems ? b.poems[0].date : b.date || ''));
+  for (let i = 0; i < visible.length - 1; i++) {
+    const a = projectP(visible[i], r);
+    const b = projectP(visible[i + 1], r);
+    const mx = (a[0] + b[0]) / 2 + (i % 2 === 0 ? -22 : 22);
+    const my = (a[1] + b[1]) / 2 + 20;
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', `M ${a[0]} ${a[1]} Q ${mx} ${my} ${b[0]} ${b[1]}`);
+    p.setAttribute('fill', 'none');
+    p.setAttribute('stroke', '#5C3D4E');
+    p.setAttribute('stroke-width', '1.5');
+    p.setAttribute('stroke-dasharray', '5,3');
+    p.setAttribute('opacity', '0.6');
+    p.setAttribute('marker-end', 'url(#arrow)');
+    layer.appendChild(p);
+  }
+}
+
+function renderCityMarkers(theme) {
+  const layer = document.getElementById('city-markers');
+  layer.innerHTML = '';
+  if (!window.CHINA_REGIONS || !CHINA_REGIONS[theme.meta.id]) return;
+  const r = theme.meta;
+  PLACES.forEach(p => {
+    if (p.x < r.lonMin || p.x > r.lonMax || p.y < r.latMin || p.y > r.latMax) return;
+    const [x, y] = projectP(p, r);
+    const outer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    outer.setAttribute('transform', `translate(${x}, ${y})`);
+    const inner = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    inner.setAttribute('class', 'city-marker');
+    inner.setAttribute('data-city', p.name);
+
+    const c1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c1.setAttribute('r', '11');
+    c1.setAttribute('fill', '#A8443C');
+    c1.setAttribute('stroke', '#3D2914');
+    c1.setAttribute('stroke-width', '1.5');
+    c1.setAttribute('filter', 'url(#stamp)');
+    inner.appendChild(c1);
+    const c2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c2.setAttribute('r', '3.5');
+    c2.setAttribute('fill', '#F2E7C8');
+    inner.appendChild(c2);
+
+    const t1 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t1.setAttribute('x', 16); t1.setAttribute('y', -2);
+    t1.setAttribute('font-family', "'Ma Shan Zheng',cursive");
+    t1.setAttribute('font-size', '18');
+    t1.setAttribute('fill', '#3D2914');
+    t1.setAttribute('font-weight', '700');
+    t1.setAttribute('style', 'paint-order:stroke;stroke:#F2E7C8;stroke-width:3.5;pointer-events:none');
+    t1.textContent = p.name;
+    inner.appendChild(t1);
+
+    inner.addEventListener('click', (e) => { e.stopPropagation(); openNote(p); });
+    outer.appendChild(inner);
+    layer.appendChild(outer);
+  });
+}
+
+let CURRENT_POEM_IDX = 0;
+let CURRENT_CITY = null;
+let NOTE_OPENING = false;
+
+function openNote(city) {
+  if (!city || NOTE_OPENING) return;
+  NOTE_OPENING = true;
+  if (CURRENT_CITY && CURRENT_CITY.name === city.name && document.getElementById('gm-note').style.display === 'block') {
+    NOTE_OPENING = false;
+    return;
+  }
+  CURRENT_CITY = city;
+  CURRENT_POEM_IDX = 0;
+  renderNote();
+  document.getElementById('gm-note').style.display = 'block';
+  setTimeout(() => { NOTE_OPENING = false; }, 200);
+}
+
+function renderNote() {
+  if (!CURRENT_CITY) return;
+  const poems = getPoems(CURRENT_CITY).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  const i = Math.max(0, Math.min(CURRENT_POEM_IDX, poems.length - 1));
+  const p = poems[i];
+  document.getElementById('gm-note-city').textContent = CURRENT_CITY.name;
+  document.getElementById('gm-note-count').textContent = poems.length > 1 ? (i + 1) + ' / ' + poems.length : String(poems.length);
+  const content = document.getElementById('gm-note-content');
+  content.innerHTML = '<div class="gm-poem-card">' +
+    '<div class="gm-poem-date">' + esc(p.date || '') + '</div>' +
+    '<h3 class="gm-poem-title">《' + esc(p.poemTitle || '行迹') + '》</h3>' +
+    '<p class="gm-poem-text">' + esc(p.poem || '') + '</p>' +
+    '<p class="gm-poem-note">' + esc(p.note || '') + '</p>' +
+    '</div>' +
+    (poems.length > 1 ? '<div class="gm-poem-nav">' +
+      '<button class="gm-poem-btn" onclick="window.__gmCyclePoem(-1)" ' + (i === 0 ? 'disabled' : '') + '>◀ 上一篇</button>' +
+      '<span class="gm-poem-counter">' + (i + 1) + ' / ' + poems.length + '</span>' +
+      '<button class="gm-poem-btn" onclick="window.__gmCyclePoem(1)" ' + (i === poems.length - 1 ? 'disabled' : '') + '>下一篇 ▶</button>' +
+      '</div>' : '');
+  content.onclick = e => e.stopPropagation();
+}
+
+window.__gmCyclePoem = function (d) {
+  if (!CURRENT_CITY) return;
+  const poems = getPoems(CURRENT_CITY);
+  CURRENT_POEM_IDX = Math.max(0, Math.min(CURRENT_POEM_IDX + d, poems.length - 1));
+  renderNote();
+};
+
+function closeNote() {
+  document.getElementById('gm-note').style.display = 'none';
+  CURRENT_CITY = null;
+  CURRENT_POEM_IDX = 0;
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderRegion(regionId) {
+  if (!window.CHINA_REGIONS) return;
+  CURRENT = regionId;
+  const r = CHINA_REGIONS[regionId].meta;
+  const theme = { meta: r, stroke: '#5C3D4E', accent: '#6E8A6F' };
+  closeNote();
+  const svg = document.getElementById('gm-map');
+  const vbx = r.vbX != null ? r.vbX : 0;
+  const vby = r.vbY != null ? r.vbY : 0;
+  svg.setAttribute('viewBox', `${vbx} ${vby} ${r.w} ${r.h}`);
+  renderProvinces(theme);
+  renderDecor(theme);
+  renderTrajectory(theme);
+  renderCityMarkers(theme);
+  // 统计：当前区域的省数
+  document.getElementById('gm-stat-provs').textContent = (CHINA_REGIONS[regionId] && CHINA_REGIONS[regionId].features && CHINA_REGIONS[regionId].features.length) || 0;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('gm-note-close').addEventListener('click', closeNote);
+  document.getElementById('gm-map').addEventListener('click', e => {
+    if (!e.target.closest('.city-marker') && !e.target.closest('.gm-note-panel')) {
+      closeNote();
+    }
+  });
+  setTimeout(() => renderRegion('ne'), 100);
+});
+})();
+</script>
+</div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/image/media/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Yetbye</div><div class="author-info-description"></div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">35</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">15</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://www.zhihu.com/people/80-34-65-84-64"><i class="fab fa-zhihu"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/Yetbye" target="_blank" title="Github"><i class="fab fa-github"></i></a><a class="social-icon" href="https://www.zhihu.com/people/80-34-65-84-64" target="_blank" title="Zhihu"><i class="fab fa-zhihu"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">小站现在还有很多不足，如果数据没有加载出来，可以刷新试试~ Have a nice day!</div></div><div class="sticky_layout"><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/docs/CausalForcingPP/" title="Causal Forcing++: 可扩展少步自回归扩散蒸馏"><img src="/docs/CausalForcingPP/assets/_v_end.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Causal Forcing++: 可扩展少步自回归扩散蒸馏"/></a><div class="content"><a class="title" href="/docs/CausalForcingPP/" title="Causal Forcing++: 可扩展少步自回归扩散蒸馏">Causal Forcing++: 可扩展少步自回归扩散蒸馏</a><time datetime="2026-08-31T04:00:00.000Z" title="发表于 2026-08-31 12:00:00">2026-08-31</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/docs/AnnCA/" title="FAST-AR: ANN加速自回归视频扩散"><img src="/docs/AnnCA/assets/Figure_10__Ablations_p15.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="FAST-AR: ANN加速自回归视频扩散"/></a><div class="content"><a class="title" href="/docs/AnnCA/" title="FAST-AR: ANN加速自回归视频扩散">FAST-AR: ANN加速自回归视频扩散</a><time datetime="2026-08-31T04:00:00.000Z" title="发表于 2026-08-31 12:00:00">2026-08-31</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/docs/CausVid/" title="从双向扩散到快速自回归视频扩散模型 | CausVid 论文精读"><img src="/docs/CausVid/assets/fig1_latency.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="从双向扩散到快速自回归视频扩散模型 | CausVid 论文精读"/></a><div class="content"><a class="title" href="/docs/CausVid/" title="从双向扩散到快速自回归视频扩散模型 | CausVid 论文精读">从双向扩散到快速自回归视频扩散模型 | CausVid 论文精读</a><time datetime="2026-08-31T04:00:00.000Z" title="发表于 2026-08-31 12:00:00">2026-08-31</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/docs/ContextForcing/" title="Context Forcing: 一致性长上下文自回归视频生成"><img src="/docs/ContextForcing/assets/cover.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Context Forcing: 一致性长上下文自回归视频生成"/></a><div class="content"><a class="title" href="/docs/ContextForcing/" title="Context Forcing: 一致性长上下文自回归视频生成">Context Forcing: 一致性长上下文自回归视频生成</a><time datetime="2026-08-31T04:00:00.000Z" title="发表于 2026-08-31 12:00:00">2026-08-31</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/docs/CausalForcing/" title="Causal Forcing: 自回归扩散蒸馏的正确姿势"><img src="/docs/CausalForcing/assets/cover.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Causal Forcing: 自回归扩散蒸馏的正确姿势"/></a><div class="content"><a class="title" href="/docs/CausalForcing/" title="Causal Forcing: 自回归扩散蒸馏的正确姿势">Causal Forcing: 自回归扩散蒸馏的正确姿势</a><time datetime="2026-08-31T04:00:00.000Z" title="发表于 2026-08-31 12:00:00">2026-08-31</time></div></div></div></div><div class="card-widget card-categories"><div class="item-headline">
+            <i class="fas fa-folder-open"></i>
+            <span>分类</span>
+            
+          </div>
+          <ul class="card-category-list" id="aside-cat-list">
+            <li class="card-category-list-item "><a class="card-category-list-link" href="/categories/DL-cards/"><span class="card-category-list-name">DL-cards</span><span class="card-category-list-count">4</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/nlp/"><span class="card-category-list-name">nlp</span><span class="card-category-list-count">1</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/poetry/"><span class="card-category-list-name">poetry</span><span class="card-category-list-count">1</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/yolo-od/"><span class="card-category-list-name">yolo-od</span><span class="card-category-list-count">2</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/%E8%AE%BA%E6%96%87%E7%B2%BE%E8%AF%BB/"><span class="card-category-list-name">论文精读</span><span class="card-category-list-count">25</span></a></li>
+          </ul></div><div class="card-widget card-tags"><div class="item-headline"><i class="fas fa-tags"></i><span>标签</span></div><div class="card-tag-cloud"><a href="/tags/%E8%A7%86%E9%A2%91%E7%94%9F%E6%88%90/" style="font-size: 1.5em; color: #99a9bf">视频生成</a> <a href="/tags/NeurIPS-2024/" style="font-size: 1.1em; color: #999">NeurIPS-2024</a> <a href="/tags/NeurIPS-2025/" style="font-size: 1.1em; color: #999">NeurIPS-2025</a> <a href="/tags/%E9%AB%98%E6%95%88%E6%8E%A8%E7%90%86/" style="font-size: 1.2em; color: #999da3">高效推理</a> <a href="/tags/arXiv/" style="font-size: 1.45em; color: #99a7ba">arXiv</a> <a href="/tags/%E9%95%BF%E8%A7%86%E9%A2%91/" style="font-size: 1.35em; color: #99a3b1">长视频</a> <a href="/tags/YOLO/" style="font-size: 1.15em; color: #999b9e">YOLO</a> <a href="/tags/%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0/" style="font-size: 1.3em; color: #99a1ac">深度学习</a> <a href="/tags/%E4%B8%8D%E7%AD%89%E5%BC%8F/" style="font-size: 1.1em; color: #999">不等式</a> <a href="/tags/ICML-2026/" style="font-size: 1.25em; color: #999fa7">ICML-2026</a> <a href="/tags/CVPR-2025/" style="font-size: 1.1em; color: #999">CVPR-2025</a> <a href="/tags/CVPR-2024/" style="font-size: 1.1em; color: #999">CVPR-2024</a> <a href="/tags/%E8%8A%B1%E9%97%B4%E8%AF%8D/" style="font-size: 1.1em; color: #999">花间词</a> <a href="/tags/%E8%92%B8%E9%A6%8F%E5%8A%A0%E9%80%9F/" style="font-size: 1.4em; color: #99a5b6">蒸馏加速</a> <a href="/tags/ICLR-2026/" style="font-size: 1.1em; color: #999">ICLR-2026</a></div></div><div class="card-widget card-archives">
+    <div class="item-headline">
+      <i class="fas fa-archive"></i>
+      <span>归档</span>
+      
+    </div>
+  
+    <ul class="card-archive-list">
+      
+        <li class="card-archive-list-item">
+          <a class="card-archive-list-link" href="/archives/2026/08/">
+            <span class="card-archive-list-date">
+              八月 2026
+            </span>
+            <span class="card-archive-list-count">25</span>
+          </a>
+        </li>
+      
+        <li class="card-archive-list-item">
+          <a class="card-archive-list-link" href="/archives/2025/11/">
+            <span class="card-archive-list-date">
+              十一月 2025
+            </span>
+            <span class="card-archive-list-count">1</span>
+          </a>
+        </li>
+      
+        <li class="card-archive-list-item">
+          <a class="card-archive-list-link" href="/archives/2025/06/">
+            <span class="card-archive-list-date">
+              六月 2025
+            </span>
+            <span class="card-archive-list-count">7</span>
+          </a>
+        </li>
+      
+        <li class="card-archive-list-item">
+          <a class="card-archive-list-link" href="/archives/2025/05/">
+            <span class="card-archive-list-date">
+              五月 2025
+            </span>
+            <span class="card-archive-list-count">2</span>
+          </a>
+        </li>
+      
+    </ul>
+  </div></div></div></main><footer id="footer" style="background-image: url(/image/media/footer1.jpg);"><div id="footer-wrap"><div class="footer_custom_text">最是人间留不住，朱颜辞镜花辞树</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="translateLink" type="button" title="简繁转换">简</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="/js/tw_cn.js"></script><div class="js-pjax"></div><script src="https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js"></script><script src="/js/fish.js"></script><canvas class="fireworks" mobile="false"></canvas><script src="https://cdnjs.cloudflare.com/ajax/libs/butterfly-extsrc/1.1.4/fireworks.min.js"></script><script id="canvas_nest" defer="defer" color="255, 20, 147" opacity="0.7" zIndex="-1" count="99" mobile="false" src="https://cdnjs.cloudflare.com/ajax/libs/butterfly-extsrc/1.1.4/canvas-nest.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/aplayer/1.10.1/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdnjs.cloudflare.com/ajax/libs/aplayer/1.10.1/APlayer.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/butterfly-extsrc/1.1.4/metingjs/dist/Meting.min.js"></script><script>(() => {
+  const destroyAplayer = () => {
+    if (window.aplayers) {
+      for (let i = 0; i < window.aplayers.length; i++) {
+        if (!window.aplayers[i].options.fixed) {
+          window.aplayers[i].destroy()
+        }
+      }
+    }
+  }
+
+  const runMetingJS = () => {
+    typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+  }
+
+  btf.addGlobalFn('pjaxSend', destroyAplayer, 'destroyAplayer')
+  btf.addGlobalFn('pjaxComplete', loadMeting, 'runMetingJS')
+})()</script><script src="https://cdnjs.cloudflare.com/ajax/libs/pjax/0.2.8/pjax.min.js"></script><script>(() => {
+  const pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+  window.pjax = new Pjax({
+    elements: 'a:not([target="_blank"]):not([href="/notes/"]):not([href="/moments/"]):not([href="/gallery/"]):not([href="/shuoshuo/"]):not([href="/music/"]):not([href="/about/"]):not([href="/map/"])',
+    selectors: pjaxSelectors,
+    cacheBust: false,
+    analytics: false,
+    scrollRestoration: false
+  })
+
+  const triggerPjaxFn = (val) => {
+    if (!val) return
+    Object.values(val).forEach(fn => fn())
+  }
+
+  document.addEventListener('pjax:send', () => {
+    // removeEventListener
+    btf.removeGlobalFnEvent('pjaxSendOnce')
+    btf.removeGlobalFnEvent('themeChange')
+
+    // reset readmode
+    const $bodyClassList = document.body.classList
+    if ($bodyClassList.contains('read-mode')) $bodyClassList.remove('read-mode')
+
+    triggerPjaxFn(window.globalFn.pjaxSend)
+  })
+
+  document.addEventListener('pjax:complete', () => {
+    btf.removeGlobalFnEvent('pjaxCompleteOnce')
+    document.querySelectorAll('script[data-pjax]').forEach(item => {
+      const newScript = document.createElement('script')
+      const content = item.text || item.textContent || item.innerHTML || ""
+      Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+      newScript.appendChild(document.createTextNode(content))
+      item.parentNode.replaceChild(newScript, item)
+    })
+
+    triggerPjaxFn(window.globalFn.pjaxComplete)
+  })
+
+  document.addEventListener('pjax:error', e => {
+    if (e.request.status === 404) {
+      const usePjax = true
+      false 
+        ? (usePjax ? pjax.loadUrl('/404.html') : window.location.href = '/404.html')
+        : window.location.href = e.request.responseURL
+    }
+  })
+})()</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div><script src="/live2dw/lib/L2Dwidget.min.js?094cbace49a39548bed64abff5988b05"></script><script>L2Dwidget.init({"pluginRootPath":"live2dw/","pluginJsPath":"lib/","pluginModelPath":"assets/","model":{"jsonPath":"/live2dw/assets/z16.model.json"},"display":{"position":"left","width":150,"height":300,"hOffset":0,"vOffset":-20},"mobile":{"show":false,"scale":0.5},"react":{"opacityDefault":0.7,"opacityOnHover":0.9},"log":false,"tagMode":false});</script></body></html>
